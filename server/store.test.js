@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createUserPasswordHash, pushAudit, sanitizeUser, verifyUserPassword } from './store.js';
+import { createUserPasswordHash, pushAudit, sanitizeUser, summarizeAuditIntegrity, verifyUserPassword } from './store.js';
 
 test('sanitizeUser removes password and preserves public fields', () => {
   const source = {
@@ -46,6 +46,9 @@ test('pushAudit prepends an entry and increments id from meta.nextId', () => {
   assert.equal(db.auditoria[0], entry);
   assert.equal(entry.usuario, 'Tecnico 1');
   assert.equal(entry.modulo, 'insumos');
+  assert.equal(typeof entry.hash, 'string');
+  assert.equal(entry.hash.length, 64);
+  assert.equal(entry.prevHash, 'genesis');
 });
 
 test('pushAudit keeps explicit module when provided', () => {
@@ -63,6 +66,33 @@ test('pushAudit keeps explicit module when provided', () => {
   });
 
   assert.equal(entry.modulo, 'tickets');
+});
+
+test('summarizeAuditIntegrity validates generated chain', () => {
+  const db = {
+    meta: { nextId: 10 },
+    auditoria: [],
+  };
+
+  pushAudit(db, {
+    accion: 'Entrada',
+    item: 'Cable',
+    cantidad: 1,
+    usuario: 'Tecnico 1',
+    modulo: 'insumos',
+  });
+  pushAudit(db, {
+    accion: 'Salida',
+    item: 'Cable',
+    cantidad: 1,
+    usuario: 'Tecnico 1',
+    modulo: 'insumos',
+  });
+
+  const integrity = summarizeAuditIntegrity(db.auditoria);
+  assert.equal(integrity.ok, true);
+  assert.equal(integrity.total, 2);
+  assert.equal(integrity.invalid, 0);
 });
 
 test('verifyUserPassword validates hashed password and rejects wrong values', () => {

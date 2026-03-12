@@ -1,9 +1,15 @@
-import { promises as fs } from 'node:fs';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { existsSync, promises as fs } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
+import {
+  buildAssetQrLookupResponse,
+  buildSignedAssetQrToken,
+  QR_TOKEN_SCHEME,
+  verifySignedAssetQrToken,
+} from './modules/qr-token.js';
 import {
   createUserPasswordHash,
   getDataDirPath,
@@ -12,6 +18,7 @@ import {
   pushAudit,
   readDb,
   sanitizeUser,
+  summarizeAuditIntegrity,
   updateDb,
   verifyUserPassword,
 } from './store.js';
@@ -55,6 +62,8 @@ const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => bran
 
 const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
 const CLOSED_STATES = new Set(['Resuelto', 'Cerrado']);
+const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
+const AUDIT_RESULTS = new Set(['ok', 'error']);
 const CORS_ORIGINS = String(process.env.CORS_ORIGIN || process.env.CORS_ORIGINS || '')
   .split(',')
   .map((item) => item.trim())
@@ -70,15 +79,13 @@ const PAGINATION_DEFAULT_PAGE_SIZE = Math.max(10, Math.trunc(Number(process.env.
 const PAGINATION_MAX_PAGE_SIZE = Math.max(PAGINATION_DEFAULT_PAGE_SIZE, Math.trunc(Number(process.env.PAGINATION_MAX_SIZE || 100)));
 const DATA_DIR_PATH = getDataDirPath ? getDataDirPath() : path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR_PATH, 'uploads');
+const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
+const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
+const HAS_CLIENT_DIST = existsSync(CLIENT_INDEX_FILE);
 const TRUST_PROXY = process.env.TRUST_PROXY;
 const DISALLOW_DEMO_PASSWORDS = String(
   process.env.AUTH_DISALLOW_DEMO_PASSWORDS || (process.env.NODE_ENV === 'production' ? 'true' : 'false'),
 ).toLowerCase() !== 'false';
-const QR_TOKEN_PREFIX = 'mtiqr1';
-const QR_TOKEN_SCHEME = 'mti-hs256-v1';
-const QR_SIGNING_SECRET = String(
-  process.env.QR_SIGNING_SECRET || process.env.AUTH_TOKEN_SECRET || 'mesa-it-qr-dev-secret-change-me',
-).trim() || 'mesa-it-qr-dev-secret-change-me';
 const DEMO_PASSWORD_HASHES = new Set([
   'scrypt-v1$4923721e0ded78534bbd638be30ae5f1$1993ab737237283782f648c1dfa3abc737309abc2bbe5a2e3600a4e1a2ed33660abb03efd5bfdd7a4b44d065e9fe400a6444df09f2661ecda0b2119ddc2d39f9',
   'scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456',
@@ -114,6 +121,13 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '8mb' }));
+app.use((req, res, next) => {
+  const incoming = asNonEmptyString(req.headers['x-request-id']);
+  const requestId = incoming || randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
 
 function normalizePrioridad(value) {
   const raw = String(value || 'MEDIA').toUpperCase();
@@ -168,6 +182,12 @@ function normalizeTicketBranch(value, allowedBranchCodes = DEFAULT_BRANCH_CODES)
   const code = asNonEmptyString(value).toUpperCase();
   if (!allowedBranchCodes.has(code)) return '';
   return code;
+}
+
+function normalizeTicketAttentionType(value) {
+  const type = asNonEmptyString(value).toUpperCase();
+  if (type === 'PRESENCIAL' || type === 'REMOTO') return type;
+  return '';
 }
 
 function isSupplyActive(item) {
@@ -276,102 +296,6 @@ function parseBearerToken(headerValue) {
   return match ? asNonEmptyString(match[1]) : '';
 }
 
-function toBase64Url(buffer) {
-  return Buffer.from(buffer)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function fromBase64Url(base64url) {
-  const raw = asNonEmptyString(base64url);
-  if (!raw) return null;
-  if (!/^[A-Za-z0-9_-]+$/.test(raw)) return null;
-  const base64 = raw
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .padEnd(Math.ceil(raw.length / 4) * 4, '=');
-  try {
-    return Buffer.from(base64, 'base64');
-  } catch {
-    return null;
-  }
-}
-
-function signQrPayload(payloadBase64Url) {
-  const digest = createHmac('sha256', QR_SIGNING_SECRET)
-    .update(String(payloadBase64Url || ''))
-    .digest();
-  return toBase64Url(digest);
-}
-
-function secureEqualsText(left, right) {
-  const leftText = asNonEmptyString(left);
-  const rightText = asNonEmptyString(right);
-  if (!leftText || !rightText || leftText.length !== rightText.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(leftText), Buffer.from(rightText));
-  } catch {
-    return false;
-  }
-}
-
-function buildSignedAssetQrToken(asset) {
-  const payload = {
-    v: 1,
-    t: 'activo',
-    aid: Number(asset?.id) || 0,
-    iat: Math.floor(Date.now() / 1000),
-  };
-  const payloadBase64Url = toBase64Url(Buffer.from(JSON.stringify(payload), 'utf8'));
-  const signature = signQrPayload(payloadBase64Url);
-  return {
-    scheme: QR_TOKEN_SCHEME,
-    token: `${QR_TOKEN_PREFIX}.${payloadBase64Url}.${signature}`,
-    payload,
-  };
-}
-
-function verifySignedAssetQrToken(token) {
-  const raw = asNonEmptyString(token);
-  if (!raw) return { ok: false };
-
-  const [prefix, payloadBase64Url, signature] = raw.split('.');
-  if (prefix !== QR_TOKEN_PREFIX || !payloadBase64Url || !signature) return { ok: false };
-
-  const expectedSignature = signQrPayload(payloadBase64Url);
-  if (!secureEqualsText(expectedSignature, signature)) return { ok: false };
-
-  const payloadBuffer = fromBase64Url(payloadBase64Url);
-  if (!payloadBuffer) return { ok: false };
-
-  let payload;
-  try {
-    payload = JSON.parse(payloadBuffer.toString('utf8'));
-  } catch {
-    return { ok: false };
-  }
-
-  const version = toInt(payload?.v);
-  const type = asNonEmptyString(payload?.t).toLowerCase();
-  const assetId = toInt(payload?.aid);
-  const issuedAtEpoch = toInt(payload?.iat);
-  if (version !== 1 || type !== 'activo' || assetId === null || assetId <= 0 || issuedAtEpoch === null || issuedAtEpoch <= 0) {
-    return { ok: false };
-  }
-
-  return {
-    ok: true,
-    payload: {
-      v: version,
-      t: type,
-      aid: assetId,
-      iat: issuedAtEpoch,
-    },
-  };
-}
-
 function createAuthToken() {
   return `mti_${randomUUID()}`;
 }
@@ -398,10 +322,48 @@ function getValidSession(token) {
 
 function getRequestActor(req) {
   return {
+    userId: Number.isFinite(Number(req.authUser?.id)) ? Math.trunc(Number(req.authUser.id)) : null,
+    username: asNonEmptyString(req.authUser?.username).toLowerCase(),
     rol: req.authUser?.rol || '',
     usuario: req.authUser?.nombre || 'Sistema',
     departamento: asNonEmptyString(req.authUser?.departamento).toUpperCase(),
   };
+}
+
+function buildAuditPayload(req, payload = {}) {
+  const actor = getRequestActor(req);
+  return {
+    ...payload,
+    usuario: asNonEmptyString(payload.usuario) || actor.usuario || 'Sistema',
+    userId: payload.userId !== undefined ? payload.userId : actor.userId,
+    username: asNonEmptyString(payload.username || actor.username).toLowerCase(),
+    rol: asNonEmptyString(payload.rol || actor.rol).toLowerCase(),
+    departamento: asNonEmptyString(payload.departamento || actor.departamento).toUpperCase(),
+    requestId: asNonEmptyString(payload.requestId || req?.requestId).slice(0, 120),
+    ip: asNonEmptyString(payload.ip || getRequestIp(req)).slice(0, 120),
+    userAgent: asNonEmptyString(payload.userAgent || req?.headers['user-agent']).slice(0, 280),
+    resultado: asNonEmptyString(payload.resultado || payload.result).toLowerCase() || 'ok',
+    timestamp: asNonEmptyString(payload.timestamp) || new Date().toISOString(),
+  };
+}
+
+function pushAuditWithContext(db, req, payload) {
+  if (!req) return pushAudit(db, payload);
+  const withContext = buildAuditPayload(req, payload);
+  return pushAudit(db, withContext);
+}
+
+async function writeSecurityAudit(req, payload) {
+  try {
+    await updateDb((db) =>
+      pushAuditWithContext(db, req, {
+        modulo: 'otros',
+        entidad: 'sesion',
+        ...payload,
+      }));
+  } catch {
+    // No interrumpir el flujo de autenticacion por fallas de auditoria.
+  }
 }
 
 async function requireAuth(req, res, next) {
@@ -614,6 +576,130 @@ function paginateList(rows, page, pageSize) {
   };
 }
 
+function normalizeAuditModuleFilter(value) {
+  const module = asNonEmptyString(value).toLowerCase();
+  if (!AUDIT_MODULES.has(module)) return '';
+  return module;
+}
+
+function normalizeAuditResultFilter(value) {
+  const result = asNonEmptyString(value).toLowerCase();
+  if (!AUDIT_RESULTS.has(result)) return '';
+  return result;
+}
+
+function parseAuditDateBoundary(value, endOfDay = false) {
+  const raw = asNonEmptyString(value);
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const stamp = new Date(`${raw}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`);
+    if (!Number.isNaN(stamp.getTime())) return stamp.getTime();
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+  return null;
+}
+
+function auditTimestampMs(entry) {
+  const direct = new Date(asNonEmptyString(entry?.timestamp)).getTime();
+  if (Number.isFinite(direct)) return direct;
+
+  const fallbackRaw = asNonEmptyString(entry?.fecha)
+    .replace(/\sa\.\s*m\./gi, ' AM')
+    .replace(/\sp\.\s*m\./gi, ' PM')
+    .replace(/\./g, '');
+  if (!fallbackRaw) return null;
+  const fallback = new Date(fallbackRaw).getTime();
+  if (!Number.isFinite(fallback)) return null;
+  return fallback;
+}
+
+function auditMatchesSearch(entry, searchKey) {
+  if (!searchKey) return true;
+  const fields = [
+    entry?.accion,
+    entry?.item,
+    entry?.usuario,
+    entry?.username,
+    entry?.rol,
+    entry?.departamento,
+    entry?.entidad,
+    entry?.motivo,
+    entry?.modulo,
+    entry?.requestId,
+    entry?.ip,
+    String(entry?.id || ''),
+    String(entry?.entidadId ?? ''),
+  ];
+  return fields.some((value) => normalizeTextKey(value || '').includes(searchKey));
+}
+
+function summarizeAuditAlerts(rows) {
+  const nowTs = Date.now();
+  const windowMs = 24 * 60 * 60 * 1000;
+  const recentRows = rows.filter((entry) => {
+    const ts = auditTimestampMs(entry);
+    return ts !== null && ts >= nowTs - windowMs;
+  });
+
+  const errorCount24h = recentRows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'error').length;
+  const loginFailures24h = recentRows.filter((entry) => {
+    const action = normalizeTextKey(entry?.accion || '');
+    return action.includes('login fallido') || action.includes('login bloqueado') || action.includes('login rechazado');
+  }).length;
+  const missingActorCount = rows.filter((entry) => {
+    const username = asNonEmptyString(entry?.username);
+    const usuario = asNonEmptyString(entry?.usuario);
+    return !username && !usuario;
+  }).length;
+  const missingRequestIdCount = rows.filter((entry) => !asNonEmptyString(entry?.requestId)).length;
+
+  const bucketMap = new Map();
+  const bucketWindowMs = 10 * 60 * 1000;
+  recentRows.forEach((entry) => {
+    const ts = auditTimestampMs(entry);
+    if (ts === null) return;
+    const actor = asNonEmptyString(entry?.username || entry?.usuario).toLowerCase() || 'anon';
+    const ip = asNonEmptyString(entry?.ip) || 'unknown';
+    const bucket = Math.floor(ts / bucketWindowMs);
+    const key = `${actor}|${ip}|${bucket}`;
+    bucketMap.set(key, (bucketMap.get(key) || 0) + 1);
+  });
+
+  let burstBuckets = 0;
+  let burstMaxEvents = 0;
+  let burstTopActor = '';
+  let burstTopIp = '';
+  for (const [key, count] of bucketMap.entries()) {
+    if (count < 12) continue;
+    burstBuckets += 1;
+    if (count > burstMaxEvents) {
+      burstMaxEvents = count;
+      const [actor, ip] = key.split('|');
+      burstTopActor = actor || '';
+      burstTopIp = ip || '';
+    }
+  }
+
+  return {
+    windowHours: 24,
+    totalRows: rows.length,
+    recentRows: recentRows.length,
+    errorCount24h,
+    loginFailures24h,
+    missingActorCount,
+    missingRequestIdCount,
+    burst: {
+      detected: burstMaxEvents >= 12,
+      maxEvents10m: burstMaxEvents,
+      actor: burstTopActor,
+      ip: burstTopIp,
+      buckets: burstBuckets,
+      threshold: 12,
+    },
+  };
+}
+
 function getRequestIp(req) {
   const ip = asNonEmptyString(req.ip || req.socket?.remoteAddress || '');
   return ip || 'unknown';
@@ -768,21 +854,6 @@ function stripSensitiveAssetFields(asset, role) {
   if (role === 'admin') return asset;
   const { passwordRemota, ...safe } = asset;
   return safe;
-}
-
-function buildAssetQrLookupResponse(asset) {
-  return {
-    id: Number(asset?.id) || 0,
-    tag: asNonEmptyString(asset?.tag).toUpperCase(),
-    tipo: asNonEmptyString(asset?.tipo || asset?.equipo).toUpperCase(),
-    marca: asNonEmptyString(asset?.marca),
-    modelo: asNonEmptyString(asset?.modelo),
-    serial: asNonEmptyString(asset?.serial).toUpperCase(),
-    estado: asNonEmptyString(asset?.estado) || 'Operativo',
-    ubicacion: asNonEmptyString(asset?.ubicacion),
-    responsable: asNonEmptyString(asset?.responsable),
-    departamento: asNonEmptyString(asset?.departamento).toUpperCase(),
-  };
 }
 
 function buildBootstrapUsers(users, role) {
@@ -1061,6 +1132,7 @@ function importAssets(db, options) {
   const usuario = asNonEmptyString(options.usuario) || 'Admin IT';
   const persist = options.persist !== false;
   const sourceName = asNonEmptyString(options.fileName) || 'Importacion Excel';
+  const auditReq = options.auditReq || null;
 
   const detailLimit = 40;
   const details = [];
@@ -1135,12 +1207,14 @@ function importAssets(db, options) {
   });
 
   if (persist && (report.created > 0 || report.updated > 0)) {
-    pushAudit(db, {
+    pushAuditWithContext(db, auditReq, {
       accion: 'Importacion Activos',
       item: sourceName,
       cantidad: report.created + report.updated,
       usuario,
       modulo: 'activos',
+      entidad: 'activo',
+      meta: { created: report.created, updated: report.updated, skipped: report.skipped, invalid: report.invalid },
     });
   }
 
@@ -1209,12 +1283,13 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       if (hasRoleUpdate && normalized.roles.length === 0) return { ok: false, code: 'INVALID_ROLES' };
 
       db.catalogos = normalized;
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Catalogos Actualizados',
         item: `Sucursales: ${normalized.sucursales.length} | Cargos: ${normalized.cargos.length} | Roles: ${normalized.roles.length}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
+        entidad: 'catalogo',
       });
       return { ok: true, catalogos: normalized };
     });
@@ -1281,12 +1356,15 @@ app.post('/api/users', requireAuth, async (req, res, next) => {
         activo: true,
       };
       db.users.push(user);
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Alta Usuario',
         item: `${user.username} | ${cargo}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
+        entidad: 'usuario',
+        entidadId: user.id,
+        after: sanitizeUser(user),
       });
       return { ok: true, user };
     });
@@ -1399,12 +1477,15 @@ app.patch('/api/users/:id', requireAuth, async (req, res, next) => {
         revokeSessionsByUserId(user.id);
       }
 
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: hasActivo ? (activo ? 'Activacion Usuario' : 'Desactivacion Usuario') : 'Edicion Usuario',
         item: `${user.username} | ${user.departamento || 'SIN CARGO'}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
+        entidad: 'usuario',
+        entidadId: user.id,
+        after: sanitizeUser(user),
       });
       return { ok: true, user };
     });
@@ -1459,12 +1540,15 @@ app.delete('/api/users/:id', requireAuth, async (req, res, next) => {
 
       db.users.splice(index, 1);
       revokeSessionsByUserId(target.id);
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Baja Usuario',
         item: `${target.username} | ${target.departamento || 'SIN CARGO'}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
+        entidad: 'usuario',
+        entidadId: target.id,
+        before: sanitizeUser(target),
       });
       return { ok: true };
     });
@@ -1494,10 +1578,27 @@ app.post('/api/auth/login', async (req, res, next) => {
     const password = asNonEmptyString(req.body?.password);
 
     if (!username || !password) {
+      await writeSecurityAudit(req, {
+        accion: 'Login Fallido',
+        item: username || 'N/A',
+        cantidad: 1,
+        resultado: 'error',
+        motivo: 'Credenciales incompletas',
+        username,
+      });
       return res.status(400).json({ error: 'Usuario y password son requeridos.' });
     }
     const throttle = getLoginThrottle(req, username);
     if (throttle) {
+      await writeSecurityAudit(req, {
+        accion: 'Login Bloqueado',
+        item: username,
+        cantidad: 1,
+        resultado: 'error',
+        motivo: 'Throttle de intentos',
+        username,
+        meta: { retryAfterSec: throttle.retryAfterSec },
+      });
       return res.status(429).json({
         error: 'Demasiados intentos de inicio de sesion. Intenta mas tarde.',
         retryAfterSec: throttle.retryAfterSec,
@@ -1515,17 +1616,56 @@ app.post('/api/auth/login', async (req, res, next) => {
     if (!user) {
       const failed = registerLoginFailure(req, username);
       if (failed.locked) {
+        await writeSecurityAudit(req, {
+          accion: 'Login Bloqueado',
+          item: username,
+          cantidad: 1,
+          resultado: 'error',
+          motivo: 'Cuenta bloqueada por intentos fallidos',
+          username,
+          meta: { retryAfterSec: failed.retryAfterSec },
+        });
         return res.status(429).json({
           error: 'Cuenta temporalmente bloqueada por intentos fallidos.',
           retryAfterSec: failed.retryAfterSec,
         });
       }
+      await writeSecurityAudit(req, {
+        accion: 'Login Fallido',
+        item: username,
+        cantidad: 1,
+        resultado: 'error',
+        motivo: 'Credenciales invalidas',
+        username,
+      });
       return res.status(401).json({ error: 'Credenciales invalidas.' });
     }
     if (!roleIsEnabledByCatalog(db, user.rol)) {
+      await writeSecurityAudit(req, {
+        accion: 'Login Rechazado',
+        item: username,
+        cantidad: 1,
+        resultado: 'error',
+        motivo: 'Rol deshabilitado',
+        userId: user.id,
+        username: user.username,
+        rol: user.rol,
+        departamento: user.departamento,
+      });
       return res.status(403).json({ error: 'Tu rol esta deshabilitado en catalogo.' });
     }
     if (DISALLOW_DEMO_PASSWORDS && isDemoPasswordUser(user)) {
+      await writeSecurityAudit(req, {
+        accion: 'Login Rechazado',
+        item: username,
+        cantidad: 1,
+        resultado: 'error',
+        motivo: 'Password demo deshabilitado',
+        userId: user.id,
+        username: user.username,
+        rol: user.rol,
+        departamento: user.departamento,
+      });
       return res.status(403).json({
         error: 'Credencial de demo deshabilitada. Solicita cambio de password al administrador.',
       });
@@ -1533,6 +1673,17 @@ app.post('/api/auth/login', async (req, res, next) => {
 
     clearLoginFailures(req, username);
     const token = registerSession(user);
+    await writeSecurityAudit(req, {
+      accion: 'Login Exitoso',
+      item: user.username,
+      cantidad: 1,
+      resultado: 'ok',
+      userId: user.id,
+      username: user.username,
+      rol: user.rol,
+      departamento: user.departamento,
+      meta: { tokenIssued: true },
+    });
     res.json({
       user: sanitizeUser(user),
       token,
@@ -1543,9 +1694,24 @@ app.post('/api/auth/login', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  if (req.authToken) authSessions.delete(req.authToken);
-  res.json({ ok: true });
+app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
+  try {
+    const actor = getRequestActor(req);
+    if (req.authToken) authSessions.delete(req.authToken);
+    await writeSecurityAudit(req, {
+      accion: 'Logout',
+      item: actor.username || actor.usuario || 'N/A',
+      cantidad: 1,
+      resultado: 'ok',
+      userId: actor.userId,
+      username: actor.username,
+      rol: actor.rol,
+      departamento: actor.departamento,
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
@@ -1809,7 +1975,16 @@ app.post('/api/activos', requireAuth, async (req, res, next) => {
 
       const nuevo = { id: nextId(db), ...normalized };
       db.activos.push(nuevo);
-      pushAudit(db, { accion: 'Alta Activo', item: nuevo.tag, cantidad: 1, usuario, modulo: 'activos' });
+      pushAuditWithContext(db, req, {
+        accion: 'Alta Activo',
+        item: nuevo.tag,
+        cantidad: 1,
+        usuario,
+        modulo: 'activos',
+        entidad: 'activo',
+        entidadId: nuevo.id,
+        after: nuevo,
+      });
       return { ok: true, item: nuevo };
     });
 
@@ -1820,6 +1995,60 @@ app.post('/api/activos', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo registrar el activo.' });
     }
     res.status(201).json(created.item);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/api/activos/:id', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensureCanEdit(req, res)) return;
+    const id = toInt(req.params.id);
+    const { usuario } = getRequestActor(req);
+    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+
+    const parsed = normalizeAssetPayload(req.body, { mode: 'create' });
+    if (!parsed.ok) {
+      return res.status(400).json({ error: parsed.errors.join('. ') || 'Campos requeridos incompletos para activo.' });
+    }
+    const normalized = finalizeAsset(parsed.item);
+
+    const updated = await updateDb((db) => {
+      const idx = db.activos.findIndex((item) => Number(item.id) === Number(id));
+      if (idx < 0) return { ok: false, code: 'NOT_FOUND' };
+
+      const indexes = buildAssetIndexes(db.activos);
+      const conflicts = findAssetConflicts(indexes, normalized, id);
+      if (conflicts.length > 0) {
+        return { ok: false, code: 'CONFLICT', fields: conflicts };
+      }
+
+      const nextItem = { ...db.activos[idx], ...normalized, id };
+      db.activos[idx] = nextItem;
+      pushAuditWithContext(db, req, {
+        accion: 'Edicion Activo',
+        item: nextItem.tag,
+        cantidad: 1,
+        usuario,
+        modulo: 'activos',
+        entidad: 'activo',
+        entidadId: nextItem.id,
+        after: nextItem,
+      });
+      return { ok: true, item: nextItem };
+    });
+
+    if (!updated?.ok && updated?.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'Activo no encontrado.' });
+    }
+    if (!updated?.ok && updated?.code === 'CONFLICT') {
+      return res.status(409).json({ error: `Activo duplicado por: ${updated.fields.join(', ')}` });
+    }
+    if (!updated?.ok) {
+      return res.status(500).json({ error: 'No se pudo actualizar el activo.' });
+    }
+
+    return res.json(updated.item);
   } catch (error) {
     next(error);
   }
@@ -1853,6 +2082,7 @@ app.post('/api/activos/import', requireAuth, async (req, res, next) => {
         usuario,
         fileName,
         persist: false,
+        auditReq: req,
       });
       return res.json({ ...report, dryRun: true });
     }
@@ -1864,6 +2094,7 @@ app.post('/api/activos/import', requireAuth, async (req, res, next) => {
         usuario,
         fileName,
         persist: true,
+        auditReq: req,
       }),
     );
 
@@ -1882,12 +2113,14 @@ app.delete('/api/activos', requireAuth, async (req, res, next) => {
       const removedCount = Array.isArray(db.activos) ? db.activos.length : 0;
       if (removedCount > 0) {
         db.activos = [];
-        pushAudit(db, {
+        pushAuditWithContext(db, req, {
           accion: 'Borrado Masivo Activos',
           item: 'Inventario completo',
           cantidad: removedCount,
           usuario,
           modulo: 'activos',
+          entidad: 'activo',
+          meta: { removedCount },
         });
       }
       return { removedCount };
@@ -1910,7 +2143,16 @@ app.delete('/api/activos/:id', requireAuth, async (req, res, next) => {
       const idx = db.activos.findIndex((a) => a.id === id);
       if (idx < 0) return null;
       const [activo] = db.activos.splice(idx, 1);
-      pushAudit(db, { accion: 'Baja Activo', item: activo.tag, cantidad: 1, usuario, modulo: 'activos' });
+      pushAuditWithContext(db, req, {
+        accion: 'Baja Activo',
+        item: activo.tag,
+        cantidad: 1,
+        usuario,
+        modulo: 'activos',
+        entidad: 'activo',
+        entidadId: activo.id,
+        before: activo,
+      });
       return activo;
     });
 
@@ -1962,7 +2204,16 @@ app.post('/api/insumos', requireAuth, async (req, res, next) => {
         activo: true,
       };
       db.insumos.push(nuevo);
-      pushAudit(db, { accion: 'Registro Nuevo', item: nombre, cantidad: stock, usuario, modulo: 'insumos' });
+      pushAuditWithContext(db, req, {
+        accion: 'Registro Nuevo',
+        item: nombre,
+        cantidad: stock,
+        usuario,
+        modulo: 'insumos',
+        entidad: 'insumo',
+        entidadId: nuevo.id,
+        after: nuevo,
+      });
       return { ok: true, item: nuevo };
     });
 
@@ -1973,6 +2224,86 @@ app.post('/api/insumos', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo registrar el insumo.' });
     }
     res.status(201).json(result.item);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/api/insumos/:id', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensureCanEdit(req, res)) return;
+    const id = toInt(req.params.id);
+    const nombre = asNonEmptyString(req.body?.nombre);
+    const unidad = asNonEmptyString(req.body?.unidad) || 'Piezas';
+    const categoria = (asNonEmptyString(req.body?.categoria) || 'HARDWARE').toUpperCase();
+    const stock = toInt(req.body?.stock);
+    const min = toInt(req.body?.min);
+    const { usuario } = getRequestActor(req);
+    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+
+    if (!nombre || stock === null || min === null) {
+      return res.status(400).json({ error: 'Campos requeridos incompletos para insumo.' });
+    }
+    if (stock < 0 || min < 0) {
+      return res.status(400).json({ error: 'Stock y minimo deben ser mayores o iguales a 0.' });
+    }
+    if (min > stock) {
+      return res.status(400).json({ error: 'El minimo no puede ser mayor al stock.' });
+    }
+
+    const updated = await updateDb((db) => {
+      const idx = db.insumos.findIndex((item) => Number(item.id) === Number(id));
+      if (idx < 0) return { ok: false, code: 'NOT_FOUND' };
+
+      const current = db.insumos[idx];
+      if (!isSupplyActive(current)) return { ok: false, code: 'INACTIVE' };
+
+      const exists = db.insumos.find(
+        (item) =>
+          Number(item.id) !== Number(id) &&
+          isSupplyActive(item) &&
+          normalizeTextKey(item.nombre) === normalizeTextKey(nombre) &&
+          normalizeTextKey(item.categoria) === normalizeTextKey(categoria),
+      );
+      if (exists) return { ok: false, code: 'DUPLICATE' };
+
+      const before = { ...current };
+      const nextItem = {
+        ...current,
+        nombre,
+        unidad,
+        stock,
+        min,
+        categoria,
+      };
+      db.insumos[idx] = nextItem;
+      pushAuditWithContext(db, req, {
+        accion: 'Edicion Insumo',
+        item: nextItem.nombre,
+        cantidad: nextItem.stock,
+        usuario,
+        modulo: 'insumos',
+        entidad: 'insumo',
+        entidadId: nextItem.id,
+        before,
+        after: nextItem,
+      });
+      return { ok: true, item: nextItem };
+    });
+
+    if (!updated?.ok && updated?.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'Insumo no encontrado.' });
+    }
+    if (!updated?.ok && updated?.code === 'INACTIVE') {
+      return res.status(409).json({ error: 'El insumo esta dado de baja y no se puede editar.' });
+    }
+    if (!updated?.ok && updated?.code === 'DUPLICATE') {
+      return res.status(409).json({ error: 'Ya existe un insumo activo con ese nombre y categoria.' });
+    }
+    if (!updated?.ok) {
+      return res.status(500).json({ error: 'No se pudo actualizar el insumo.' });
+    }
+    return res.json(updated.item);
   } catch (error) {
     next(error);
   }
@@ -2008,7 +2339,17 @@ app.patch('/api/insumos/:id/stock', requireAuth, async (req, res, next) => {
       const accion = stockInput !== null
         ? diff > 0 ? 'Ajuste Entrada' : 'Ajuste Salida'
         : diff > 0 ? 'Entrada' : 'Salida';
-      pushAudit(db, { accion, item: item.nombre, cantidad: Math.abs(diff), usuario, modulo: 'insumos' });
+      pushAuditWithContext(db, req, {
+        accion,
+        item: item.nombre,
+        cantidad: Math.abs(diff),
+        usuario,
+        modulo: 'insumos',
+        entidad: 'insumo',
+        entidadId: item.id,
+        after: item,
+        meta: { previousStock: current, nextStock },
+      });
       return { ok: true, item };
     });
 
@@ -2039,7 +2380,16 @@ app.delete('/api/insumos/:id', requireAuth, async (req, res, next) => {
       if (!item) return { ok: false, code: 'NOT_FOUND' };
       if (!isSupplyActive(item)) return { ok: false, code: 'INACTIVE' };
       item.activo = false;
-      pushAudit(db, { accion: 'Baja Logica', item: item.nombre, cantidad: item.stock, usuario, modulo: 'insumos' });
+      pushAuditWithContext(db, req, {
+        accion: 'Baja Logica',
+        item: item.nombre,
+        cantidad: item.stock,
+        usuario,
+        modulo: 'insumos',
+        entidad: 'insumo',
+        entidadId: item.id,
+        after: item,
+      });
       return { ok: true, item };
     });
 
@@ -2065,10 +2415,11 @@ app.post('/api/tickets', requireAuth, async (req, res, next) => {
     const descripcion = asNonEmptyString(req.body?.descripcion);
     const sucursalInput = req.body?.sucursal;
     const prioridad = normalizePrioridad(req.body?.prioridad);
+    const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
     const asignadoA = canEditByRole(req.authUser?.rol) ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
-    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput)) {
+    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || !atencionTipo) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
     }
 
@@ -2089,6 +2440,7 @@ app.post('/api/tickets', requireAuth, async (req, res, next) => {
         descripcion,
         sucursal,
         prioridad,
+        atencionTipo,
         estado: 'Abierto',
         fecha: now(),
         fechaCreacion: createdAtIso,
@@ -2116,7 +2468,16 @@ app.post('/api/tickets', requireAuth, async (req, res, next) => {
         if (activo) activo.estado = 'Falla';
       }
 
-      pushAudit(db, { accion: 'Nuevo Ticket', item: `${activoTag} | ${sucursal}`, cantidad: 1, usuario, modulo: 'tickets' });
+      pushAuditWithContext(db, req, {
+        accion: 'Nuevo Ticket',
+        item: `${activoTag} | ${sucursal} | ${atencionTipo}`,
+        cantidad: 1,
+        usuario,
+        modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: ticket.id,
+        after: ticket,
+      });
       return { ok: true, ticket };
     });
 
@@ -2142,15 +2503,20 @@ app.patch('/api/tickets/:id', requireAuth, async (req, res, next) => {
     const id = toInt(req.params.id);
     const estado = req.body?.estado ? normalizeEstadoTicket(req.body?.estado) : null;
     const asignadoA = req.body?.asignadoA !== undefined ? asNonEmptyString(req.body?.asignadoA) : undefined;
+    const hasAtencionTipoUpdate = req.body?.atencionTipo !== undefined;
+    const atencionTipo = hasAtencionTipoUpdate ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
 
     if (id === null) return res.status(400).json({ error: 'ID invalido.' });
-    if (!estado && asignadoA === undefined && !comentario) {
+    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
     if (req.body?.estado && !estado) {
       return res.status(400).json({ error: 'Estado de ticket no valido.' });
+    }
+    if (hasAtencionTipoUpdate && !atencionTipo) {
+      return res.status(400).json({ error: 'Tipo de atencion no valido.' });
     }
 
     const updated = await updateDb((db) => {
@@ -2169,8 +2535,11 @@ app.patch('/api/tickets/:id', requireAuth, async (req, res, next) => {
       }
 
       const previousState = ticket.estado;
+      const previousAttentionType = normalizeTicketAttentionType(ticket.atencionTipo);
       if (estado) ticket.estado = estado;
       if (nextAssignee !== undefined) ticket.asignadoA = nextAssignee;
+      if (hasAtencionTipoUpdate) ticket.atencionTipo = atencionTipo;
+      const attentionChanged = hasAtencionTipoUpdate && atencionTipo !== previousAttentionType;
 
       if (CLOSED_STATES.has(ticket.estado) && !ticket.fechaCierre) {
         ticket.fechaCierre = new Date().toISOString();
@@ -2190,15 +2559,46 @@ app.patch('/api/tickets/:id', requireAuth, async (req, res, next) => {
       ticket.historial.unshift({
         fecha: now(),
         usuario,
-        accion: estado ? ticketAuditAction(ticket.estado) : 'Ticket Actualizado',
+        accion: estado ? ticketAuditAction(ticket.estado) : attentionChanged ? 'Tipo Atencion Ticket' : 'Ticket Actualizado',
         estado: ticket.estado,
         comentario: comentario || '',
       });
 
       if (estado && estado !== previousState) {
-        pushAudit(db, { accion: ticketAuditAction(estado), item: ticket.activoTag, cantidad: 1, usuario, modulo: 'tickets' });
-      } else if (asignadoA !== undefined) {
-        pushAudit(db, { accion: 'Asignacion Ticket', item: ticket.activoTag, cantidad: 1, usuario, modulo: 'tickets' });
+        pushAuditWithContext(db, req, {
+          accion: ticketAuditAction(estado),
+          item: ticket.activoTag,
+          cantidad: 1,
+          usuario,
+          modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          after: ticket,
+        });
+      }
+      if (asignadoA !== undefined) {
+        pushAuditWithContext(db, req, {
+          accion: 'Asignacion Ticket',
+          item: ticket.activoTag,
+          cantidad: 1,
+          usuario,
+          modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          after: ticket,
+        });
+      }
+      if (attentionChanged) {
+        pushAuditWithContext(db, req, {
+          accion: 'Tipo Atencion Ticket',
+          item: `${ticket.activoTag} | ${atencionTipo}`,
+          cantidad: 1,
+          usuario,
+          modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          after: ticket,
+        });
       }
 
       return { ok: true, ticket };
@@ -2244,7 +2644,16 @@ app.patch('/api/tickets/:id/resolve', requireAuth, async (req, res, next) => {
 
       const activo = db.activos.find((a) => a.tag.toUpperCase() === ticket.activoTag.toUpperCase());
       if (activo) activo.estado = 'Operativo';
-      pushAudit(db, { accion: 'Ticket Resuelto', item: ticket.activoTag, cantidad: 1, usuario, modulo: 'tickets' });
+      pushAuditWithContext(db, req, {
+        accion: 'Ticket Resuelto',
+        item: ticket.activoTag,
+        cantidad: 1,
+        usuario,
+        modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: ticket.id,
+        after: ticket,
+      });
       return ticket;
     });
 
@@ -2291,12 +2700,15 @@ app.delete('/api/tickets/:id', requireAuth, async (req, res, next) => {
         }
       }
 
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Ticket Eliminado',
         item: `${deleted.activoTag} | #${deleted.id}`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: deleted.id,
+        before: deleted,
       });
       return { ok: true, ticket: deleted, attachmentPaths };
     });
@@ -2350,12 +2762,15 @@ app.post('/api/tickets/:id/comments', requireAuth, async (req, res, next) => {
         comentario,
       });
 
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Comentario Ticket',
         item: ticket.activoTag,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: ticket.id,
+        meta: { comentario },
       });
       return { ok: true, ticket };
     });
@@ -2447,12 +2862,15 @@ app.post('/api/tickets/:id/attachments', requireAuth, async (req, res, next) => 
           comentario: fileName,
         });
 
-        pushAudit(db, {
+        pushAuditWithContext(db, req, {
           accion: 'Adjunto Ticket',
           item: `${ticket.activoTag} | ${fileName}`,
           cantidad: 1,
           usuario,
           modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          meta: { attachmentName: fileName, size: contentBuffer.length },
         });
 
         return { ok: true, ticket, attachment };
@@ -2553,12 +2971,15 @@ app.delete('/api/tickets/:id/attachments/:attachmentId', requireAuth, async (req
         comentario: attachment.fileName,
       });
 
-      pushAudit(db, {
+      pushAuditWithContext(db, req, {
         accion: 'Adjunto Ticket',
         item: `${ticket.activoTag} | ${attachment.fileName} | eliminado`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: ticket.id,
+        meta: { attachmentName: attachment.fileName, removed: true },
       });
       return { ok: true, ticket, removedStoragePath: attachment.storagePath };
     });
@@ -2587,6 +3008,7 @@ app.get('/api/tickets', requireAuth, async (req, res, next) => {
     const db = await readDb();
     const estado = req.query.estado ? normalizeEstadoTicket(req.query.estado) : null;
     const prioridad = req.query.prioridad ? normalizePrioridad(req.query.prioridad) : null;
+    const atencionTipo = req.query.atencion !== undefined ? normalizeTicketAttentionType(req.query.atencion) : '';
     const onlyOpen = req.query.open === '1';
     const onlySla = req.query.sla === 'vencido';
     const lifecycle = asNonEmptyString(req.query.lifecycle).toUpperCase();
@@ -2594,10 +3016,14 @@ app.get('/api/tickets', requireAuth, async (req, res, next) => {
     const assignee = asNonEmptyString(req.query.assignee);
     const search = normalizeTextKey(req.query.search || '');
     const withPagination = req.query.page !== undefined || req.query.pageSize !== undefined;
+    if (req.query.atencion !== undefined && !atencionTipo) {
+      return res.status(400).json({ error: 'Filtro de atencion invalido.' });
+    }
 
     let list = filterTicketsForUser(db.tickets.slice(), req.authUser);
     if (estado) list = list.filter((t) => t.estado === estado);
     if (prioridad) list = list.filter((t) => t.prioridad === prioridad);
+    if (atencionTipo) list = list.filter((t) => normalizeTicketAttentionType(t.atencionTipo) === atencionTipo);
     if (onlyOpen) list = list.filter((t) => !CLOSED_STATES.has(t.estado));
     if (onlySla) list = list.filter((t) => isSlaBreached(t));
     if (lifecycle === 'ABIERTOS') list = list.filter((t) => !CLOSED_STATES.has(t.estado));
@@ -2617,6 +3043,7 @@ app.get('/api/tickets', requireAuth, async (req, res, next) => {
           ticket.sucursal,
           ticket.solicitadoPor,
           ticket.departamento,
+          ticket.atencionTipo,
           String(ticket.id),
         ];
         return fields.some((value) => normalizeTextKey(value || '').includes(search));
@@ -2645,20 +3072,110 @@ app.get('/api/tickets', requireAuth, async (req, res, next) => {
   }
 });
 
-app.get('/api/auditoria', requireAuth, async (_req, res, next) => {
+app.get('/api/auditoria', requireAuth, async (req, res, next) => {
   try {
-    if (_req.authUser?.rol === 'solicitante') {
+    if (req.authUser?.rol === 'solicitante') {
       return res.status(403).json({ error: 'No autorizado para consultar auditoria.' });
     }
+
     const db = await readDb();
-    res.json(db.auditoria);
+    const moduleFilter = normalizeAuditModuleFilter(req.query.module);
+    const resultFilter = normalizeAuditResultFilter(req.query.result);
+    const userFilter = normalizeTextKey(req.query.user || '');
+    const entityFilter = normalizeTextKey(req.query.entity || '');
+    const actionFilter = normalizeTextKey(req.query.action || '');
+    const search = normalizeTextKey(req.query.q || req.query.search || '');
+    const fromTs = parseAuditDateBoundary(req.query.from || req.query.dateFrom, false);
+    const toTs = parseAuditDateBoundary(req.query.to || req.query.dateTo, true);
+    const { page, pageSize } = parsePagination(req.query);
+
+    let rows = Array.isArray(db.auditoria) ? db.auditoria.slice() : [];
+    if (moduleFilter) rows = rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === moduleFilter);
+    if (resultFilter) rows = rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === resultFilter);
+    if (userFilter) {
+      rows = rows.filter((entry) => {
+        const userFields = [
+          entry?.usuario,
+          entry?.username,
+          entry?.rol,
+          entry?.departamento,
+        ];
+        return userFields.some((value) => normalizeTextKey(value || '').includes(userFilter));
+      });
+    }
+    if (entityFilter) rows = rows.filter((entry) => normalizeTextKey(entry?.entidad || '').includes(entityFilter));
+    if (actionFilter) rows = rows.filter((entry) => normalizeTextKey(entry?.accion || '').includes(actionFilter));
+    if (search) rows = rows.filter((entry) => auditMatchesSearch(entry, search));
+    if (fromTs !== null) rows = rows.filter((entry) => {
+      const ts = auditTimestampMs(entry);
+      return ts !== null && ts >= fromTs;
+    });
+    if (toTs !== null) rows = rows.filter((entry) => {
+      const ts = auditTimestampMs(entry);
+      return ts !== null && ts <= toTs;
+    });
+
+    rows.sort((left, right) => {
+      const leftTs = auditTimestampMs(left) || 0;
+      const rightTs = auditTimestampMs(right) || 0;
+      return rightTs - leftTs;
+    });
+
+    const paged = paginateList(rows, page, pageSize);
+    const integrity = summarizeAuditIntegrity(db.auditoria);
+    const alerts = summarizeAuditAlerts(rows);
+
+    res.json({
+      items: paged.items,
+      pagination: paged.pagination,
+      filters: {
+        module: moduleFilter || '',
+        result: resultFilter || '',
+        user: asNonEmptyString(req.query.user),
+        entity: asNonEmptyString(req.query.entity),
+        action: asNonEmptyString(req.query.action),
+        q: asNonEmptyString(req.query.q || req.query.search),
+        from: asNonEmptyString(req.query.from || req.query.dateFrom),
+        to: asNonEmptyString(req.query.to || req.query.dateTo),
+      },
+      summary: {
+        total: rows.length,
+        byModule: {
+          tickets: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'tickets').length,
+          insumos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'insumos').length,
+          activos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'activos').length,
+          otros: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'otros').length,
+        },
+        byResult: {
+          ok: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'ok').length,
+          error: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'error').length,
+        },
+      },
+      integrity,
+      alerts,
+      generatedAt: new Date().toISOString(),
+    });
   } catch (error) {
     next(error);
   }
 });
 
-app.use((_req, res) => {
+if (HAS_CLIENT_DIST) {
+  app.use(express.static(CLIENT_DIST_DIR, { index: false }));
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(CLIENT_INDEX_FILE);
+  });
+}
+
+app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });
+});
+
+app.use((_req, res) => {
+  if (HAS_CLIENT_DIST) {
+    return res.sendFile(CLIENT_INDEX_FILE);
+  }
+  return res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 
 app.use((error, _req, res, _next) => {

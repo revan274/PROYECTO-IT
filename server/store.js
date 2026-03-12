@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,6 +18,8 @@ const DB_BACKUP_ENABLE = String(process.env.DB_BACKUP_ENABLE || 'true').toLowerC
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
 const PASSWORD_KEYLEN = 64;
 const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
+const AUDIT_RESULTS = new Set(['ok', 'error']);
+const AUDIT_GENESIS_HASH = 'genesis';
 const USER_ROLES = new Set(['admin', 'tecnico', 'consulta', 'solicitante']);
 const DEFAULT_TICKET_BRANCHES = [
   { code: 'TJ01', name: 'Sucursal Estrella', activo: true },
@@ -161,6 +163,7 @@ const DEFAULT_DB = {
       descripcion: 'Falla en el pesaje',
       prioridad: 'CRITICA',
       estado: 'Abierto',
+      atencionTipo: 'PRESENCIAL',
       fecha: '2023-10-24 09:00',
       fechaCreacion: '2023-10-24T09:00:00.000Z',
       fechaLimite: '2023-10-24T11:00:00.000Z',
@@ -227,6 +230,12 @@ function normalizeTicketAttachment(attachment) {
   };
 }
 
+function normalizeTicketAttentionType(value) {
+  const type = text(value).toUpperCase();
+  if (type === 'PRESENCIAL' || type === 'REMOTO') return type;
+  return '';
+}
+
 function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
   const copy = { ...ticket };
   if (!copy.fechaCreacion) {
@@ -249,6 +258,7 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
   if (!copy.estado) copy.estado = 'Abierto';
   if (!copy.prioridad) copy.prioridad = 'MEDIA';
   if (!copy.asignadoA) copy.asignadoA = '';
+  copy.atencionTipo = normalizeTicketAttentionType(copy.atencionTipo);
   copy.attachments = Array.isArray(copy.attachments)
     ? copy.attachments.map(normalizeTicketAttachment).filter(Boolean)
     : [];
@@ -362,6 +372,129 @@ function normalizeAuditModule(value) {
   return module;
 }
 
+function normalizeAuditResult(value) {
+  const result = text(value).toLowerCase();
+  if (!AUDIT_RESULTS.has(result)) return 'ok';
+  return result;
+}
+
+function parseDateMs(value) {
+  const raw = text(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+  const fallback = new Date(
+    raw
+      .replace(/\sa\.\s*m\./gi, ' AM')
+      .replace(/\sp\.\s*m\./gi, ' PM')
+      .replace(/\./g, ''),
+  );
+  if (!Number.isNaN(fallback.getTime())) return fallback.getTime();
+  return null;
+}
+
+function isSensitiveAuditKey(key) {
+  const normalized = text(key).toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized.includes('password')
+    || normalized.includes('pass')
+    || normalized.includes('secret')
+    || normalized.includes('token')
+    || normalized.includes('hash')
+    || normalized.includes('auth')
+  );
+}
+
+function sanitizeAuditSnapshot(value, depth = 0) {
+  if (value === null || value === undefined) return null;
+  if (depth > 3) return '[TRUNCATED]';
+  if (typeof value === 'string') return value.slice(0, 400);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.slice(0, 30).map((item) => sanitizeAuditSnapshot(item, depth + 1));
+  }
+  if (typeof value !== 'object') return String(value).slice(0, 400);
+
+  const output = {};
+  const keys = Object.keys(value).slice(0, 60);
+  keys.forEach((key) => {
+    if (isSensitiveAuditKey(key)) {
+      output[key] = '[REDACTED]';
+      return;
+    }
+    output[key] = sanitizeAuditSnapshot(value[key], depth + 1);
+  });
+  return output;
+}
+
+function normalizeAuditEntityId(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return Math.trunc(numeric);
+  return text(value).slice(0, 80) || null;
+}
+
+function normalizeAuditHash(value) {
+  const hash = text(value).toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(hash)) return '';
+  return hash;
+}
+
+function normalizeAuditPrevHash(value) {
+  const normalized = text(value).toLowerCase();
+  if (normalized === AUDIT_GENESIS_HASH) return AUDIT_GENESIS_HASH;
+  return normalizeAuditHash(normalized);
+}
+
+function stableAuditStringify(value) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableAuditStringify(item)).join(',')}]`;
+  if (typeof value !== 'object') return JSON.stringify(String(value));
+
+  const keys = Object.keys(value).sort((a, b) => a.localeCompare(b));
+  const pairs = keys.map((key) => `${JSON.stringify(key)}:${stableAuditStringify(value[key])}`);
+  return `{${pairs.join(',')}}`;
+}
+
+function buildAuditHashSource(entry) {
+  return {
+    id: Number(entry.id) || 0,
+    accion: text(entry.accion),
+    item: text(entry.item),
+    cantidad: Math.max(0, Math.trunc(Number(entry.cantidad) || 0)),
+    fecha: text(entry.fecha),
+    usuario: text(entry.usuario),
+    modulo: normalizeAuditModule(entry.modulo) || inferAuditModule(entry.accion, entry.item),
+    timestamp: text(entry.timestamp),
+    requestId: text(entry.requestId),
+    ip: text(entry.ip),
+    userAgent: text(entry.userAgent),
+    userId: Number.isFinite(Number(entry.userId)) ? Math.trunc(Number(entry.userId)) : null,
+    username: text(entry.username).toLowerCase(),
+    rol: text(entry.rol).toLowerCase(),
+    departamento: text(entry.departamento).toUpperCase(),
+    resultado: normalizeAuditResult(entry.resultado),
+    entidad: text(entry.entidad).toLowerCase(),
+    entidadId: normalizeAuditEntityId(entry.entidadId),
+    motivo: text(entry.motivo),
+    before: sanitizeAuditSnapshot(entry.before),
+    after: sanitizeAuditSnapshot(entry.after),
+    meta: sanitizeAuditSnapshot(entry.meta),
+  };
+}
+
+export function computeAuditEntryHash(entry, prevHash = 'genesis') {
+  const previous = normalizeAuditPrevHash(prevHash) || AUDIT_GENESIS_HASH;
+  const source = buildAuditHashSource(entry);
+  const digest = createHash('sha256');
+  digest.update(`${previous}|${stableAuditStringify(source)}`);
+  return digest.digest('hex');
+}
+
 function inferAuditModule(accion, item = '') {
   const action = text(accion).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const subject = text(item).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -404,7 +537,139 @@ function normalizeAuditEntry(entry) {
   copy.fecha = text(copy.fecha) || now();
   copy.usuario = text(copy.usuario) || 'Sistema';
   copy.modulo = normalizeAuditModule(copy.modulo) || inferAuditModule(copy.accion, copy.item);
+  copy.timestamp = (() => {
+    const source = text(copy.timestamp);
+    if (source) {
+      const parsed = parseDateMs(source);
+      if (parsed !== null) return new Date(parsed).toISOString();
+    }
+    const parsedFecha = parseDateMs(copy.fecha);
+    if (parsedFecha !== null) return new Date(parsedFecha).toISOString();
+    return new Date().toISOString();
+  })();
+  copy.requestId = text(copy.requestId).slice(0, 120);
+  copy.ip = text(copy.ip).slice(0, 120);
+  copy.userAgent = text(copy.userAgent).slice(0, 280);
+  copy.userId = Number.isFinite(Number(copy.userId)) ? Math.trunc(Number(copy.userId)) : null;
+  copy.username = text(copy.username).toLowerCase();
+  copy.rol = text(copy.rol).toLowerCase();
+  copy.departamento = text(copy.departamento).toUpperCase();
+  copy.resultado = normalizeAuditResult(copy.resultado);
+  copy.entidad = text(copy.entidad).toLowerCase();
+  copy.entidadId = normalizeAuditEntityId(copy.entidadId);
+  copy.motivo = text(copy.motivo).slice(0, 240);
+  copy.before = sanitizeAuditSnapshot(copy.before);
+  copy.after = sanitizeAuditSnapshot(copy.after);
+  copy.meta = sanitizeAuditSnapshot(copy.meta);
+  copy.prevHash = normalizeAuditPrevHash(copy.prevHash);
+  copy.hash = normalizeAuditHash(copy.hash);
   return copy;
+}
+
+function rebuildAuditChain(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const normalized = entries.map((entry) => normalizeAuditEntry(entry));
+  const oldestFirst = [...normalized].reverse();
+  let prevHash = AUDIT_GENESIS_HASH;
+  oldestFirst.forEach((entry) => {
+    entry.prevHash = prevHash;
+    entry.hash = computeAuditEntryHash(entry, prevHash);
+    prevHash = entry.hash;
+  });
+  return oldestFirst.reverse();
+}
+
+function normalizeAuditEntries(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const normalized = entries.map((entry) => normalizeAuditEntry(entry));
+  const requiresChainRebuild = normalized.some(
+    (entry) => !normalizeAuditPrevHash(entry.prevHash) || !normalizeAuditHash(entry.hash),
+  );
+  if (requiresChainRebuild) {
+    return rebuildAuditChain(normalized);
+  }
+  const oldestFirst = [...normalized].reverse();
+  let prevHash = AUDIT_GENESIS_HASH;
+  oldestFirst.forEach((entry) => {
+    const storedPrevHash = normalizeAuditPrevHash(entry.prevHash);
+    const storedHash = normalizeAuditHash(entry.hash);
+    entry.prevHash = storedPrevHash || prevHash;
+    entry.hash = storedHash || computeAuditEntryHash(entry, entry.prevHash);
+    prevHash = entry.hash;
+  });
+  return oldestFirst.reverse();
+}
+
+function entryNeedsAuditMigration(entry) {
+  const normalized = normalizeAuditEntry(entry);
+  if (!normalized.accion) return true;
+  if (!normalized.item) return true;
+  if (!normalized.fecha) return true;
+  if (!normalized.timestamp) return true;
+  if (!normalizeAuditModule(normalized.modulo)) return true;
+  if (!normalizeAuditPrevHash(normalized.prevHash)) return true;
+  if (!normalizeAuditHash(normalized.hash)) return true;
+  return false;
+}
+
+export function summarizeAuditIntegrity(entries) {
+  const normalized = normalizeAuditEntries(entries);
+  if (normalized.length === 0) {
+    return {
+      ok: true,
+      total: 0,
+      valid: 0,
+      invalid: 0,
+      firstBrokenId: null,
+      checkedAt: new Date().toISOString(),
+      lastExpectedHash: AUDIT_GENESIS_HASH,
+      samples: [],
+    };
+  }
+
+  const oldestFirst = [...normalized].reverse();
+  let expectedPrevHash = AUDIT_GENESIS_HASH;
+  let valid = 0;
+  let invalid = 0;
+  let firstBrokenId = null;
+  const samples = [];
+
+  oldestFirst.forEach((entry) => {
+    const expectedHash = computeAuditEntryHash(entry, expectedPrevHash);
+    const actualPrevHash = normalizeAuditPrevHash(entry.prevHash);
+    const actualHash = normalizeAuditHash(entry.hash);
+    const prevMatches = actualPrevHash === expectedPrevHash;
+    const hashMatches = actualHash === expectedHash;
+
+    if (prevMatches && hashMatches) {
+      valid += 1;
+    } else {
+      invalid += 1;
+      if (firstBrokenId === null) firstBrokenId = Number(entry.id) || null;
+      if (samples.length < 5) {
+        samples.push({
+          id: Number(entry.id) || 0,
+          prevHashExpected: expectedPrevHash,
+          prevHashActual: actualPrevHash || '(empty)',
+          hashExpected: expectedHash,
+          hashActual: actualHash || '(empty)',
+        });
+      }
+    }
+
+    expectedPrevHash = expectedHash;
+  });
+
+  return {
+    ok: invalid === 0,
+    total: oldestFirst.length,
+    valid,
+    invalid,
+    firstBrokenId,
+    checkedAt: new Date().toISOString(),
+    lastExpectedHash: expectedPrevHash,
+    samples,
+  };
 }
 
 function normalizeAssetStatus(value) {
@@ -506,7 +771,7 @@ function normalizeDbShape(db) {
   normalized.tickets = Array.isArray(db.tickets)
     ? db.tickets.map((ticket) => normalizeTicket(ticket, validBranchCodes))
     : [];
-  normalized.auditoria = Array.isArray(db.auditoria) ? db.auditoria.map(normalizeAuditEntry) : [];
+  normalized.auditoria = Array.isArray(db.auditoria) ? normalizeAuditEntries(db.auditoria) : [];
 
   if (!normalized.meta || typeof normalized.meta !== 'object') {
     normalized.meta = { nextId: maxExistingId(normalized) + 1 };
@@ -570,7 +835,7 @@ export async function readDb() {
   const usersRequireMigration = Array.isArray(parsed?.users)
     && parsed.users.some((user) => typeof user?.password === 'string' || !String(user?.passwordHash || '').trim());
   const auditRequiresMigration = Array.isArray(parsed?.auditoria)
-    && parsed.auditoria.some((entry) => !normalizeAuditModule(entry?.modulo));
+    && parsed.auditoria.some((entry) => entryNeedsAuditMigration(entry));
   const catalogsRequireMigration = !parsed?.catalogos
     || !Array.isArray(parsed.catalogos?.sucursales)
     || !Array.isArray(parsed.catalogos?.cargos)
@@ -637,15 +902,38 @@ export function verifyUserPassword(user, plainPassword) {
 
 export function pushAudit(db, payload) {
   const modulo = normalizeAuditModule(payload.modulo) || inferAuditModule(payload.accion, payload.item);
-  const entry = {
+  const currentAudit = Array.isArray(db.auditoria) ? db.auditoria : [];
+  const latestHash = normalizeAuditHash(currentAudit[0]?.hash) || null;
+  const prevHash = latestHash || AUDIT_GENESIS_HASH;
+  const draftEntry = {
     id: nextId(db),
-    accion: payload.accion,
-    item: payload.item,
+    accion: payload.accion || 'Accion',
+    item: payload.item || 'N/A',
     cantidad: payload.cantidad,
     fecha: now(),
-    usuario: payload.usuario || 'Admin IT',
+    usuario: payload.usuario || payload.username || 'Sistema',
     modulo,
+    timestamp: payload.timestamp || new Date().toISOString(),
+    requestId: payload.requestId || '',
+    ip: payload.ip || '',
+    userAgent: payload.userAgent || '',
+    userId: payload.userId ?? null,
+    username: payload.username || '',
+    rol: payload.rol || '',
+    departamento: payload.departamento || '',
+    resultado: payload.resultado || payload.result || 'ok',
+    entidad: payload.entidad || payload.entity || '',
+    entidadId: payload.entidadId ?? payload.entityId ?? null,
+    motivo: payload.motivo || payload.reason || '',
+    before: payload.before,
+    after: payload.after,
+    meta: payload.meta,
+    prevHash,
   };
+  const entry = normalizeAuditEntry(draftEntry);
+  entry.prevHash = normalizeAuditPrevHash(entry.prevHash) || AUDIT_GENESIS_HASH;
+  entry.hash = computeAuditEntryHash(entry, entry.prevHash);
+  db.auditoria = currentAudit;
   db.auditoria.unshift(entry);
   return entry;
 }

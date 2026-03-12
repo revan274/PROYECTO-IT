@@ -90,3 +90,16 @@ Revisa `.env.example`. Variables principales:
 - Todas las rutas de datos requieren `Authorization: Bearer <token>`.
 - Los permisos se validan por rol en sesion autenticada.
 - `passwordRemota` de activos solo se entrega a rol `admin`.
+
+## Despliegue en Render (1 servicio)
+Este repo incluye `render.yaml` para desplegar frontend + API en el mismo dominio.
+
+1. Sube el repo a GitHub.
+2. En Render: `New` -> `Blueprint` -> conecta el repo.
+3. Render detecta `render.yaml` y crea el servicio `mesa-it`.
+4. Configura variables sensibles en Render:
+   - `CORS_ORIGINS`: URL publica del servicio (ej: `https://mesa-it.onrender.com`)
+   - `QR_SIGNING_SECRET`: secreto largo y unico
+5. Deploy.
+
+El backend sirve automaticamente `dist/` cuando existe build, y la API queda en `/api`.
