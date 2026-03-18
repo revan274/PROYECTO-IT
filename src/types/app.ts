@@ -133,10 +133,13 @@ export interface DuplicateRiskItem {
 
 export interface AssetRiskSummary {
   totalActivos: number;
+  activosEvaluablesIp: number;
   activosConIp: number;
   activosSinIp: number;
+  activosEvaluablesMac: number;
   activosConMac: number;
   activosSinMac: number;
+  activosEvaluablesResponsable: number;
   activosSinResponsable: number;
   activosVidaAlta: number;
   activosEnFalla: number;

@@ -59,6 +59,8 @@ const DEFAULT_BRANCH_CATALOG = [
   { code: 'CEDIS', name: 'CeDis', activo: true },
 ];
 const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => branch.code));
+const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
+const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
 const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
 const CLOSED_STATES = new Set(['Resuelto', 'Cerrado']);
@@ -800,11 +802,26 @@ function parseAssetLifeYears(value) {
   return years;
 }
 
+function assetRiskTypeKey(asset) {
+  return asNonEmptyString(asset?.tipo || asset?.equipo).toUpperCase();
+}
+
+function assetRequiresNetworkIdentity(asset) {
+  return !NETWORK_RISK_EXEMPT_ASSET_TYPES.has(assetRiskTypeKey(asset));
+}
+
+function assetRequiresResponsible(asset) {
+  return !RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES.has(assetRiskTypeKey(asset));
+}
+
 function summarizeAssetRisks(activos) {
   const ipCounts = new Map();
   const macCounts = new Map();
+  let activosEvaluablesIp = 0;
   let activosSinIp = 0;
+  let activosEvaluablesMac = 0;
   let activosSinMac = 0;
+  let activosEvaluablesResponsable = 0;
   let activosSinResponsable = 0;
   let activosVidaAlta = 0;
   let activosEnFalla = 0;
@@ -814,10 +831,19 @@ function summarizeAssetRisks(activos) {
     const mac = asNonEmptyString(asset.macAddress).toLowerCase();
     const responsable = asNonEmptyString(asset.responsable);
     const years = parseAssetLifeYears(asset.aniosVida);
+    const requiresNetworkIdentity = assetRequiresNetworkIdentity(asset);
+    const requiresResponsible = assetRequiresResponsible(asset);
 
-    if (!ip) activosSinIp += 1;
-    if (!mac) activosSinMac += 1;
-    if (!responsable) activosSinResponsable += 1;
+    if (requiresNetworkIdentity) {
+      activosEvaluablesIp += 1;
+      activosEvaluablesMac += 1;
+      if (!ip) activosSinIp += 1;
+      if (!mac) activosSinMac += 1;
+    }
+    if (requiresResponsible) {
+      activosEvaluablesResponsable += 1;
+      if (!responsable) activosSinResponsable += 1;
+    }
     if (years !== null && years >= 4) activosVidaAlta += 1;
     if (asset.estado === 'Falla') activosEnFalla += 1;
 
@@ -836,10 +862,13 @@ function summarizeAssetRisks(activos) {
 
   return {
     totalActivos: activos.length,
-    activosConIp: activos.length - activosSinIp,
+    activosEvaluablesIp,
+    activosConIp: activosEvaluablesIp - activosSinIp,
     activosSinIp,
-    activosConMac: activos.length - activosSinMac,
+    activosEvaluablesMac,
+    activosConMac: activosEvaluablesMac - activosSinMac,
     activosSinMac,
+    activosEvaluablesResponsable,
     activosSinResponsable,
     activosVidaAlta,
     activosEnFalla,
@@ -1873,9 +1902,9 @@ app.get('/api/activos', requireAuth, async (req, res, next) => {
         if (mac) macCount.set(mac, (macCount.get(mac) || 0) + 1);
       });
 
-      if (risk === 'SIN_IP') list = list.filter((asset) => !asNonEmptyString(asset.ipAddress));
-      if (risk === 'SIN_MAC') list = list.filter((asset) => !asNonEmptyString(asset.macAddress));
-      if (risk === 'SIN_RESP') list = list.filter((asset) => !asNonEmptyString(asset.responsable));
+      if (risk === 'SIN_IP') list = list.filter((asset) => assetRequiresNetworkIdentity(asset) && !asNonEmptyString(asset.ipAddress));
+      if (risk === 'SIN_MAC') list = list.filter((asset) => assetRequiresNetworkIdentity(asset) && !asNonEmptyString(asset.macAddress));
+      if (risk === 'SIN_RESP') list = list.filter((asset) => assetRequiresResponsible(asset) && !asNonEmptyString(asset.responsable));
       if (risk === 'VIDA_ALTA') list = list.filter((asset) => {
         const years = parseAssetLifeYears(asset.aniosVida);
         return years !== null && years >= 4;

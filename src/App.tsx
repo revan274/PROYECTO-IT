@@ -896,6 +896,23 @@ function calculateMedian(values: number[]): number | null {
   return calculatePercentile(values, 50);
 }
 
+const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
+const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
+
+function getAssetRiskTypeKey(asset: Pick<Activo, 'tipo' | 'equipo'>): string {
+  return String(asset.tipo || asset.equipo || '')
+    .trim()
+    .toUpperCase();
+}
+
+function assetRequiresNetworkIdentity(asset: Pick<Activo, 'tipo' | 'equipo'>): boolean {
+  return !NETWORK_RISK_EXEMPT_ASSET_TYPES.has(getAssetRiskTypeKey(asset));
+}
+
+function assetRequiresResponsible(asset: Pick<Activo, 'tipo' | 'equipo'>): boolean {
+  return !RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES.has(getAssetRiskTypeKey(asset));
+}
+
 function ticketBelongsToSessionUser(ticket: TicketItem, user: UserSession | null): boolean {
   if (!user) return false;
   if (user.rol !== 'solicitante') return true;
@@ -1246,8 +1263,11 @@ function normalizeCatalogState(value?: Partial<CatalogState>): CatalogState {
 function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {
   const ipCounts = new Map<string, number>();
   const macCounts = new Map<string, number>();
+  let activosEvaluablesIp = 0;
   let activosSinIp = 0;
+  let activosEvaluablesMac = 0;
   let activosSinMac = 0;
+  let activosEvaluablesResponsable = 0;
   let activosSinResponsable = 0;
   let activosVidaAlta = 0;
   let activosEnFalla = 0;
@@ -1257,10 +1277,19 @@ function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {
     const mac = (asset.macAddress || '').trim().toLowerCase();
     const responsable = (asset.responsable || '').trim();
     const years = parseAssetLifeYears(asset.aniosVida);
+    const requiresNetworkIdentity = assetRequiresNetworkIdentity(asset);
+    const requiresResponsible = assetRequiresResponsible(asset);
 
-    if (!ip) activosSinIp += 1;
-    if (!mac) activosSinMac += 1;
-    if (!responsable) activosSinResponsable += 1;
+    if (requiresNetworkIdentity) {
+      activosEvaluablesIp += 1;
+      activosEvaluablesMac += 1;
+      if (!ip) activosSinIp += 1;
+      if (!mac) activosSinMac += 1;
+    }
+    if (requiresResponsible) {
+      activosEvaluablesResponsable += 1;
+      if (!responsable) activosSinResponsable += 1;
+    }
     if (years !== null && years >= 4) activosVidaAlta += 1;
     if (asset.estado === 'Falla') activosEnFalla += 1;
 
@@ -1279,10 +1308,13 @@ function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {
 
   return {
     totalActivos: activos.length,
-    activosConIp: activos.length - activosSinIp,
+    activosEvaluablesIp,
+    activosConIp: activosEvaluablesIp - activosSinIp,
     activosSinIp,
-    activosConMac: activos.length - activosSinMac,
+    activosEvaluablesMac,
+    activosConMac: activosEvaluablesMac - activosSinMac,
     activosSinMac,
+    activosEvaluablesResponsable,
     activosSinResponsable,
     activosVidaAlta,
     activosEnFalla,
@@ -4144,7 +4176,10 @@ export default function App() {
   );
 
   const activosConIp = effectiveRiskSummary.activosConIp;
+  const activosEvaluablesIp = effectiveRiskSummary.activosEvaluablesIp;
   const activosConMac = effectiveRiskSummary.activosConMac;
+  const activosEvaluablesMac = effectiveRiskSummary.activosEvaluablesMac;
+  const activosEvaluablesResponsable = effectiveRiskSummary.activosEvaluablesResponsable;
   const activosSinResponsable = effectiveRiskSummary.activosSinResponsable;
   const activosVidaAlta = effectiveRiskSummary.activosVidaAlta;
   const activosEnFalla = effectiveRiskSummary.activosEnFalla;
@@ -4161,13 +4196,13 @@ export default function App() {
         if (inventoryStatusFilter !== 'TODOS' && asset.estado !== inventoryStatusFilter) {
           return false;
         }
-        if (inventoryRiskFilter === 'SIN_IP' && (asset.ipAddress || '').trim()) {
+        if (inventoryRiskFilter === 'SIN_IP' && (!assetRequiresNetworkIdentity(asset) || (asset.ipAddress || '').trim())) {
           return false;
         }
-        if (inventoryRiskFilter === 'SIN_MAC' && (asset.macAddress || '').trim()) {
+        if (inventoryRiskFilter === 'SIN_MAC' && (!assetRequiresNetworkIdentity(asset) || (asset.macAddress || '').trim())) {
           return false;
         }
-        if (inventoryRiskFilter === 'SIN_RESP' && (asset.responsable || '').trim()) {
+        if (inventoryRiskFilter === 'SIN_RESP' && (!assetRequiresResponsible(asset) || (asset.responsable || '').trim())) {
           return false;
         }
         if (inventoryRiskFilter === 'DUP_RED' && !hasNetworkDuplication(asset)) {
@@ -7047,15 +7082,15 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="bg-white border border-slate-100 rounded-2xl p-4">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con IP</p>
-                      <p className="text-2xl font-black text-slate-800">{activosConIp} <span className="text-sm text-slate-400">/ {activos.length}</span></p>
+                      <p className="text-2xl font-black text-slate-800">{activosConIp} <span className="text-sm text-slate-400">/ {activosEvaluablesIp}</span></p>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-4">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con MAC</p>
-                      <p className="text-2xl font-black text-slate-800">{activosConMac} <span className="text-sm text-slate-400">/ {activos.length}</span></p>
+                      <p className="text-2xl font-black text-slate-800">{activosConMac} <span className="text-sm text-slate-400">/ {activosEvaluablesMac}</span></p>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-4">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sin Responsable</p>
-                      <p className="text-2xl font-black text-red-500">{activosSinResponsable}</p>
+                      <p className="text-2xl font-black text-red-500">{activosSinResponsable} <span className="text-sm text-slate-400">/ {activosEvaluablesResponsable}</span></p>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-2xl p-4">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Vida Util Alta (&gt;=4)</p>
@@ -7198,13 +7233,13 @@ export default function App() {
                       onClick={() => applyInventoryFocus('SIN_IP')}
                       className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
                     >
-                      Sin IP: {activos.length - activosConIp} | Ver afectados
+                      Sin IP: {effectiveRiskSummary.activosSinIp} | Ver afectados
                     </button>
                     <button
                       onClick={() => applyInventoryFocus('SIN_MAC')}
                       className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
                     >
-                      Sin MAC: {activos.length - activosConMac} | Ver afectados
+                      Sin MAC: {effectiveRiskSummary.activosSinMac} | Ver afectados
                     </button>
                     <button
                       onClick={() => applyInventoryFocus('SIN_RESP')}
