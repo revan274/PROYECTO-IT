@@ -1,13 +1,15 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(async () => {
-  const plugins = [react(), tailwindcss()]
+  const plugins: PluginOption[] = [react(), tailwindcss()]
 
   try {
-    // @ts-ignore - optional dependency for Cloudflare builds.
-    const { cloudflare } = await import('@cloudflare/vite-plugin')
+    const cloudflarePluginId = '@cloudflare/vite-plugin'
+    const { cloudflare } = await import(/* @vite-ignore */ cloudflarePluginId) as {
+      cloudflare?: () => PluginOption
+    }
     if (typeof cloudflare === 'function') {
       plugins.push(cloudflare())
     }

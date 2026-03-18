@@ -143,13 +143,61 @@ function calculateSlaDeadline(prioridad: PrioridadTicket): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
-function getSlaStatus(ticket: TicketItem): { label: string; className: string } {
-  if (ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado') {
+function isTicketClosed(ticket: Pick<TicketItem, 'estado'>): boolean {
+  return ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado';
+}
+
+function ticketAuditActionLabel(estado: TicketEstado): string {
+  if (estado === 'Resuelto') return 'Ticket Resuelto';
+  if (estado === 'Cerrado') return 'Ticket Cerrado';
+  if (estado === 'En Proceso') return 'Ticket En Proceso';
+  if (estado === 'En Espera') return 'Ticket En Espera';
+  return 'Ticket Actualizado';
+}
+
+function buildTicketHistoryEntry(
+  accion: string,
+  estado: TicketEstado,
+  usuario: string,
+  comentario = '',
+): { fecha: string; usuario: string; accion: string; estado: TicketEstado; comentario?: string } {
+  return {
+    fecha: new Date().toISOString(),
+    usuario,
+    accion,
+    estado,
+    comentario,
+  };
+}
+
+function getTicketSlaDueTimestamp(ticket: Pick<TicketItem, 'fechaLimite'>): number | null {
+  return parseDateToTimestamp(ticket.fechaLimite || '');
+}
+
+function getTicketSlaRemainingMinutes(ticket: TicketItem, nowMs = Date.now()): number | null {
+  if (isTicketClosed(ticket)) return null;
+  const dueTimestamp = getTicketSlaDueTimestamp(ticket);
+  if (dueTimestamp !== null) {
+    return Math.ceil((dueTimestamp - nowMs) / 60000);
+  }
+  return typeof ticket.slaRestanteMin === 'number' ? ticket.slaRestanteMin : null;
+}
+
+function isTicketSlaExpired(ticket: TicketItem, nowMs = Date.now()): boolean {
+  if (isTicketClosed(ticket)) return false;
+  const dueTimestamp = getTicketSlaDueTimestamp(ticket);
+  if (dueTimestamp !== null) return nowMs > dueTimestamp;
+  const remaining = typeof ticket.slaRestanteMin === 'number' ? ticket.slaRestanteMin : null;
+  return !!ticket.slaVencido || (typeof remaining === 'number' && remaining <= 0);
+}
+
+function getSlaStatus(ticket: TicketItem, nowMs = Date.now()): { label: string; className: string } {
+  if (isTicketClosed(ticket)) {
     return { label: 'SLA CERRADO', className: 'bg-slate-100 text-slate-500 border-slate-200' };
   }
 
-  const remaining = ticket.slaRestanteMin;
-  if (ticket.slaVencido || (typeof remaining === 'number' && remaining <= 0)) {
+  const remaining = getTicketSlaRemainingMinutes(ticket, nowMs);
+  if (isTicketSlaExpired(ticket, nowMs) || (typeof remaining === 'number' && remaining <= 0)) {
     return { label: 'SLA VENCIDO', className: 'bg-red-50 text-red-600 border-red-200' };
   }
   if (typeof remaining === 'number' && remaining <= 60) {
@@ -483,17 +531,17 @@ function toActivoFromQrLookup(lookup: AssetQrResolveResponse['asset'] | Record<s
 function ticketTimestamp(ticket: TicketItem): number {
   const source = ticket.fechaCreacion || ticket.fechaCierre || ticket.fecha;
   if (!source) return Number(ticket.id || 0);
-  const parsed = new Date(source);
-  if (Number.isNaN(parsed.getTime())) return Number(ticket.id || 0);
-  return parsed.getTime();
+  const parsed = parseDateToTimestamp(source);
+  if (parsed === null) return Number(ticket.id || 0);
+  return parsed;
 }
 
 function ticketCreatedTimestamp(ticket: TicketItem): number {
   const source = ticket.fechaCreacion || ticket.fecha;
   if (!source) return ticketTimestamp(ticket);
-  const parsed = new Date(source);
-  if (Number.isNaN(parsed.getTime())) return ticketTimestamp(ticket);
-  return parsed.getTime();
+  const parsed = parseDateToTimestamp(source);
+  if (parsed === null) return ticketTimestamp(ticket);
+  return parsed;
 }
 
 function parseDateToTimestamp(value?: string): number | null {
@@ -1407,7 +1455,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [backendConnected, setBackendConnected] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [dashboardNow, setDashboardNow] = useState(() => Date.now());
+  const [liveNow, setLiveNow] = useState(() => Date.now());
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const debouncedSupplySearchTerm = useDebouncedValue(supplySearchTerm);
   const headerSearchTokens = useMemo(
@@ -1510,11 +1558,10 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (!isDashboardView) return;
-    setDashboardNow(Date.now());
-    const intervalId = window.setInterval(() => setDashboardNow(Date.now()), 60000);
+    setLiveNow(Date.now());
+    const intervalId = window.setInterval(() => setLiveNow(Date.now()), 60000);
     return () => window.clearInterval(intervalId);
-  }, [isDashboardView]);
+  }, []);
 
   useEffect(() => {
     if (!sessionUser) {
@@ -3463,6 +3510,7 @@ export default function App() {
           const id = Date.now();
           const fechaLimite = calculateSlaDeadline(prioridad);
           const ticketTag = activoTag || `#${id}`;
+          const createdAtIso = new Date().toISOString();
           setTickets((prev) => [
             ...prev,
             {
@@ -3473,8 +3521,8 @@ export default function App() {
               prioridad,
               estado: 'Abierto',
               atencionTipo,
-              fecha: new Date().toLocaleString(),
-              fechaCreacion: new Date().toISOString(),
+              fecha: createdAtIso,
+              fechaCreacion: createdAtIso,
               fechaLimite,
               asignadoA: canEdit ? (formData.asignadoA || '') : '',
               solicitadoPor: sessionUser?.nombre || 'Usuario',
@@ -3484,13 +3532,7 @@ export default function App() {
               slaVencido: false,
               slaRestanteMin: Math.ceil((new Date(fechaLimite).getTime() - Date.now()) / 60000),
               historial: [
-                {
-                  fecha: new Date().toLocaleString(),
-                  usuario: sessionUser?.nombre || 'Admin IT',
-                  accion: 'Ticket Creado',
-                  estado: 'Abierto',
-                  comentario: 'Registro inicial',
-                },
+                buildTicketHistoryEntry('Ticket Creado', 'Abierto', sessionUser?.nombre || 'Admin IT', 'Registro inicial'),
               ],
             },
           ]);
@@ -3528,19 +3570,22 @@ export default function App() {
                 estado: 'Resuelto',
                 fechaCierre: ticket.fechaCierre || new Date().toISOString(),
                 historial: [
-                  {
-                    fecha: new Date().toLocaleString(),
-                    usuario: sessionUser?.nombre || 'Admin IT',
-                    accion: 'Ticket Resuelto',
-                    estado: 'Resuelto',
-                    comentario: 'Resolucion en modo local',
-                  },
+                  buildTicketHistoryEntry('Ticket Resuelto', 'Resuelto', sessionUser?.nombre || 'Admin IT', 'Resolucion en modo local'),
                   ...(ticket.historial || []),
                 ],
               }
             : ticket,
         ),
       );
+      if (ticketToResolve?.activoTag) {
+        setActivos((prev) =>
+          prev.map((asset) =>
+            normalizeForCompare(asset.tag) === normalizeForCompare(ticketToResolve.activoTag)
+              ? { ...asset, estado: 'Operativo' }
+              : asset,
+          ),
+        );
+      }
       registrarLog('Ticket Resuelto', ticketToResolve?.activoTag || `#${id}`, 1, 'tickets');
       showToast('Ticket cerrado', 'success');
       return;
@@ -3620,6 +3665,11 @@ export default function App() {
         prev.map((ticket) => {
           if (ticket.id !== ticketId) return ticket;
           const nextState = updates.estado || ticket.estado;
+          const historyAction = updates.estado
+            ? ticketAuditActionLabel(nextState)
+            : updates.atencionTipo !== undefined
+              ? 'Tipo Atencion Ticket'
+              : 'Ticket Actualizado';
           return {
             ...ticket,
             estado: nextState,
@@ -3629,9 +3679,34 @@ export default function App() {
               nextState === 'Resuelto' || nextState === 'Cerrado'
                 ? ticket.fechaCierre || new Date().toISOString()
                 : ticket.fechaCierre,
+            historial: [
+              buildTicketHistoryEntry(
+                historyAction,
+                nextState,
+                sessionUser?.nombre || 'Admin IT',
+                String(updates.comentario || '').trim(),
+              ),
+              ...(ticket.historial || []),
+            ],
           };
         }),
       );
+      if (updates.estado && ticketCurrent?.activoTag) {
+        const nextAssetState = updates.estado === 'Abierto' || updates.estado === 'En Proceso'
+          ? 'Falla'
+          : updates.estado === 'Resuelto' || updates.estado === 'Cerrado'
+            ? 'Operativo'
+            : null;
+        if (nextAssetState) {
+          setActivos((prev) =>
+            prev.map((asset) =>
+              normalizeForCompare(asset.tag) === normalizeForCompare(ticketCurrent.activoTag)
+                ? { ...asset, estado: nextAssetState }
+                : asset,
+            ),
+          );
+        }
+      }
       if (updates.estado) {
         registrarLog(`Ticket ${updates.estado}`, ticketCurrent?.activoTag || `#${ticketId}`, 1, 'tickets');
       } else if (updates.asignadoA !== undefined) {
@@ -3695,13 +3770,7 @@ export default function App() {
               ? {
                   ...ticket,
                   historial: [
-                    {
-                      fecha: new Date().toLocaleString(),
-                      usuario: sessionUser?.nombre || 'Sistema',
-                      accion: 'Comentario',
-                      estado: ticket.estado,
-                      comentario,
-                    },
+                    buildTicketHistoryEntry('Comentario', ticket.estado, sessionUser?.nombre || 'Sistema', comentario),
                     ...(ticket.historial || []),
                   ],
                 }
@@ -3780,13 +3849,7 @@ export default function App() {
                   ...ticket,
                   attachments: [attachment, ...(ticket.attachments || [])],
                   historial: [
-                    {
-                      fecha: new Date().toLocaleString(),
-                      usuario: sessionUser?.nombre || 'Sistema',
-                      accion: 'Adjunto agregado',
-                      estado: ticket.estado,
-                      comentario: file.name,
-                    },
+                    buildTicketHistoryEntry('Adjunto agregado', ticket.estado, sessionUser?.nombre || 'Sistema', file.name),
                     ...(ticket.historial || []),
                   ],
                 }
@@ -3872,13 +3935,7 @@ export default function App() {
                   ...ticket,
                   attachments: (ticket.attachments || []).filter((item) => item.id !== attachment.id),
                   historial: [
-                    {
-                      fecha: new Date().toLocaleString(),
-                      usuario: sessionUser?.nombre || 'Sistema',
-                      accion: 'Adjunto eliminado',
-                      estado: ticket.estado,
-                      comentario: attachment.fileName,
-                    },
+                    buildTicketHistoryEntry('Adjunto eliminado', ticket.estado, sessionUser?.nombre || 'Sistema', attachment.fileName),
                     ...(ticket.historial || []),
                   ],
                 }
@@ -4378,21 +4435,25 @@ export default function App() {
     },
     [canAccessTicketBySession, canEdit, sessionUser?.rol],
   );
+  const getSlaStatusForCurrentTime = useCallback(
+    (ticket: TicketItem) => getSlaStatus(ticket, liveNow),
+    [liveNow],
+  );
   const scopedTickets = useMemo(
     () => (isRequesterOnlyUser ? tickets.filter(canAccessTicketBySession) : tickets),
     [canAccessTicketBySession, isRequesterOnlyUser, tickets],
   );
 
-  const isTicketOpen = (ticket: TicketItem): boolean => ticket.estado !== 'Resuelto' && ticket.estado !== 'Cerrado';
+  const isTicketOpen = (ticket: TicketItem): boolean => !isTicketClosed(ticket);
   const openTickets = scopedTickets.filter(isTicketOpen);
   const openTicketsCount = openTickets.length;
-  const slaExpiredCount = openTickets.filter((t) => t.slaVencido).length;
+  const slaExpiredCount = openTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
   const criticalTicketsCount = openTickets.filter((t) => t.prioridad === 'CRITICA').length;
   const unassignedTicketsCount = openTickets.filter((t) => !(t.asignadoA || '').trim()).length;
 
   const dashboardWindow = useMemo(
-    () => resolveDashboardRangeWindow(dashboardRange, dashboardNow),
-    [dashboardNow, dashboardRange],
+    () => resolveDashboardRangeWindow(dashboardRange, liveNow),
+    [dashboardRange, liveNow],
   );
   const dashboardTicketsCurrent = useMemo(
     () =>
@@ -4433,12 +4494,12 @@ export default function App() {
     [dashboardOpenTicketsPrevious],
   );
   const dashboardSlaExpiredCurrent = useMemo(
-    () => dashboardOpenTicketsCurrent.filter((ticket) => !!ticket.slaVencido),
-    [dashboardOpenTicketsCurrent],
+    () => dashboardOpenTicketsCurrent.filter((ticket) => isTicketSlaExpired(ticket, liveNow)),
+    [dashboardOpenTicketsCurrent, liveNow],
   );
   const dashboardSlaExpiredPrevious = useMemo(
-    () => dashboardOpenTicketsPrevious.filter((ticket) => !!ticket.slaVencido),
-    [dashboardOpenTicketsPrevious],
+    () => dashboardOpenTicketsPrevious.filter((ticket) => isTicketSlaExpired(ticket, liveNow)),
+    [dashboardOpenTicketsPrevious, liveNow],
   );
   const dashboardUnassignedCount = useMemo(
     () => dashboardOpenTicketsCurrent.filter((ticket) => !(ticket.asignadoA || '').trim()).length,
@@ -4488,14 +4549,14 @@ export default function App() {
       { label: '8-24h', minHours: 8, maxHours: 24, count: 0 },
       { label: '>24h', minHours: 24, maxHours: Number.POSITIVE_INFINITY, count: 0 },
     ];
-    const nowMs = Date.now();
+    const nowMs = liveNow;
     dashboardOpenTicketsCurrent.forEach((ticket) => {
       const ageHours = Math.max(0, (nowMs - ticketCreatedTimestamp(ticket)) / (60 * 60 * 1000));
       const target = buckets.find((bucket) => ageHours >= bucket.minHours && ageHours < bucket.maxHours);
       if (target) target.count += 1;
     });
     return buckets;
-  }, [dashboardOpenTicketsCurrent]);
+  }, [dashboardOpenTicketsCurrent, liveNow]);
   const dashboardSlaTotalCount = dashboardTicketsCurrent.length;
   const dashboardSlaExpiredCount = dashboardSlaExpiredCurrent.length;
   const dashboardSlaCompliantCount = Math.max(0, dashboardSlaTotalCount - dashboardSlaExpiredCount);
@@ -4539,7 +4600,7 @@ export default function App() {
       if (ticketPriorityFilter !== 'TODAS' && ticket.prioridad !== ticketPriorityFilter) return false;
       if (ticketAssignmentFilter === 'ASIGNADOS' && !(ticket.asignadoA || '').trim()) return false;
       if (ticketAssignmentFilter === 'SIN_ASIGNAR' && (ticket.asignadoA || '').trim()) return false;
-      if (ticketSlaFilter === 'VENCIDO' && !ticket.slaVencido) return false;
+      if (ticketSlaFilter === 'VENCIDO' && !isTicketSlaExpired(ticket, liveNow)) return false;
 
       if (headerSearchTokens.length === 0) return true;
       const searchable = normalizeForCompare([
@@ -4553,13 +4614,16 @@ export default function App() {
     });
 
     rows.sort((a, b) => {
-      if ((a.slaVencido ? 1 : 0) !== (b.slaVencido ? 1 : 0)) return (b.slaVencido ? 1 : 0) - (a.slaVencido ? 1 : 0);
+      const leftExpired = isTicketSlaExpired(a, liveNow) ? 1 : 0;
+      const rightExpired = isTicketSlaExpired(b, liveNow) ? 1 : 0;
+      if (leftExpired !== rightExpired) return rightExpired - leftExpired;
       return ticketTimestamp(b) - ticketTimestamp(a);
     });
     return rows;
   }, [
     formatTicketBranchFromCatalog,
     headerSearchTokens,
+    liveNow,
     scopedTickets,
     ticketAssignmentFilter,
     ticketLifecycleFilter,
@@ -4928,14 +4992,14 @@ export default function App() {
   const reportOpenCount = reportTickets.filter(isTicketOpen).length;
   const reportClosedCount = reportTickets.length - reportOpenCount;
   const reportCriticalCount = reportTickets.filter((ticket) => ticket.prioridad === 'CRITICA').length;
-  const reportSlaExpiredCount = reportTickets.filter((ticket) => ticket.estado !== 'Resuelto' && ticket.estado !== 'Cerrado' && !!ticket.slaVencido).length;
+  const reportSlaExpiredCount = reportTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
   const reportSlaTotalCount = reportTickets.length;
   const reportSlaCompliantCount = Math.max(0, reportSlaTotalCount - reportSlaExpiredCount);
   const reportSlaCompliancePct = reportSlaTotalCount > 0
     ? Math.round((reportSlaCompliantCount / reportSlaTotalCount) * 100)
     : 100;
   const reportPreviousOpenCount = reportPreviousTickets.filter(isTicketOpen).length;
-  const reportPreviousSlaExpiredCount = reportPreviousTickets.filter((ticket) => ticket.estado !== 'Resuelto' && ticket.estado !== 'Cerrado' && !!ticket.slaVencido).length;
+  const reportPreviousSlaExpiredCount = reportPreviousTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
   const reportPreviousSlaTotalCount = reportPreviousTickets.length;
   const reportPreviousSlaCompliantCount = Math.max(0, reportPreviousSlaTotalCount - reportPreviousSlaExpiredCount);
   const reportPreviousSlaCompliancePct = reportPreviousSlaTotalCount > 0
@@ -5303,7 +5367,7 @@ export default function App() {
       const area = getTicketAreaLabel(ticket);
       const branch = formatTicketBranchFromCatalog(ticket.sucursal);
       const attention = formatTicketAttentionType(ticket.atencionTipo);
-      const sla = ticket.slaVencido ? 'Vencido' : 'En tiempo';
+      const sla = isTicketSlaExpired(ticket, liveNow) ? 'Vencido' : 'En tiempo';
       return `
         <tr>
           <td>${ticket.id}</td>
@@ -5584,7 +5648,7 @@ export default function App() {
         Prioridad: ticket.prioridad,
         Estado: ticket.estado,
         Atencion: formatTicketAttentionType(ticket.atencionTipo),
-        SLA: ticket.slaVencido ? 'VENCIDO' : 'EN TIEMPO',
+        SLA: isTicketSlaExpired(ticket, liveNow) ? 'VENCIDO' : 'EN TIEMPO',
         Asignado: ticket.asignadoA || 'Sin asignar',
         SolicitadoPor: ticket.solicitadoPor || '',
         Departamento: ticket.departamento || '',
@@ -8022,7 +8086,7 @@ export default function App() {
                 formatBytes={formatBytes}
                 normalizeTicketAttentionType={normalizeTicketAttentionType}
                 formatTicketAttentionType={formatTicketAttentionType}
-                getSlaStatus={getSlaStatus}
+                getSlaStatus={getSlaStatusForCurrentTime}
                 canDeleteTicket={canDeleteTicket}
                 onOpenTicketModal={() => openModal('ticket')}
                 onApplyTicketFocus={applyTicketFocus}
