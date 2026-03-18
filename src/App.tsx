@@ -1465,7 +1465,7 @@ export default function App() {
   const [supplyStatusFilter, setSupplyStatusFilter] = useState<SupplyStatusFilter>('TODOS');
   const [importDraft, setImportDraft] = useState<ImportDraftState | null>(null);
   const [isApplyingImport, setIsApplyingImport] = useState(false);
-  const [assetRiskSummary, setAssetRiskSummary] = useState<AssetRiskSummary | null>(null);
+  const [, setAssetRiskSummary] = useState<AssetRiskSummary | null>(null);
   const [assetRiskSource, setAssetRiskSource] = useState<'api' | 'local'>('local');
   const [newUserForm, setNewUserForm] = useState<{
     nombre: string;
@@ -4139,7 +4139,7 @@ export default function App() {
     return (ip ? (networkIpCounts[ip] || 0) > 1 : false) || (mac ? (networkMacCounts[mac] || 0) > 1 : false);
   }, [networkIpCounts, networkMacCounts]);
   const localRiskSummary = useMemo(() => calculateAssetRiskSummary(activos), [activos]);
-  const effectiveRiskSummary = assetRiskSource === 'api' && assetRiskSummary ? assetRiskSummary : localRiskSummary;
+  const effectiveRiskSummary = localRiskSummary;
   const duplicateIpEntries = effectiveRiskSummary.duplicateIpEntries;
   const duplicateMacEntries = effectiveRiskSummary.duplicateMacEntries;
 
