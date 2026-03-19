@@ -308,6 +308,14 @@ function formatDateTime(value?: string): string {
   return parsed.toLocaleString();
 }
 
+function normalizeLooseDateString(value?: string): string {
+  return String(value || '')
+    .trim()
+    .replace(/\sa\.\s*m\./gi, ' AM')
+    .replace(/\sp\.\s*m\./gi, ' PM')
+    .replace(/\./g, '');
+}
+
 function parseAuditBoundaryDate(value?: string, endOfDay = false): number | null {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -326,11 +334,7 @@ function getAuditRowTimestampMs(log: Pick<RegistroAuditoria, 'timestamp' | 'fech
     const parsed = new Date(ts);
     if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
   }
-  const raw = String(log.fecha || '')
-    .trim()
-    .replace(/\sa\.\s*m\./gi, ' AM')
-    .replace(/\sp\.\s*m\./gi, ' PM')
-    .replace(/\./g, '');
+  const raw = normalizeLooseDateString(log.fecha);
   if (!raw) return null;
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
@@ -565,11 +569,7 @@ function parseDateToTimestamp(value?: string): number | null {
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
 
-  const cleaned = raw
-    .replace(/\sa\.\s*m\./gi, ' AM')
-    .replace(/\sp\.\s*m\./gi, ' PM')
-    .replace(/\./g, '')
-    .trim();
+  const cleaned = normalizeLooseDateString(raw);
   const alt = new Date(cleaned);
   if (!Number.isNaN(alt.getTime())) return alt.getTime();
   return null;
@@ -683,6 +683,14 @@ function formatTicketAttentionType(value: unknown): string {
   if (normalized === 'PRESENCIAL') return 'Presencial';
   if (normalized === 'REMOTO') return 'Remoto';
   return 'Sin definir';
+}
+
+function buildTicketDescription(areaAfectada: string, descripcion: string): string {
+  const area = String(areaAfectada || '').trim();
+  const details = String(descripcion || '').trim();
+  if (!area) return details;
+  const areaLabel = `Área afectada: ${area}`;
+  return details.startsWith(areaLabel) ? details : `${areaLabel} | ${details}`;
 }
 
 function normalizeIncidentCause(value: string): string {
@@ -955,6 +963,59 @@ function preventInvalidIntegerInputKeys(event: React.KeyboardEvent<HTMLInputElem
   if (event.key === 'e' || event.key === 'E' || event.key === '+' || event.key === '-' || event.key === '.') {
     event.preventDefault();
   }
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/[^\d]/g, '');
+}
+
+function buildInitialFormDataForModal(
+  modal: Exclude<ModalType, null>,
+  defaultBranchCode: string,
+): FormDataState {
+  if (modal === 'ticket') {
+    return {
+      prioridad: 'MEDIA',
+      atencionTipo: undefined,
+      asignadoA: '',
+      sucursal: defaultBranchCode,
+      areaAfectada: '',
+      fallaComun: '',
+    };
+  }
+  if (modal === 'activo') {
+    return {
+      estado: 'Operativo',
+      fechaCompra: new Date().toISOString().slice(0, 10),
+    };
+  }
+  if (modal === 'insumo') {
+    return { unidad: 'Piezas' };
+  }
+  return {};
+}
+
+function getModalTitle(
+  modal: ModalType,
+  editingAssetId: number | null,
+  editingInsumoId: number | null,
+): string {
+  if (modal === 'activo') return editingAssetId !== null ? 'Editar Equipo' : 'Alta Equipo';
+  if (modal === 'insumo') return editingInsumoId !== null ? 'Editar Insumo' : 'Ingreso Material';
+  if (modal === 'ticket') return 'Ticket';
+  return '';
+}
+
+function getModalSubmitLabel(
+  modal: ModalType,
+  isModalSaving: boolean,
+  editingAssetId: number | null,
+  editingInsumoId: number | null,
+): string {
+  if (isModalSaving) return 'Guardando...';
+  if (modal === 'activo' && editingAssetId !== null) return 'Guardar Cambios';
+  if (modal === 'insumo' && editingInsumoId !== null) return 'Guardar Cambios';
+  return 'Guardar';
 }
 
 function useDebouncedValue<T>(value: T, delayMs = 220): T {
@@ -1657,11 +1718,18 @@ export default function App() {
   const canEdit = sessionUser?.rol === 'admin' || sessionUser?.rol === 'tecnico';
   const canCreateTickets = canEdit || sessionUser?.rol === 'solicitante';
   const canSubmitInsumo = canEdit && insumoFormValidation.isValid && !isModalSaving;
-  const canSubmitModal = showModal === 'ticket'
+  const currentModal = showModal;
+  const isAssetModal = currentModal === 'activo';
+  const isSupplyModal = currentModal === 'insumo';
+  const isTicketModal = currentModal === 'ticket';
+  const canSubmitModal = isTicketModal
     ? canCreateTickets && !isModalSaving
-    : showModal === 'insumo'
+    : isSupplyModal
       ? canSubmitInsumo
       : canEdit && !isModalSaving;
+  const modalWidthClass = isAssetModal ? 'max-w-5xl' : 'max-w-lg';
+  const modalTitle = getModalTitle(currentModal, editingAssetId, editingInsumoId);
+  const modalSubmitLabel = getModalSubmitLabel(currentModal, isModalSaving, editingAssetId, editingInsumoId);
   const canManageUsers = sessionUser?.rol === 'admin';
   const isReadOnly = !canEdit;
   const isRequesterOnlyUser = sessionUser?.rol === 'solicitante';
@@ -1888,25 +1956,7 @@ export default function App() {
     setEditingInsumoId(null);
     setIsModalSaving(false);
     setInsumoTouched(createEmptyInsumoTouched());
-    if (modal === 'ticket') {
-      setFormData({
-        prioridad: 'MEDIA',
-        atencionTipo: undefined,
-        asignadoA: '',
-        sucursal: activeTicketBranches[0]?.code || '',
-        areaAfectada: '',
-        fallaComun: '',
-      });
-    } else if (modal === 'activo') {
-      setFormData({
-        estado: 'Operativo',
-        fechaCompra: new Date().toISOString().slice(0, 10),
-      });
-    } else if (modal === 'insumo') {
-      setFormData({ unidad: 'Piezas' });
-    } else {
-      setFormData({});
-    }
+    setFormData(buildInitialFormDataForModal(modal, activeTicketBranches[0]?.code || ''));
     setShowModal(modal);
   };
 
@@ -3316,7 +3366,9 @@ export default function App() {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isModalSaving) return;
-    const isTicketModal = showModal === 'ticket';
+    const modalType = showModal;
+    if (!modalType) return;
+    const isTicketModal = modalType === 'ticket';
     if (isTicketModal) {
       if (!canCreateTickets) {
         showToast('Tu rol no permite crear tickets', 'warning');
@@ -3330,7 +3382,7 @@ export default function App() {
     setIsModalSaving(true);
 
     try {
-      if (showModal === 'activo') {
+      if (modalType === 'activo') {
         const isEditingAsset = editingAssetId !== null;
         const activoPayload = {
           tag: formData.tag || '',
@@ -3412,9 +3464,7 @@ export default function App() {
           }
         }
         showToast(editingAssetId !== null ? 'Activo actualizado' : 'Activo registrado', 'success');
-      }
-
-      if (showModal === 'insumo') {
+      } else if (modalType === 'insumo') {
         setInsumoTouched({
           nombre: true,
           unidad: true,
@@ -3481,46 +3531,32 @@ export default function App() {
           }
         }
         showToast(editingInsumoId !== null ? 'Insumo actualizado' : 'Insumo añadido', 'success');
-      }
-
-      if (showModal === 'ticket') {
+      } else if (modalType === 'ticket') {
         const activoTag = String(formData.activoTag || '').trim().toUpperCase();
         const sucursal = String(formData.sucursal || '').trim().toUpperCase();
         const areaAfectada = String(formData.areaAfectada || '').trim();
         const atencionTipo = normalizeTicketAttentionType(formData.atencionTipo);
         const descripcionBase = String(formData.descripcion || '').trim();
-        const areaLabel = `Área afectada: ${areaAfectada}`;
-        const descripcionFinal = descripcionBase.startsWith(areaLabel)
-          ? descripcionBase
-          : `${areaLabel} | ${descripcionBase}`;
-        if (!isValidTicketBranchValue(sucursal)) {
-          showToast('Selecciona una sucursal válida para el ticket', 'warning');
+        const ticketValidationError = !isValidTicketBranchValue(sucursal)
+          ? 'Selecciona una sucursal válida para el ticket'
+          : ticketAssetOptions.length === 0
+            ? 'No hay activos registrados en la sucursal seleccionada'
+            : !activoTag
+              ? 'Selecciona un TAG del equipo'
+              : !ticketAssetOptions.some((option) => option.tag === activoTag)
+                ? 'Selecciona un TAG válido para la sucursal elegida'
+                : !areaAfectada
+                  ? 'Selecciona área afectada'
+                  : !atencionTipo
+                    ? 'Selecciona si la atención fue presencial o remota'
+                    : !descripcionBase
+                      ? 'Agrega la descripción de la falla'
+                      : '';
+        if (ticketValidationError) {
+          showToast(ticketValidationError, 'warning');
           return;
         }
-        if (ticketAssetOptions.length === 0) {
-          showToast('No hay activos registrados en la sucursal seleccionada', 'warning');
-          return;
-        }
-        if (!activoTag) {
-          showToast('Selecciona un TAG del equipo', 'warning');
-          return;
-        }
-        if (!ticketAssetOptions.some((option) => option.tag === activoTag)) {
-          showToast('Selecciona un TAG válido para la sucursal elegida', 'warning');
-          return;
-        }
-        if (!areaAfectada) {
-          showToast('Selecciona área afectada', 'warning');
-          return;
-        }
-        if (!atencionTipo) {
-          showToast('Selecciona si la atención fue presencial o remota', 'warning');
-          return;
-        }
-        if (!descripcionBase) {
-          showToast('Agrega la descripción de la falla', 'warning');
-          return;
-        }
+        const descripcionFinal = buildTicketDescription(areaAfectada, descripcionBase);
 
         if (backendConnected) {
           await apiRequest('/tickets', {
@@ -8185,19 +8221,11 @@ export default function App() {
       </main>
 
       {/* MODAL UNIVERSAL */}
-      {showModal && (
+      {currentModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className={`bg-white w-full ${showModal === 'activo' ? 'max-w-5xl' : 'max-w-lg'} rounded-[3rem] shadow-2xl overflow-hidden`}>
+          <div className={`bg-white w-full ${modalWidthClass} rounded-[3rem] shadow-2xl overflow-hidden`}>
             <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/30 font-black uppercase text-sm">
-              {showModal === 'activo'
-                ? editingAssetId !== null
-                  ? 'Editar Equipo'
-                  : 'Alta Equipo'
-                : showModal === 'insumo'
-                  ? editingInsumoId !== null
-                    ? 'Editar Insumo'
-                    : 'Ingreso Material'
-                  : 'Ticket'}
+              {modalTitle}
               <button
                 type="button"
                 onClick={closeModal}
@@ -8208,7 +8236,7 @@ export default function App() {
               </button>
             </div>
             <form onSubmit={handleSave} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
-               {showModal === 'activo' && (
+               {isAssetModal && (
                  <>
                   <div className="space-y-6">
                     <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
@@ -8399,7 +8427,7 @@ export default function App() {
                   </div>
                  </>
                )}
-               {showModal === 'insumo' && (
+               {isSupplyModal && (
                  <>
                    <div className="space-y-1">
                      <input
@@ -8458,7 +8486,7 @@ export default function App() {
                          value={String(formData.stock ?? '')}
                          onBlur={() => markInsumoTouched('stock')}
                          onKeyDown={preventInvalidIntegerInputKeys}
-                         onChange={(e) => updateFormData({ stock: e.target.value.replace(/[^\d]/g, '') })}
+                         onChange={(e) => updateFormData({ stock: digitsOnly(e.target.value) })}
                          className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${
                            insumoTouched.stock && insumoFormValidation.errors.stock
                              ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
@@ -8482,7 +8510,7 @@ export default function App() {
                          value={String(formData.min ?? '')}
                          onBlur={() => markInsumoTouched('min')}
                          onKeyDown={preventInvalidIntegerInputKeys}
-                         onChange={(e) => updateFormData({ min: e.target.value.replace(/[^\d]/g, '') })}
+                         onChange={(e) => updateFormData({ min: digitsOnly(e.target.value) })}
                          className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${
                            insumoTouched.min && insumoFormValidation.errors.min
                              ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
@@ -8521,7 +8549,7 @@ export default function App() {
                    </div>
                  </>
                )}
-               {showModal === 'ticket' && (
+               {isTicketModal && (
                  <>
                    <select
                      required
@@ -8659,7 +8687,7 @@ export default function App() {
                    </p>
                  </>
                )}
-              {showModal === 'insumo' ? (
+              {isSupplyModal ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <button
                     type="button"
@@ -8674,7 +8702,7 @@ export default function App() {
                     type="submit"
                     className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 flex justify-center gap-2 disabled:opacity-50"
                   >
-                    <Save size={18} /> {isModalSaving ? 'Guardando...' : editingInsumoId !== null ? 'Guardar Cambios' : 'Guardar'}
+                    <Save size={18} /> {modalSubmitLabel}
                   </button>
                 </div>
               ) : (
@@ -8683,7 +8711,7 @@ export default function App() {
                   type="submit"
                   className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 mt-4 flex justify-center gap-2 disabled:opacity-50"
                 >
-                  <Save size={18} /> {isModalSaving ? 'Guardando...' : (showModal === 'activo' && editingAssetId !== null ? 'Guardar Cambios' : 'Guardar')}
+                  <Save size={18} /> {modalSubmitLabel}
                 </button>
               )}
             </form>
