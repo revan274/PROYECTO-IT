@@ -2058,31 +2058,33 @@ export default function App() {
     const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
     const tipoRaw = String(selectedAsset.tipo || 'Activo TI').trim() || 'Activo TI';
     const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
-    const serialRaw = String(selectedAsset.serial || '').trim();
-    const controlOwnerRaw = String(selectedAsset.responsable || '').trim() || String(selectedAsset.departamento || '').trim();
+    const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
     const equipmentRaw = [
+      String(selectedAsset.equipo || '').trim(),
       String(selectedAsset.marca || '').trim(),
       String(selectedAsset.modelo || '').trim(),
-    ].filter(Boolean).join(' ') || String(selectedAsset.equipo || '').trim() || 'Sin especificacion';
-    const controlRaw = [
-      serialRaw ? `S/N ${serialRaw}` : '',
-      controlOwnerRaw,
-    ].filter(Boolean).join(' · ') || 'Sin datos de control';
+    ].filter(Boolean).join(' ') || 'Sin especificacion';
     const branchCode = resolveAssetBranchCode(selectedAsset, activeTicketBranchCodes);
     const branchRaw = branchCode || String(selectedAsset.departamento || '').trim().toUpperCase();
+    const ubicacionFullRaw = [branchRaw, ubicacionRaw]
+      .filter((value, index, values) => value && values.indexOf(value) === index)
+      .join(' | ') || ubicacionRaw;
     const idAssetRaw = String(selectedAsset.id || 'N/D');
     const statusLabelRaw = selectedAsset.estado === 'Falla' ? 'Revisar' : 'Operativo';
     const qrModeLabelRaw = selectedAssetQrMode === 'signed' ? 'Firmado' : 'Local';
+    const headerTitleRaw = 'Los Gigantes - Control de Activos TI';
+    const supportLabelRaw = 'Escanea para reportar falla';
 
     const tag = escapeHtml(tagRaw);
     const tipo = escapeHtml(tipoRaw);
-    const ubicacion = escapeHtml(ubicacionRaw);
+    const ubicacion = escapeHtml(ubicacionFullRaw);
+    const serial = escapeHtml(serialRaw);
     const equipo = escapeHtml(equipmentRaw);
-    const control = escapeHtml(controlRaw);
-    const branch = escapeHtml(branchRaw);
     const idAsset = escapeHtml(idAssetRaw);
     const statusLabel = escapeHtml(statusLabelRaw);
     const qrModeLabel = escapeHtml(qrModeLabelRaw);
+    const headerTitle = escapeHtml(headerTitleRaw);
+    const supportLabel = escapeHtml(supportLabelRaw);
 
     printWindow.document.write(`<!doctype html>
 <html>
@@ -2096,7 +2098,7 @@ export default function App() {
       padding: 0;
       width: 60mm;
       height: 40mm;
-      font-family: "Segoe UI", Arial, sans-serif;
+      font-family: Consolas, "Liberation Mono", "Courier New", monospace;
       background: #ffffff;
       color: #0f172a;
     }
@@ -2106,117 +2108,60 @@ export default function App() {
     .label {
       width: 60mm;
       height: 40mm;
-      padding: 1.6mm;
+      padding: 1.35mm;
       border: 0.25mm solid #0f172a;
-      border-radius: 2.7mm;
+      border-radius: 1.7mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 1.2mm;
-      padding-bottom: 0.85mm;
-      border-bottom: 0.25mm solid #cbd5e1;
+      padding: 0 0 0.7mm;
+      border-bottom: 0.25mm solid #0f172a;
     }
-    .eyebrow {
-      margin: 0 0 0.15mm;
-      font-size: 4.4pt;
-      font-weight: 900;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #64748b;
-    }
-    .title {
+    .header-title {
       margin: 0;
-      font-size: 6.2pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
+      font-size: 4.85pt;
+      font-weight: 700;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-    }
-    .status {
-      font-size: 4.7pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0.5mm 1.15mm;
-      border: 0.25mm solid #0f172a;
-      border-radius: 999px;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .body {
+    .content {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 22mm 1fr;
-      gap: 1.4mm;
-      padding-top: 1mm;
+      grid-template-columns: 1fr 18.5mm;
+      gap: 1.2mm;
+      padding-top: 0.8mm;
     }
-    .qr-panel {
-      border: 0.25mm solid #cbd5e1;
-      border-radius: 2mm;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.65mm;
-      padding: 0.95mm;
-      background: #ffffff;
-    }
-    .qr {
-      width: 19.2mm;
-      height: 19.2mm;
-      object-fit: contain;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-    .scan {
-      margin: 0;
-      font-size: 4.15pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      text-align: center;
-      line-height: 1.15;
-    }
-    .meta {
+    .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.5mm;
+      gap: 0.65mm;
     }
     .tag {
       margin: 0;
-      font-size: 7.9pt;
-      font-weight: 900;
-      line-height: 1.02;
-      letter-spacing: 0.02em;
+      font-size: 7.7pt;
+      font-weight: 700;
+      line-height: 1.04;
+      letter-spacing: 0.01em;
       text-transform: uppercase;
       word-break: break-word;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 8.7mm;
+      max-height: 8.6mm;
     }
-    .chip-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.6mm;
-    }
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      max-width: 100%;
-      padding: 0.35mm 0.95mm;
-      border: 0.25mm solid #0f172a;
-      border-radius: 999px;
-      font-size: 4.55pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    .subline {
+      margin: 0;
+      font-size: 5pt;
+      line-height: 1.15;
+      font-weight: 700;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2226,44 +2171,82 @@ export default function App() {
       flex-direction: column;
       gap: 0.45mm;
       min-width: 0;
+      margin-top: 0.25mm;
     }
     .row {
       min-width: 0;
+      font-size: 4.95pt;
+      line-height: 1.12;
+      font-weight: 700;
     }
     .k {
-      display: block;
-      margin: 0 0 0.1mm;
-      font-size: 4.35pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #64748b;
     }
     .v {
-      display: block;
-      margin: 0;
-      font-size: 5.7pt;
-      font-weight: 800;
-      line-height: 1.08;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .qr-panel {
+      border-left: 0.25mm solid #0f172a;
+      padding-left: 1.1mm;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      gap: 0.6mm;
+      min-width: 0;
+    }
+    .qr-label {
+      margin: 0;
+      font-size: 4.3pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.05;
+    }
+    .qr-frame {
+      border: 0.25mm solid #0f172a;
+      border-radius: 1.1mm;
+      padding: 0.75mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr {
+      width: 15.3mm;
+      height: 15.3mm;
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .cta {
+      margin-top: auto;
+      padding: 0.6mm 0.8mm;
+      border-top: 0.25mm solid #0f172a;
+      border-bottom: 0.25mm solid #0f172a;
+      font-size: 4.45pt;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.1;
     }
     .footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1mm;
-      margin-top: 0.75mm;
-      padding-top: 0.75mm;
+      gap: 1.2mm;
+      margin-top: 0.8mm;
+      padding-top: 0.7mm;
       border-top: 0.25mm solid #cbd5e1;
-      font-size: 4.35pt;
-      font-weight: 900;
+      font-size: 4.45pt;
+      font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .footer .hint {
-      color: #334155;
       white-space: nowrap;
     }
     .footer .id {
@@ -2274,42 +2257,39 @@ export default function App() {
 <body>
   <div class="label">
     <div class="header">
-      <div>
-        <p class="eyebrow">Mesa de ayuda</p>
-        <p class="title">Activo TI</p>
-      </div>
-      <div class="status">${statusLabel}</div>
+      <p class="header-title">${headerTitle}</p>
     </div>
-    <div class="body">
-      <div class="qr-panel">
-        <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
-        <p class="scan">Escanea para soporte</p>
-      </div>
-      <div class="meta">
-        <p class="tag">${tag}</p>
-        <div class="chip-row">
-          <span class="chip">${tipo}</span>
-          ${branch ? `<span class="chip">${branch}</span>` : ''}
-        </div>
+    <div class="content">
+      <div class="info">
+        <p class="tag">ID: ${tag}</p>
+        <p class="subline">S/N: ${serial}</p>
         <div class="rows">
           <div class="row">
-            <span class="k">Equipo</span>
-            <span class="v">${equipo}</span>
+            <span class="k">Equipo:</span>
+            <span class="v"> ${equipo}</span>
           </div>
           <div class="row">
-            <span class="k">Ubicacion</span>
-            <span class="v">${ubicacion}</span>
+            <span class="k">Ubicacion:</span>
+            <span class="v"> ${ubicacion}</span>
           </div>
           <div class="row">
-            <span class="k">Control</span>
-            <span class="v">${control}</span>
+            <span class="k">Tipo:</span>
+            <span class="v"> ${tipo}</span>
           </div>
         </div>
+      </div>
+      <div class="qr-panel">
+        <p class="qr-label">Codigo</p>
+        <p class="qr-label">QR</p>
+        <div class="qr-frame">
+          <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
+        </div>
+        <p class="cta">${supportLabel}</p>
       </div>
     </div>
     <div class="footer">
-      <span class="hint">Inventario TI</span>
-      <span class="id">${qrModeLabel} · ID ${idAsset}</span>
+      <span class="hint">${statusLabel}</span>
+      <span class="id">${qrModeLabel} - ID ${idAsset}</span>
     </div>
   </div>
 </body>
