@@ -1,16 +1,9 @@
 import type { ReactNode } from 'react';
+import { normalizeForCompare } from '../../utils/format';
 
 interface BadgeProps {
   children: ReactNode;
   variant?: string;
-}
-
-function normalizeForCompare(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
 }
 
 export function Badge({ children, variant }: BadgeProps) {

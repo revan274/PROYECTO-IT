@@ -41,7 +41,6 @@ import {
   SUPPLY_UNIT_OPTIONS,
   TICKET_AREA_OPTIONS,
   TICKET_ATTENTION_TYPES,
-  TICKET_BRANCH_LABEL_BY_CODE,
   TICKET_STATES,
   TRAVEL_DEFAULT_AUTHORIZER,
   TRAVEL_DEFAULT_DEPARTMENT,
@@ -49,7 +48,6 @@ import {
   TRAVEL_DEFAULT_FUEL_EFFICIENCY,
   TRAVEL_DESTINATION_PRESETS,
   TRAVEL_REPORT_MIN_ROWS,
-  USER_CARGO_LABEL_BY_VALUE,
   USER_ROLE_LABEL,
   USER_ROLE_PERMISSIONS,
 } from './constants/app';
@@ -67,7 +65,6 @@ import type {
   AuditSummaryState,
   BootstrapResponse,
   CatalogBranch,
-  CatalogRole,
   CatalogState,
   DashboardRange,
   EstadoActivo,
@@ -133,287 +130,55 @@ import {
   writeStoredSession,
   writeStoredTheme,
 } from './utils/app';
+import {
+  auditModuleLabel,
+  filterAuditRowsClient,
+  getAuditRowTimestampMs,
+  resolveAuditModule,
+} from './utils/audit';
+import {
+  assetRequiresNetworkIdentity,
+  assetRequiresResponsible,
+  calculateAssetRiskSummary,
+  formatTicketBranch,
+  formatUserCargo,
+  isUserRole,
+  normalizeCatalogState,
+  normalizeIpAddress,
+  normalizeMacAddress,
+  normalizeSpreadsheetKey,
+  parseAssetLifeYears,
+  resolveAssetBranchCode,
+  spreadsheetCellToText,
+} from './utils/assets';
+import {
+  digitsOnly,
+  escapeHtml,
+  formatBytes,
+  formatDateTime,
+  includesAllSearchTokens,
+  normalizeForCompare,
+  parseDateToTimestamp,
+  preventInvalidIntegerInputKeys,
+  sanitizeFileToken,
+  tokenizeSearchQuery,
+} from './utils/format';
+import {
+  buildTicketDescription,
+  buildTicketHistoryEntry,
+  calculateSlaDeadline,
+  formatTicketAttentionType,
+  getSlaStatus,
+  isTicketSlaExpired,
+  isTicketClosed,
+  normalizeTicketAttentionType,
+  ticketAuditActionLabel,
+} from './utils/tickets';
 
 const LazyQRCodeCanvas = React.lazy(async () => {
   const module = await import('qrcode.react');
   return { default: module.QRCodeCanvas };
 });
-function calculateSlaDeadline(prioridad: PrioridadTicket): string {
-  const hours = SLA_POLICY[prioridad] || SLA_POLICY.MEDIA;
-  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-}
-
-function isTicketClosed(ticket: Pick<TicketItem, 'estado'>): boolean {
-  return ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado';
-}
-
-function ticketAuditActionLabel(estado: TicketEstado): string {
-  if (estado === 'Resuelto') return 'Ticket Resuelto';
-  if (estado === 'Cerrado') return 'Ticket Cerrado';
-  if (estado === 'En Proceso') return 'Ticket En Proceso';
-  if (estado === 'En Espera') return 'Ticket En Espera';
-  return 'Ticket Actualizado';
-}
-
-function buildTicketHistoryEntry(
-  accion: string,
-  estado: TicketEstado,
-  usuario: string,
-  comentario = '',
-): { fecha: string; usuario: string; accion: string; estado: TicketEstado; comentario?: string } {
-  return {
-    fecha: new Date().toISOString(),
-    usuario,
-    accion,
-    estado,
-    comentario,
-  };
-}
-
-function getTicketSlaDueTimestamp(ticket: Pick<TicketItem, 'fechaLimite'>): number | null {
-  return parseDateToTimestamp(ticket.fechaLimite || '');
-}
-
-function getTicketSlaRemainingMinutes(ticket: TicketItem, nowMs = Date.now()): number | null {
-  if (isTicketClosed(ticket)) return null;
-  const dueTimestamp = getTicketSlaDueTimestamp(ticket);
-  if (dueTimestamp !== null) {
-    return Math.ceil((dueTimestamp - nowMs) / 60000);
-  }
-  return typeof ticket.slaRestanteMin === 'number' ? ticket.slaRestanteMin : null;
-}
-
-function isTicketSlaExpired(ticket: TicketItem, nowMs = Date.now()): boolean {
-  if (isTicketClosed(ticket)) return false;
-  const dueTimestamp = getTicketSlaDueTimestamp(ticket);
-  if (dueTimestamp !== null) return nowMs > dueTimestamp;
-  const remaining = typeof ticket.slaRestanteMin === 'number' ? ticket.slaRestanteMin : null;
-  return !!ticket.slaVencido || (typeof remaining === 'number' && remaining <= 0);
-}
-
-function getSlaStatus(ticket: TicketItem, nowMs = Date.now()): { label: string; className: string } {
-  if (isTicketClosed(ticket)) {
-    return { label: 'SLA CERRADO', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-  }
-
-  const remaining = getTicketSlaRemainingMinutes(ticket, nowMs);
-  if (isTicketSlaExpired(ticket, nowMs) || (typeof remaining === 'number' && remaining <= 0)) {
-    return { label: 'SLA VENCIDO', className: 'bg-red-50 text-red-600 border-red-200' };
-  }
-  if (typeof remaining === 'number' && remaining <= 60) {
-    return { label: `SLA ${remaining} MIN`, className: 'bg-amber-50 text-amber-600 border-amber-200' };
-  }
-  if (typeof remaining === 'number') {
-    const hours = Math.ceil(remaining / 60);
-    return { label: `SLA ${hours} H`, className: 'bg-green-50 text-green-600 border-green-200' };
-  }
-
-  return { label: 'SLA N/D', className: 'bg-slate-100 text-slate-500 border-slate-200' };
-}
-
-function formatTicketBranch(value?: string, labels: Record<string, string> = TICKET_BRANCH_LABEL_BY_CODE): string {
-  const code = String(value || '').trim().toUpperCase();
-  if (!code) return 'Sin sucursal';
-  return labels[code] || code;
-}
-
-function resolveAssetBranchCode(
-  asset: Pick<Activo, 'departamento' | 'ubicacion'>,
-  validBranchCodes: ReadonlySet<string>,
-): string {
-  const departamento = String(asset.departamento || '').trim().toUpperCase();
-  if (departamento && validBranchCodes.has(departamento)) return departamento;
-
-  const ubicacion = String(asset.ubicacion || '').trim().toUpperCase();
-  if (!ubicacion) return '';
-
-  const segments = ubicacion.split('|').map((part) => part.trim()).filter(Boolean);
-  for (const segment of segments) {
-    if (validBranchCodes.has(segment)) return segment;
-    const tokens = segment.split(/\s+/).map((token) => token.trim()).filter(Boolean);
-    for (const token of tokens) {
-      if (validBranchCodes.has(token)) return token;
-    }
-  }
-
-  for (const code of validBranchCodes) {
-    if (ubicacion.includes(code)) return code;
-  }
-
-  return '';
-}
-
-function formatUserCargo(value?: string, labels: Record<string, string> = USER_CARGO_LABEL_BY_VALUE): string {
-  const cargo = String(value || '').trim().toUpperCase();
-  if (!cargo) return 'Sin cargo';
-  return labels[cargo] || value || 'Sin cargo';
-}
-
-function normalizeAuditModule(value?: string): AuditModule | null {
-  const raw = normalizeForCompare(value || '');
-  if (raw === 'activos') return 'activos';
-  if (raw === 'insumos') return 'insumos';
-  if (raw === 'tickets') return 'tickets';
-  if (raw === 'otros') return 'otros';
-  return null;
-}
-
-function inferAuditModule(accion: string, item = ''): AuditModule {
-  const action = normalizeForCompare(accion || '');
-  const subject = normalizeForCompare(item || '');
-  if (
-    action.includes('ticket')
-    || action.includes('asignacion')
-    || action.includes('sla')
-    || subject.startsWith('tk-')
-  ) {
-    return 'tickets';
-  }
-  if (
-    action.includes('activo')
-    || action.includes('inventario')
-    || action.includes('equipo')
-  ) {
-    return 'activos';
-  }
-  if (
-    action.includes('insumo')
-    || action.includes('stock')
-    || action.includes('entrada')
-    || action.includes('salida')
-    || action.includes('ajuste')
-    || action.includes('baja logica')
-    || action.includes('registro nuevo')
-  ) {
-    return 'insumos';
-  }
-  return 'otros';
-}
-
-function resolveAuditModule(log: Pick<RegistroAuditoria, 'accion' | 'item' | 'modulo'>): AuditModule {
-  return normalizeAuditModule(log.modulo) || inferAuditModule(log.accion, log.item);
-}
-
-function auditModuleLabel(module: AuditModule): string {
-  if (module === 'activos') return 'Activos IT';
-  if (module === 'insumos') return 'Insumos';
-  if (module === 'tickets') return 'Tickets';
-  return 'Otros';
-}
-
-function formatDateTime(value?: string): string {
-  if (!value) return 'N/D';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
-}
-
-function normalizeLooseDateString(value?: string): string {
-  return String(value || '')
-    .trim()
-    .replace(/\sa\.\s*m\./gi, ' AM')
-    .replace(/\sp\.\s*m\./gi, ' PM')
-    .replace(/\./g, '');
-}
-
-function parseAuditBoundaryDate(value?: string, endOfDay = false): number | null {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const parsed = new Date(`${raw}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`);
-    if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-  }
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-  return null;
-}
-
-function getAuditRowTimestampMs(log: Pick<RegistroAuditoria, 'timestamp' | 'fecha'>): number | null {
-  const ts = String(log.timestamp || '').trim();
-  if (ts) {
-    const parsed = new Date(ts);
-    if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-  }
-  const raw = normalizeLooseDateString(log.fecha);
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-  return null;
-}
-
-function filterAuditRowsClient(rows: RegistroAuditoria[], filters: AuditFiltersState): RegistroAuditoria[] {
-  const userKey = normalizeForCompare(filters.user || '');
-  const entityKey = normalizeForCompare(filters.entity || '');
-  const actionKey = normalizeForCompare(filters.action || '');
-  const queryKey = normalizeForCompare(filters.q || '');
-  const fromMs = parseAuditBoundaryDate(filters.from, false);
-  const toMs = parseAuditBoundaryDate(filters.to, true);
-
-  const filtered = rows.filter((log) => {
-    if (filters.module && resolveAuditModule(log) !== filters.module) return false;
-    if (filters.result && (String(log.resultado || 'ok').toLowerCase() !== filters.result)) return false;
-
-    if (userKey) {
-      const fields = [log.usuario, log.username, log.rol, log.departamento];
-      if (!fields.some((value) => normalizeForCompare(String(value || '')).includes(userKey))) return false;
-    }
-    if (entityKey && !normalizeForCompare(String(log.entidad || '')).includes(entityKey)) return false;
-    if (actionKey && !normalizeForCompare(String(log.accion || '')).includes(actionKey)) return false;
-    if (queryKey) {
-      const fields = [
-        log.accion,
-        log.item,
-        log.usuario,
-        log.username,
-        log.rol,
-        log.departamento,
-        log.entidad,
-        log.motivo,
-        log.modulo,
-        log.requestId,
-        log.ip,
-        String(log.id || ''),
-        String(log.entidadId ?? ''),
-      ];
-      if (!fields.some((value) => normalizeForCompare(String(value || '')).includes(queryKey))) return false;
-    }
-
-    const ts = getAuditRowTimestampMs(log);
-    if (fromMs !== null && (ts === null || ts < fromMs)) return false;
-    if (toMs !== null && (ts === null || ts > toMs)) return false;
-    return true;
-  });
-
-  filtered.sort((left, right) => {
-    const leftTs = getAuditRowTimestampMs(left) || 0;
-    const rightTs = getAuditRowTimestampMs(right) || 0;
-    return rightTs - leftTs;
-  });
-  return filtered;
-}
-
-function formatBytes(value?: number): string {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return '0 B';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round((size / 1024) * 10) / 10} KB`;
-  return `${Math.round((size / (1024 * 1024)) * 10) / 10} MB`;
-}
-
-function escapeHtml(value: string): string {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function sanitizeFileToken(value: string): string {
-  const normalized = normalizeForCompare(value).replace(/[^a-z0-9]+/g, '-');
-  const compact = normalized.replace(/^-+|-+$/g, '');
-  return compact || 'activo';
-}
 
 function buildAssetQrCanvasId(assetId: number): string {
   return `asset-qr-${assetId}`;
@@ -548,33 +313,6 @@ function ticketCreatedTimestamp(ticket: TicketItem): number {
   return parsed;
 }
 
-function parseDateToTimestamp(value?: string): number | null {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const year = Number(dateOnlyMatch[1]);
-    const month = Number(dateOnlyMatch[2]);
-    const day = Number(dateOnlyMatch[3]);
-    const localDate = new Date(year, month - 1, day);
-    if (
-      localDate.getFullYear() === year
-      && localDate.getMonth() === month - 1
-      && localDate.getDate() === day
-    ) {
-      return localDate.getTime();
-    }
-  }
-
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-
-  const cleaned = normalizeLooseDateString(raw);
-  const alt = new Date(cleaned);
-  if (!Number.isNaN(alt.getTime())) return alt.getTime();
-  return null;
-}
-
 function parseMonthInputRange(value?: string): TravelMonthRange | null {
   const raw = String(value || '').trim();
   const match = raw.match(/^(\d{4})-(\d{2})$/);
@@ -670,27 +408,6 @@ function extractTicketIssueDescription(ticket: TicketItem): string {
     .replace(/^(?:[aá]rea afectada:)\s*[^|]+(?:\|\s*)?/i, '')
     .trim();
   return cleaned || description;
-}
-
-function normalizeTicketAttentionType(value: unknown): TicketAttentionType | null {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (normalized === 'PRESENCIAL' || normalized === 'REMOTO') return normalized;
-  return null;
-}
-
-function formatTicketAttentionType(value: unknown): string {
-  const normalized = normalizeTicketAttentionType(value);
-  if (normalized === 'PRESENCIAL') return 'Presencial';
-  if (normalized === 'REMOTO') return 'Remoto';
-  return 'Sin definir';
-}
-
-function buildTicketDescription(areaAfectada: string, descripcion: string): string {
-  const area = String(areaAfectada || '').trim();
-  const details = String(descripcion || '').trim();
-  if (!area) return details;
-  const areaLabel = `Área afectada: ${area}`;
-  return details.startsWith(areaLabel) ? details : `${areaLabel} | ${details}`;
 }
 
 function normalizeIncidentCause(value: string): string {
@@ -904,23 +621,6 @@ function calculateMedian(values: number[]): number | null {
   return calculatePercentile(values, 50);
 }
 
-const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
-const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
-
-function getAssetRiskTypeKey(asset: Pick<Activo, 'tipo' | 'equipo'>): string {
-  return String(asset.tipo || asset.equipo || '')
-    .trim()
-    .toUpperCase();
-}
-
-function assetRequiresNetworkIdentity(asset: Pick<Activo, 'tipo' | 'equipo'>): boolean {
-  return !NETWORK_RISK_EXEMPT_ASSET_TYPES.has(getAssetRiskTypeKey(asset));
-}
-
-function assetRequiresResponsible(asset: Pick<Activo, 'tipo' | 'equipo'>): boolean {
-  return !RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES.has(getAssetRiskTypeKey(asset));
-}
-
 function ticketBelongsToSessionUser(ticket: TicketItem, user: UserSession | null): boolean {
   if (!user) return false;
   if (user.rol !== 'solicitante') return true;
@@ -938,35 +638,6 @@ function ticketBelongsToSessionUser(ticket: TicketItem, user: UserSession | null
   if (userUsername && ticketUsername && userUsername === ticketUsername) return true;
   if (userName && ticketName && userName === ticketName) return true;
   return false;
-}
-
-function normalizeForCompare(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
-function tokenizeSearchQuery(value: string): string[] {
-  const normalized = normalizeForCompare(value).replace(/\s+/g, ' ');
-  if (!normalized) return [];
-  return normalized.split(' ').filter(Boolean);
-}
-
-function includesAllSearchTokens(normalizedHaystack: string, tokens: string[]): boolean {
-  if (tokens.length === 0) return true;
-  return tokens.every((token) => normalizedHaystack.includes(token));
-}
-
-function preventInvalidIntegerInputKeys(event: React.KeyboardEvent<HTMLInputElement>): void {
-  if (event.key === 'e' || event.key === 'E' || event.key === '+' || event.key === '-' || event.key === '.') {
-    event.preventDefault();
-  }
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/[^\d]/g, '');
 }
 
 function buildInitialFormDataForModal(
@@ -1043,39 +714,6 @@ function getSupplyCriticalityRank(status: Exclude<SupplyStatusFilter, 'TODOS'>):
 
 type SpreadsheetRow = Record<string, unknown>;
 type NetworkSheetRow = [unknown, unknown, unknown];
-
-function normalizeSpreadsheetKey(value: string): string {
-  return normalizeForCompare(value).replace(/[^a-z0-9]/g, '');
-}
-
-function spreadsheetCellToText(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Number.isInteger(value) ? String(value) : String(value).replace(/\.0+$/, '');
-  }
-  return String(value).trim();
-}
-
-function normalizeMacAddress(value: string): string {
-  const compact = value.toLowerCase().replace(/[^0-9a-f]/g, '');
-  if (!compact) return '';
-  if (compact.length !== 12) return '';
-  return compact.match(/.{1,2}/g)?.join(':') || '';
-}
-
-function normalizeIpAddress(value: string): string {
-  if (!value) return '';
-  const parts = value.split('.');
-  if (parts.length !== 4) return '';
-  const normalized = [];
-  for (const part of parts) {
-    if (!/^\d+$/.test(part)) return '';
-    const n = Number(part);
-    if (!Number.isFinite(n) || n < 0 || n > 255) return '';
-    normalized.push(String(n));
-  }
-  return normalized.join('.');
-}
 
 function parseInventoryRow(row: SpreadsheetRow, rowNumber: number): Omit<Activo, 'id'> | null {
   const values = new Map<string, string>();
@@ -1217,16 +855,6 @@ function enrichAssetsWithNetworkSheet(
   });
 }
 
-function parseAssetLifeYears(value?: string): number | null {
-  const raw = normalizeForCompare(value || '');
-  if (!raw) return null;
-  const match = raw.match(/\d+/);
-  if (!match) return null;
-  const years = Number(match[0]);
-  if (!Number.isFinite(years)) return null;
-  return years;
-}
-
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1258,132 +886,6 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
     reader.readAsDataURL(file);
   });
-}
-
-function isUserRole(value: string): value is UserRole {
-  return value === 'admin' || value === 'tecnico' || value === 'consulta' || value === 'solicitante';
-}
-
-function normalizeCatalogState(value?: Partial<CatalogState>): CatalogState {
-  const branchSource = Array.isArray(value?.sucursales) && value.sucursales.length > 0
-    ? value.sucursales
-    : DEFAULT_CATALOGS.sucursales;
-  const branchMap = new Map<string, CatalogBranch>();
-  branchSource.forEach((branch) => {
-    const code = String(branch?.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const name = String(branch?.name || '').trim();
-    if (!code || !name) return;
-    branchMap.set(code, {
-      code,
-      name,
-      activo: branch?.activo !== false,
-    });
-  });
-  const sucursales = branchMap.size > 0
-    ? Array.from(branchMap.values())
-    : DEFAULT_CATALOGS.sucursales.map((branch) => ({ ...branch }));
-
-  const cargoSource = Array.isArray(value?.cargos) && value.cargos.length > 0
-    ? value.cargos
-    : DEFAULT_CATALOGS.cargos;
-  const cargoMap = new Map<string, string>();
-  cargoSource.forEach((cargo) => {
-    const label = String(cargo || '').trim();
-    if (!label) return;
-    const key = normalizeForCompare(label);
-    if (!cargoMap.has(key)) cargoMap.set(key, label);
-  });
-  const cargos = cargoMap.size > 0 ? Array.from(cargoMap.values()) : [...DEFAULT_CATALOGS.cargos];
-
-  const roleSource = Array.isArray(value?.roles) && value.roles.length > 0
-    ? value.roles
-    : DEFAULT_CATALOGS.roles;
-  const roleMap = new Map<UserRole, CatalogRole>();
-  roleSource.forEach((role) => {
-    const rawValue = String(role?.value || '').trim().toLowerCase();
-    if (!isUserRole(rawValue)) return;
-    roleMap.set(rawValue, {
-      value: rawValue,
-      label: String(role?.label || USER_ROLE_LABEL[rawValue]).trim() || USER_ROLE_LABEL[rawValue],
-      permissions: String(role?.permissions || USER_ROLE_PERMISSIONS[rawValue]).trim() || USER_ROLE_PERMISSIONS[rawValue],
-      activo: role?.activo !== false,
-    });
-  });
-  const roles: CatalogRole[] = (['admin', 'tecnico', 'consulta', 'solicitante'] as UserRole[]).map((role) => (
-    roleMap.get(role) || {
-      value: role,
-      label: USER_ROLE_LABEL[role],
-      permissions: USER_ROLE_PERMISSIONS[role],
-      activo: true,
-    }
-  ));
-
-  return { sucursales, cargos, roles };
-}
-
-function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {
-  const ipCounts = new Map<string, number>();
-  const macCounts = new Map<string, number>();
-  let activosEvaluablesIp = 0;
-  let activosSinIp = 0;
-  let activosEvaluablesMac = 0;
-  let activosSinMac = 0;
-  let activosEvaluablesResponsable = 0;
-  let activosSinResponsable = 0;
-  let activosVidaAlta = 0;
-  let activosEnFalla = 0;
-
-  activos.forEach((asset) => {
-    const ip = (asset.ipAddress || '').trim();
-    const mac = (asset.macAddress || '').trim().toLowerCase();
-    const responsable = (asset.responsable || '').trim();
-    const years = parseAssetLifeYears(asset.aniosVida);
-    const requiresNetworkIdentity = assetRequiresNetworkIdentity(asset);
-    const requiresResponsible = assetRequiresResponsible(asset);
-
-    if (requiresNetworkIdentity) {
-      activosEvaluablesIp += 1;
-      activosEvaluablesMac += 1;
-      if (!ip) activosSinIp += 1;
-      if (!mac) activosSinMac += 1;
-    }
-    if (requiresResponsible) {
-      activosEvaluablesResponsable += 1;
-      if (!responsable) activosSinResponsable += 1;
-    }
-    if (years !== null && years >= 4) activosVidaAlta += 1;
-    if (asset.estado === 'Falla') activosEnFalla += 1;
-
-    if (ip) ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
-    if (mac) macCounts.set(mac, (macCounts.get(mac) || 0) + 1);
-  });
-
-  const duplicateIpEntries = Array.from(ipCounts.entries())
-    .filter(([, count]) => count > 1)
-    .sort((a, b) => b[1] - a[1])
-    .map(([value, count]) => ({ value, count }));
-  const duplicateMacEntries = Array.from(macCounts.entries())
-    .filter(([, count]) => count > 1)
-    .sort((a, b) => b[1] - a[1])
-    .map(([value, count]) => ({ value, count }));
-
-  return {
-    totalActivos: activos.length,
-    activosEvaluablesIp,
-    activosConIp: activosEvaluablesIp - activosSinIp,
-    activosSinIp,
-    activosEvaluablesMac,
-    activosConMac: activosEvaluablesMac - activosSinMac,
-    activosSinMac,
-    activosEvaluablesResponsable,
-    activosSinResponsable,
-    activosVidaAlta,
-    activosEnFalla,
-    duplicateIpCount: duplicateIpEntries.length,
-    duplicateMacCount: duplicateMacEntries.length,
-    duplicateIpEntries,
-    duplicateMacEntries,
-  };
 }
 
 function formatRetryDelay(seconds: number): string {
@@ -2106,7 +1608,7 @@ export default function App() {
     .label {
       width: 55mm;
       height: 35mm;
-      padding: 1.8mm 1.8mm 1.45mm;
+      padding: 1.65mm 1.65mm 1.35mm;
       border: 0.3mm solid #111827;
       border-radius: 1.2mm;
       display: flex;
@@ -2115,7 +1617,7 @@ export default function App() {
     }
     .header {
       margin: 0;
-      font-size: 3.65pt;
+      font-size: 3.9pt;
       font-weight: 900;
       letter-spacing: 0.05em;
       text-transform: uppercase;
@@ -2126,20 +1628,20 @@ export default function App() {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 11.7mm;
-      gap: 1mm;
+      grid-template-columns: minmax(0, 1fr) 10.8mm;
+      gap: 0.85mm;
       align-items: start;
-      margin-top: 0.7mm;
+      margin-top: 0.55mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.7mm;
+      gap: 0.55mm;
     }
     .tag {
       margin: 0;
-      font-size: 8pt;
+      font-size: 8.7pt;
       font-weight: 900;
       line-height: 1;
       letter-spacing: 0;
@@ -2149,32 +1651,43 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 8.7mm;
+      max-height: 9.4mm;
     }
     .divider {
       height: 0.22mm;
       background: #111827;
       margin: 0;
     }
+    .meta {
+      margin: 0;
+      font-size: 3.9pt;
+      line-height: 1.02;
+      font-weight: 800;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #374151;
+    }
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 0.42mm;
+      gap: 0.35mm;
       min-width: 0;
     }
     .row {
       min-width: 0;
       display: grid;
-      grid-template-columns: 5.7mm minmax(0, 1fr);
-      gap: 0.7mm;
+      grid-template-columns: 5.4mm minmax(0, 1fr);
+      gap: 0.55mm;
       align-items: center;
-      padding-bottom: 0.22mm;
+      padding-bottom: 0.18mm;
       border-bottom: 0.14mm solid #dbe2ea;
     }
     .k {
       display: block;
       margin: 0;
-      font-size: 3.2pt;
+      font-size: 3.05pt;
       font-weight: 800;
       letter-spacing: 0.03em;
       text-transform: uppercase;
@@ -2183,7 +1696,7 @@ export default function App() {
     .v {
       display: block;
       margin: 0;
-      font-size: 3.95pt;
+      font-size: 4.3pt;
       line-height: 1;
       font-weight: 900;
       text-transform: uppercase;
@@ -2197,38 +1710,38 @@ export default function App() {
     .badge-wrap {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 0.45mm;
+      margin-bottom: 0.35mm;
     }
     .qr-frame {
       border: 0.25mm solid #111827;
       border-radius: 0.7mm;
-      padding: 0.55mm;
+      padding: 0.45mm;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #ffffff;
     }
     .qr {
-      width: 9.4mm;
-      height: 9.4mm;
+      width: 8.7mm;
+      height: 8.7mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .footer {
       margin-top: auto;
-      padding-top: 0.65mm;
+      padding-top: 0.55mm;
       border-top: 0.18mm solid #111827;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.7mm;
+      gap: 0.55mm;
     }
     .footer-note {
       flex: 1;
       min-width: 0;
       margin: 0;
-      font-size: 2.95pt;
+      font-size: 3.2pt;
       line-height: 1.02;
       font-weight: 900;
       text-transform: uppercase;
@@ -2242,20 +1755,20 @@ export default function App() {
       display: inline-flex;
       align-items: center;
       gap: 0.55mm;
-      font-size: 3.05pt;
+      font-size: 3.2pt;
       font-weight: 900;
       text-transform: uppercase;
       color: #111827;
     }
     .code-badge {
-      width: 6.3mm;
-      height: 4.2mm;
+      width: 5.9mm;
+      height: 4mm;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       background: #111827;
       color: #ffffff;
-      font-size: 5.05pt;
+      font-size: 4.85pt;
       font-weight: 900;
       line-height: 1;
       border-radius: 0.35mm;
@@ -2270,11 +1783,8 @@ export default function App() {
       <div class="info">
         <p class="tag">${tag}</p>
         <div class="divider"></div>
+        <p class="meta">S/N: ${serial}</p>
         <div class="rows">
-          <div class="row">
-            <span class="k">S/N:</span>
-            <span class="v">${serial}</span>
-          </div>
           <div class="row">
             <span class="k">EQP:</span>
             <span class="v">${equipo}</span>
