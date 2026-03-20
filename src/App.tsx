@@ -2048,7 +2048,7 @@ export default function App() {
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=480,height=360');
+    const printWindow = window.open('', '_blank', 'width=760,height=420');
     if (!printWindow) {
       showToast('Permite ventanas emergentes para imprimir etiquetas', 'warning');
       return;
@@ -2056,6 +2056,7 @@ export default function App() {
 
     const qrDataUrl = qrCanvas.toDataURL('image/png');
     const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
+    const tipoRaw = String(selectedAsset.tipo || 'Activo').trim() || 'Activo';
     const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
     const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
     const equipmentRaw = [
@@ -2069,18 +2070,20 @@ export default function App() {
       .filter((value, index, values) => value && values.indexOf(value) === index)
       .join(' | ') || ubicacionRaw;
     const idAssetRaw = String(selectedAsset.id || 'N/D');
-    const headerLabelRaw = 'ID de activo';
-    const signatureNoteRaw = selectedAssetQrMode === 'signed' ? `Firmado por: ID ${idAssetRaw}` : `QR local · ID ${idAssetRaw}`;
     const internalCodeSourceRaw = String(selectedAsset.idInterno || '').trim() || idAssetRaw;
     const internalCodeDigits = (internalCodeSourceRaw.match(/\d+/g) || []).join('');
     const internalCodeRaw = (internalCodeDigits || String(selectedAsset.id || '0')).slice(-2).padStart(2, '0');
+    const headerLabelRaw = 'Activo fijo';
+    const footerNoteRaw = 'Propiedad corporativa - No remover';
 
     const tag = escapeHtml(tagRaw);
+    const tipo = escapeHtml(tipoRaw);
     const ubicacion = escapeHtml(ubicacionFullRaw);
     const serial = escapeHtml(serialRaw);
     const equipo = escapeHtml(equipmentRaw);
+    const idAsset = escapeHtml(idAssetRaw);
     const headerLabel = escapeHtml(headerLabelRaw);
-    const signatureNote = escapeHtml(signatureNoteRaw);
+    const footerNote = escapeHtml(footerNoteRaw);
     const internalCode = escapeHtml(internalCodeRaw);
 
     printWindow.document.write(`<!doctype html>
@@ -2089,12 +2092,12 @@ export default function App() {
   <meta charset="utf-8" />
   <title>Etiqueta QR ${tag}</title>
   <style>
-    @page { size: 60mm 40mm; margin: 0; }
+    @page { size: 100mm 50mm; margin: 0; }
     html, body {
       margin: 0;
       padding: 0;
-      width: 60mm;
-      height: 40mm;
+      width: 100mm;
+      height: 50mm;
       font-family: "Segoe UI", Arial, sans-serif;
       background: #ffffff;
       color: #0f172a;
@@ -2103,42 +2106,44 @@ export default function App() {
       box-sizing: border-box;
     }
     .label {
-      width: 60mm;
-      height: 40mm;
-      padding: 2.1mm 2.1mm 1.75mm;
-      border: 0.35mm solid #111827;
-      border-radius: 3mm;
+      width: 100mm;
+      height: 50mm;
+      padding: 4.1mm 4.1mm 3.1mm;
+      border: 0.42mm solid #111827;
+      border-radius: 1.1mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .header {
       margin: 0;
-      font-size: 4.1pt;
-      font-weight: 800;
-      letter-spacing: 0.12em;
+      font-size: 6.2pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #8a94a6;
+      color: #4b5563;
       white-space: nowrap;
     }
     .content {
+      flex: 1;
+      min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 15.6mm;
-      gap: 2mm;
+      grid-template-columns: minmax(0, 1fr) 22.5mm;
+      gap: 5.1mm;
       align-items: start;
-      margin-top: 1.05mm;
+      margin-top: 1.8mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 1.3mm;
+      gap: 2.1mm;
     }
     .tag {
       margin: 0;
-      font-size: 8.5pt;
+      font-size: 13.8pt;
       font-weight: 900;
-      line-height: 1.03;
+      line-height: 1.02;
       letter-spacing: 0;
       text-transform: uppercase;
       word-break: break-word;
@@ -2146,30 +2151,41 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 9.6mm;
+      max-height: 12.2mm;
+    }
+    .divider {
+      height: 0.4mm;
+      background: #111827;
+      margin: 0.1mm 0 0;
     }
     .rows {
       display: flex;
-      gap: 2.2mm;
+      flex-direction: column;
+      gap: 1.05mm;
       min-width: 0;
     }
     .row {
-      flex: 1;
       min-width: 0;
+      display: grid;
+      grid-template-columns: 8.8mm minmax(0, 1fr);
+      gap: 1.3mm;
+      align-items: center;
+      padding-bottom: 0.6mm;
+      border-bottom: 0.18mm solid #dbe2ea;
     }
     .k {
       display: block;
-      margin: 0 0 0.45mm;
-      font-size: 3.95pt;
+      margin: 0;
+      font-size: 5.35pt;
       font-weight: 800;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: #8a94a6;
+      color: #6b7280;
     }
     .v {
       display: block;
       margin: 0;
-      font-size: 6.2pt;
+      font-size: 6.35pt;
       line-height: 1.08;
       font-weight: 900;
       text-transform: uppercase;
@@ -2180,54 +2196,72 @@ export default function App() {
     .qr-panel {
       min-width: 0;
     }
+    .badge-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 2.2mm;
+    }
     .qr-frame {
-      border: 0.25mm solid #d8e0ea;
-      border-radius: 1.7mm;
-      padding: 1.1mm;
+      border: 0.25mm solid #111827;
+      border-radius: 1mm;
+      padding: 1.55mm;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #ffffff;
     }
     .qr {
-      width: 12.9mm;
-      height: 12.9mm;
+      width: 19.2mm;
+      height: 19.2mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .footer {
       margin-top: auto;
-      padding-top: 1.35mm;
-      border-top: 0.25mm solid #e6ebf2;
+      padding-top: 1.55mm;
+      border-top: 0.22mm solid #111827;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1.2mm;
+      gap: 2.4mm;
     }
-    .signature {
+    .footer-note {
       flex: 1;
       min-width: 0;
       margin: 0;
-      font-size: 3.95pt;
+      font-size: 5pt;
       line-height: 1.05;
-      font-style: italic;
-      font-weight: 700;
-      color: #9099a8;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: #111827;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .code {
       flex-shrink: 0;
-      padding: 0.7mm 1.35mm;
-      border-radius: 1.35mm;
-      background: #eef2f6;
-      font-size: 4.05pt;
+      display: inline-flex;
+      align-items: center;
+      gap: 2mm;
+      font-size: 4.85pt;
       font-weight: 900;
-      letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #374151;
+      color: #111827;
+    }
+    .code-badge {
+      width: 11.4mm;
+      height: 7.2mm;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #111827;
+      color: #ffffff;
+      font-size: 9.3pt;
+      font-weight: 900;
+      line-height: 1;
+      border-radius: 0.4mm;
+      letter-spacing: 0.02em;
     }
   </style>
 </head>
@@ -2236,33 +2270,39 @@ export default function App() {
     <p class="header">${headerLabel}</p>
     <div class="content">
       <div class="info">
-        <p class="tag">ID: ${tag}</p>
+        <p class="tag">${tag}</p>
+        <div class="divider"></div>
         <div class="rows">
           <div class="row">
-            <span class="k">Equipo</span>
+            <span class="k">S/N:</span>
+            <span class="v">${serial}</span>
+          </div>
+          <div class="row">
+            <span class="k">EQP:</span>
             <span class="v">${equipo}</span>
           </div>
           <div class="row">
-            <span class="k">Ubicacion</span>
+            <span class="k">LOC:</span>
             <span class="v">${ubicacion}</span>
           </div>
-        </div>
-        <div class="rows">
           <div class="row">
-            <span class="k">Serie</span>
-            <span class="v">${serial}</span>
+            <span class="k">TIPO:</span>
+            <span class="v">${tipo}</span>
           </div>
         </div>
       </div>
       <div class="qr-panel">
+        <div class="badge-wrap">
+          <span class="code-badge">${internalCode}</span>
+        </div>
         <div class="qr-frame">
           <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
         </div>
       </div>
     </div>
     <div class="footer">
-      <p class="signature">${signatureNote}</p>
-      <span class="code">Code: ${internalCode}</span>
+      <p class="footer-note">${footerNote}</p>
+      <span class="code">ID ${idAsset}</span>
     </div>
   </div>
 </body>

@@ -255,7 +255,7 @@ export function AssetDetailModal({
                   </button>
                 </div>
                 <p className="text-[10px] font-black text-slate-400 uppercase">
-                  Formato sugerido para Zebra GK420t: 60 x 40 mm.
+                  Formato sugerido para Zebra GK420t: 100 x 50 mm.
                 </p>
               </div>
             </div>
