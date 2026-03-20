@@ -2121,8 +2121,8 @@ export default function App() {
     }
     .header-title {
       margin: 0;
-      font-size: 4.85pt;
-      font-weight: 700;
+      font-size: 5.35pt;
+      font-weight: 800;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       white-space: nowrap;
@@ -2133,21 +2133,21 @@ export default function App() {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 1fr 18.5mm;
-      gap: 1.2mm;
-      padding-top: 0.8mm;
+      grid-template-columns: 1fr 17.2mm;
+      gap: 0.95mm;
+      padding-top: 0.7mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.65mm;
+      gap: 0.5mm;
     }
     .tag {
       margin: 0;
-      font-size: 7.7pt;
-      font-weight: 700;
-      line-height: 1.04;
+      font-size: 8.55pt;
+      font-weight: 800;
+      line-height: 1.02;
       letter-spacing: 0.01em;
       text-transform: uppercase;
       word-break: break-word;
@@ -2155,13 +2155,13 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 8.6mm;
+      max-height: 9.2mm;
     }
     .subline {
       margin: 0;
-      font-size: 5pt;
-      line-height: 1.15;
-      font-weight: 700;
+      font-size: 5.6pt;
+      line-height: 1.08;
+      font-weight: 800;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2169,15 +2169,15 @@ export default function App() {
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 0.45mm;
+      gap: 0.35mm;
       min-width: 0;
-      margin-top: 0.25mm;
+      margin-top: 0.15mm;
     }
     .row {
       min-width: 0;
-      font-size: 4.95pt;
-      line-height: 1.12;
-      font-weight: 700;
+      font-size: 5.45pt;
+      line-height: 1.06;
+      font-weight: 800;
     }
     .k {
       text-transform: uppercase;
@@ -2189,18 +2189,18 @@ export default function App() {
     }
     .qr-panel {
       border-left: 0.25mm solid #0f172a;
-      padding-left: 1.1mm;
+      padding-left: 0.9mm;
       display: flex;
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-start;
-      gap: 0.6mm;
+      gap: 0.45mm;
       min-width: 0;
     }
     .qr-label {
       margin: 0;
-      font-size: 4.3pt;
-      font-weight: 700;
+      font-size: 4.7pt;
+      font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       text-align: center;
@@ -2209,41 +2209,41 @@ export default function App() {
     .qr-frame {
       border: 0.25mm solid #0f172a;
       border-radius: 1.1mm;
-      padding: 0.75mm;
+      padding: 0.6mm;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .qr {
-      width: 15.3mm;
-      height: 15.3mm;
+      width: 14.4mm;
+      height: 14.4mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .cta {
       margin-top: auto;
-      padding: 0.6mm 0.8mm;
+      padding: 0.5mm 0.55mm;
       border-top: 0.25mm solid #0f172a;
       border-bottom: 0.25mm solid #0f172a;
-      font-size: 4.45pt;
-      font-weight: 700;
-      letter-spacing: 0.05em;
+      font-size: 4.7pt;
+      font-weight: 800;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
       text-align: center;
-      line-height: 1.1;
+      line-height: 1.03;
     }
     .footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1.2mm;
-      margin-top: 0.8mm;
-      padding-top: 0.7mm;
+      gap: 1mm;
+      margin-top: 0.7mm;
+      padding-top: 0.6mm;
       border-top: 0.25mm solid #cbd5e1;
-      font-size: 4.45pt;
-      font-weight: 700;
-      letter-spacing: 0.06em;
+      font-size: 4.8pt;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
     .footer .hint {
