@@ -5147,8 +5147,12 @@ export default function App() {
     const safeTicketsTrend = escapeHtml(reportTicketsTrend.label);
     const safeOpenTrend = escapeHtml(reportOpenTrend.label);
     const safeSlaTrend = escapeHtml(reportSlaComplianceTrend.label);
-    const safeMttrMedianTrend = escapeHtml(reportMttrMedianTrend.label);
-    const safeP90Trend = escapeHtml(reportP90ResolutionTrend.label);
+    const previousPeriodMeta = reportComparisonWindow
+      ? `<p class="meta"><strong>Periodo anterior:</strong> ${safePreviousPeriod}</p>`
+      : '';
+    const ticketsTrendHtml = reportComparisonWindow ? `<div class="delta">${safeTicketsTrend}</div>` : '';
+    const openTrendHtml = reportComparisonWindow ? `<div class="delta">${safeOpenTrend}</div>` : '';
+    const slaTrendHtml = reportComparisonWindow ? `<div class="delta">${safeSlaTrend}</div>` : '';
     const ticketRows = reportTickets.slice(0, 40).map((ticket) => {
       const area = getTicketAreaLabel(ticket);
       const branch = formatTicketBranchFromCatalog(ticket.sucursal);
@@ -5236,19 +5240,16 @@ export default function App() {
     <h1>Reporte Ejecutivo IT</h1>
     <p class="meta"><strong>Periodo:</strong> ${safePeriod}</p>
     <p class="meta"><strong>Filtros:</strong> ${safeFilterSummary}</p>
-    <p class="meta"><strong>Periodo anterior:</strong> ${safePreviousPeriod}</p>
+    ${previousPeriodMeta}
     <p class="meta"><strong>Tendencia:</strong> ${safeTrendMode}</p>
     <p class="meta"><strong>Generado:</strong> ${safeGeneratedAt}</p>
     <p class="meta"><strong>Usuario:</strong> ${safeUser}</p>
     <div class="grid">
-      <div class="card"><div class="label">Tickets</div><div class="kpi">${reportTickets.length}</div><div class="delta">${safeTicketsTrend}</div></div>
-      <div class="card"><div class="label">Abiertos</div><div class="kpi">${reportOpenCount}</div><div class="delta">${safeOpenTrend}</div></div>
+      <div class="card"><div class="label">Tickets</div><div class="kpi">${reportTickets.length}</div>${ticketsTrendHtml}</div>
+      <div class="card"><div class="label">Abiertos</div><div class="kpi">${reportOpenCount}</div>${openTrendHtml}</div>
       <div class="card"><div class="label">Cerrados</div><div class="kpi">${reportClosedCount}</div></div>
-      <div class="card"><div class="label">SLA cumplido</div><div class="kpi">${reportSlaCompliancePct}%</div><div class="delta">${reportSlaCompliantCount}/${reportSlaTotalCount} en tiempo</div><div class="delta">${safeSlaTrend}</div></div>
+      <div class="card"><div class="label">SLA cumplido</div><div class="kpi">${reportSlaCompliancePct}%</div><div class="delta">${reportSlaCompliantCount}/${reportSlaTotalCount} en tiempo</div>${slaTrendHtml}</div>
       <div class="card"><div class="label">SLA vencido</div><div class="kpi">${reportSlaExpiredCount}</div></div>
-      <div class="card"><div class="label">Criticos</div><div class="kpi">${reportCriticalCount}</div></div>
-      <div class="card"><div class="label">MTTR mediana (h)</div><div class="kpi">${reportMedianResolutionHours === null ? 'N/D' : reportMedianResolutionHours}</div><div class="delta">${safeMttrMedianTrend}</div></div>
-      <div class="card"><div class="label">P90 resolucion (h)</div><div class="kpi">${reportP90ResolutionHours === null ? 'N/D' : reportP90ResolutionHours}</div><div class="delta">${safeP90Trend}</div></div>
     </div>
     <div class="grid">
       <div class="card"><div class="label">Activos totales</div><div class="kpi">${reportInventorySnapshot.totalActivos}</div></div>
