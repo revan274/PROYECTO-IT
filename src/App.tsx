@@ -6515,16 +6515,20 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                   <div className="bg-white border border-slate-100 rounded-2xl p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tickets</p>
                     <p className="text-3xl font-black text-slate-800">{reportTickets.length}</p>
-                    <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
+                    {reportComparisonWindow && (
+                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
+                    )}
                   </div>
                   <div className="bg-white border border-slate-100 rounded-2xl p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
                     <p className="text-3xl font-black text-blue-600">{reportOpenCount}</p>
-                    <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
+                    {reportComparisonWindow && (
+                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
+                    )}
                   </div>
                   <div className="bg-white border border-slate-100 rounded-2xl p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cerrados</p>
@@ -6536,26 +6540,13 @@ export default function App() {
                     <p className="text-[10px] font-black uppercase tracking-widest text-green-600">
                       {reportSlaCompliantCount}/{reportSlaTotalCount} en tiempo
                     </p>
-                    <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>{reportSlaComplianceTrend.label}</p>
+                    {reportComparisonWindow && (
+                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>{reportSlaComplianceTrend.label}</p>
+                    )}
                   </div>
                   <div className="bg-white border border-slate-100 rounded-2xl p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Vencido</p>
                     <p className="text-3xl font-black text-red-600">{reportSlaExpiredCount}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Criticos</p>
-                    <p className="text-3xl font-black text-amber-600">{reportCriticalCount}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">MTTR Mediana (h)</p>
-                    <p className="text-3xl font-black text-slate-800">{reportMedianResolutionHours === null ? 'N/D' : reportMedianResolutionHours}</p>
-                    <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportMttrMedianTrend.toneClass}`}>{reportMttrMedianTrend.label}</p>
-                    <p className="text-[10px] font-black uppercase tracking-wider mt-1 text-slate-400">Promedio: {reportAvgResolutionHours === null ? 'N/D' : reportAvgResolutionHours}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">P90 Resolucion (h)</p>
-                    <p className="text-3xl font-black text-slate-800">{reportP90ResolutionHours === null ? 'N/D' : reportP90ResolutionHours}</p>
-                    <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportP90ResolutionTrend.toneClass}`}>{reportP90ResolutionTrend.label}</p>
                   </div>
                 </div>
 
