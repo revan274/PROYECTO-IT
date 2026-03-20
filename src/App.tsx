@@ -2069,24 +2069,19 @@ export default function App() {
       .filter((value, index, values) => value && values.indexOf(value) === index)
       .join(' | ') || ubicacionRaw;
     const idAssetRaw = String(selectedAsset.id || 'N/D');
-    const statusLabelRaw = selectedAsset.estado === 'Falla' ? 'Revisar' : 'Operativo';
-    const qrModeLabelRaw = selectedAssetQrMode === 'signed' ? 'Firmado' : 'Local';
-    const brandLabelRaw = 'Los Gigantes';
-    const headerTitleRaw = 'Control de Activos TI';
-    const supportLabelRaw = 'Escanea para reportar falla';
-    const qrPanelLabelRaw = 'Codigo QR';
+    const headerLabelRaw = 'ID de activo';
+    const signatureNoteRaw = selectedAssetQrMode === 'signed' ? `Firmado por: ID ${idAssetRaw}` : `QR local · ID ${idAssetRaw}`;
+    const internalCodeSourceRaw = String(selectedAsset.idInterno || '').trim() || idAssetRaw;
+    const internalCodeDigits = (internalCodeSourceRaw.match(/\d+/g) || []).join('');
+    const internalCodeRaw = (internalCodeDigits || String(selectedAsset.id || '0')).slice(-2).padStart(2, '0');
 
     const tag = escapeHtml(tagRaw);
     const ubicacion = escapeHtml(ubicacionFullRaw);
     const serial = escapeHtml(serialRaw);
     const equipo = escapeHtml(equipmentRaw);
-    const idAsset = escapeHtml(idAssetRaw);
-    const statusLabel = escapeHtml(statusLabelRaw);
-    const qrModeLabel = escapeHtml(qrModeLabelRaw);
-    const brandLabel = escapeHtml(brandLabelRaw);
-    const headerTitle = escapeHtml(headerTitleRaw);
-    const supportLabel = escapeHtml(supportLabelRaw);
-    const qrPanelLabel = escapeHtml(qrPanelLabelRaw);
+    const headerLabel = escapeHtml(headerLabelRaw);
+    const signatureNote = escapeHtml(signatureNoteRaw);
+    const internalCode = escapeHtml(internalCodeRaw);
 
     printWindow.document.write(`<!doctype html>
 <html>
@@ -2100,7 +2095,7 @@ export default function App() {
       padding: 0;
       width: 60mm;
       height: 40mm;
-      font-family: Consolas, "Liberation Mono", "Courier New", monospace;
+      font-family: "Segoe UI", Arial, sans-serif;
       background: #ffffff;
       color: #0f172a;
     }
@@ -2110,202 +2105,164 @@ export default function App() {
     .label {
       width: 60mm;
       height: 40mm;
-      padding: 1.35mm;
-      border: 0.25mm solid #0f172a;
-      border-radius: 1.7mm;
+      padding: 2.1mm 2.1mm 1.75mm;
+      border: 0.35mm solid #111827;
+      border-radius: 3mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 1mm;
-      padding: 0 0 0.65mm;
-      border-bottom: 0.25mm solid #0f172a;
-    }
-    .brand {
       margin: 0;
-      font-size: 4.45pt;
+      font-size: 4.1pt;
       font-weight: 800;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      color: #8a94a6;
       white-space: nowrap;
-    }
-    .header-title {
-      margin: 0;
-      font-size: 4.9pt;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: right;
     }
     .content {
-      flex: 1;
-      min-height: 0;
       display: grid;
-      grid-template-columns: 1fr 17.4mm;
-      gap: 0.95mm;
-      padding-top: 0.75mm;
+      grid-template-columns: minmax(0, 1fr) 15.6mm;
+      gap: 2mm;
+      align-items: start;
+      margin-top: 1.05mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.45mm;
+      gap: 1.3mm;
     }
     .tag {
       margin: 0;
-      font-size: 8.9pt;
-      font-weight: 800;
-      line-height: 1.02;
-      letter-spacing: 0.01em;
+      font-size: 8.5pt;
+      font-weight: 900;
+      line-height: 1.03;
+      letter-spacing: 0;
       text-transform: uppercase;
       word-break: break-word;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 9.2mm;
-    }
-    .subline {
-      margin: 0;
-      font-size: 5.75pt;
-      line-height: 1.08;
-      font-weight: 800;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      max-height: 9.6mm;
     }
     .rows {
       display: flex;
-      flex-direction: column;
-      gap: 0.4mm;
+      gap: 2.2mm;
       min-width: 0;
-      margin-top: 0.3mm;
     }
     .row {
+      flex: 1;
       min-width: 0;
-      font-size: 5.5pt;
-      line-height: 1.06;
-      font-weight: 800;
     }
     .k {
+      display: block;
+      margin: 0 0 0.45mm;
+      font-size: 3.95pt;
+      font-weight: 800;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      color: #8a94a6;
     }
     .v {
+      display: block;
+      margin: 0;
+      font-size: 6.2pt;
+      line-height: 1.08;
+      font-weight: 900;
+      text-transform: uppercase;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .qr-panel {
-      border-left: 0.25mm solid #0f172a;
-      padding-left: 0.9mm;
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      justify-content: flex-start;
-      gap: 0.45mm;
       min-width: 0;
     }
-    .qr-label {
-      margin: 0;
-      font-size: 4.55pt;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      text-align: center;
-      line-height: 1.05;
-    }
     .qr-frame {
-      border: 0.25mm solid #0f172a;
-      border-radius: 1.1mm;
-      padding: 0.6mm;
+      border: 0.25mm solid #d8e0ea;
+      border-radius: 1.7mm;
+      padding: 1.1mm;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: #ffffff;
     }
     .qr {
-      width: 14.4mm;
-      height: 14.4mm;
+      width: 12.9mm;
+      height: 12.9mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
-    .cta {
-      margin-top: auto;
-      padding: 0.5mm 0.55mm;
-      border-top: 0.25mm solid #0f172a;
-      border-bottom: 0.25mm solid #0f172a;
-      font-size: 4.45pt;
-      font-weight: 800;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      text-align: center;
-      line-height: 1.03;
-    }
     .footer {
+      margin-top: auto;
+      padding-top: 1.35mm;
+      border-top: 0.25mm solid #e6ebf2;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.85mm;
-      margin-top: 0.65mm;
-      padding-top: 0.6mm;
-      border-top: 0.25mm solid #cbd5e1;
-      font-size: 4.55pt;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      gap: 1.2mm;
     }
-    .footer .hint {
+    .signature {
       flex: 1;
       min-width: 0;
+      margin: 0;
+      font-size: 3.95pt;
+      line-height: 1.05;
+      font-style: italic;
+      font-weight: 700;
+      color: #9099a8;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .footer .id {
+    .code {
       flex-shrink: 0;
-      white-space: nowrap;
+      padding: 0.7mm 1.35mm;
+      border-radius: 1.35mm;
+      background: #eef2f6;
+      font-size: 4.05pt;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #374151;
     }
   </style>
 </head>
 <body>
   <div class="label">
-    <div class="header">
-      <p class="brand">${brandLabel}</p>
-      <p class="header-title">${headerTitle}</p>
-    </div>
+    <p class="header">${headerLabel}</p>
     <div class="content">
       <div class="info">
         <p class="tag">ID: ${tag}</p>
-        <p class="subline">S/N: ${serial}</p>
         <div class="rows">
           <div class="row">
-            <span class="k">Equipo:</span>
-            <span class="v"> ${equipo}</span>
+            <span class="k">Equipo</span>
+            <span class="v">${equipo}</span>
           </div>
           <div class="row">
-            <span class="k">Ubicacion:</span>
-            <span class="v"> ${ubicacion}</span>
+            <span class="k">Ubicacion</span>
+            <span class="v">${ubicacion}</span>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row">
+            <span class="k">Serie</span>
+            <span class="v">${serial}</span>
           </div>
         </div>
       </div>
       <div class="qr-panel">
-        <p class="qr-label">${qrPanelLabel}</p>
         <div class="qr-frame">
           <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
         </div>
-        <p class="cta">Soporte</p>
       </div>
     </div>
     <div class="footer">
-      <span class="hint">${supportLabel}</span>
-      <span class="id">${qrModeLabel} · ${statusLabel} · ID ${idAsset}</span>
+      <p class="signature">${signatureNote}</p>
+      <span class="code">Code: ${internalCode}</span>
     </div>
   </div>
 </body>
