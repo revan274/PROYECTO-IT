@@ -2056,7 +2056,6 @@ export default function App() {
 
     const qrDataUrl = qrCanvas.toDataURL('image/png');
     const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
-    const tipoRaw = String(selectedAsset.tipo || 'Activo TI').trim() || 'Activo TI';
     const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
     const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
     const equipmentRaw = [
@@ -2072,19 +2071,22 @@ export default function App() {
     const idAssetRaw = String(selectedAsset.id || 'N/D');
     const statusLabelRaw = selectedAsset.estado === 'Falla' ? 'Revisar' : 'Operativo';
     const qrModeLabelRaw = selectedAssetQrMode === 'signed' ? 'Firmado' : 'Local';
-    const headerTitleRaw = 'Los Gigantes - Control de Activos TI';
+    const brandLabelRaw = 'Los Gigantes';
+    const headerTitleRaw = 'Control de Activos TI';
     const supportLabelRaw = 'Escanea para reportar falla';
+    const qrPanelLabelRaw = 'Codigo QR';
 
     const tag = escapeHtml(tagRaw);
-    const tipo = escapeHtml(tipoRaw);
     const ubicacion = escapeHtml(ubicacionFullRaw);
     const serial = escapeHtml(serialRaw);
     const equipo = escapeHtml(equipmentRaw);
     const idAsset = escapeHtml(idAssetRaw);
     const statusLabel = escapeHtml(statusLabelRaw);
     const qrModeLabel = escapeHtml(qrModeLabelRaw);
+    const brandLabel = escapeHtml(brandLabelRaw);
     const headerTitle = escapeHtml(headerTitleRaw);
     const supportLabel = escapeHtml(supportLabelRaw);
+    const qrPanelLabel = escapeHtml(qrPanelLabelRaw);
 
     printWindow.document.write(`<!doctype html>
 <html>
@@ -2116,36 +2118,49 @@ export default function App() {
       overflow: hidden;
     }
     .header {
-      padding: 0 0 0.7mm;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1mm;
+      padding: 0 0 0.65mm;
       border-bottom: 0.25mm solid #0f172a;
+    }
+    .brand {
+      margin: 0;
+      font-size: 4.45pt;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
     .header-title {
       margin: 0;
-      font-size: 5.35pt;
+      font-size: 4.9pt;
       font-weight: 800;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      text-align: right;
     }
     .content {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 1fr 17.2mm;
+      grid-template-columns: 1fr 17.4mm;
       gap: 0.95mm;
-      padding-top: 0.7mm;
+      padding-top: 0.75mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.5mm;
+      gap: 0.45mm;
     }
     .tag {
       margin: 0;
-      font-size: 8.55pt;
+      font-size: 8.9pt;
       font-weight: 800;
       line-height: 1.02;
       letter-spacing: 0.01em;
@@ -2159,7 +2174,7 @@ export default function App() {
     }
     .subline {
       margin: 0;
-      font-size: 5.6pt;
+      font-size: 5.75pt;
       line-height: 1.08;
       font-weight: 800;
       white-space: nowrap;
@@ -2169,13 +2184,13 @@ export default function App() {
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 0.35mm;
+      gap: 0.4mm;
       min-width: 0;
-      margin-top: 0.15mm;
+      margin-top: 0.3mm;
     }
     .row {
       min-width: 0;
-      font-size: 5.45pt;
+      font-size: 5.5pt;
       line-height: 1.06;
       font-weight: 800;
     }
@@ -2199,7 +2214,7 @@ export default function App() {
     }
     .qr-label {
       margin: 0;
-      font-size: 4.7pt;
+      font-size: 4.55pt;
       font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -2226,7 +2241,7 @@ export default function App() {
       padding: 0.5mm 0.55mm;
       border-top: 0.25mm solid #0f172a;
       border-bottom: 0.25mm solid #0f172a;
-      font-size: 4.7pt;
+      font-size: 4.45pt;
       font-weight: 800;
       letter-spacing: 0.03em;
       text-transform: uppercase;
@@ -2237,19 +2252,24 @@ export default function App() {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1mm;
-      margin-top: 0.7mm;
+      gap: 0.85mm;
+      margin-top: 0.65mm;
       padding-top: 0.6mm;
       border-top: 0.25mm solid #cbd5e1;
-      font-size: 4.8pt;
+      font-size: 4.55pt;
       font-weight: 800;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
     .footer .hint {
+      flex: 1;
+      min-width: 0;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .footer .id {
+      flex-shrink: 0;
       white-space: nowrap;
     }
   </style>
@@ -2257,6 +2277,7 @@ export default function App() {
 <body>
   <div class="label">
     <div class="header">
+      <p class="brand">${brandLabel}</p>
       <p class="header-title">${headerTitle}</p>
     </div>
     <div class="content">
@@ -2272,24 +2293,19 @@ export default function App() {
             <span class="k">Ubicacion:</span>
             <span class="v"> ${ubicacion}</span>
           </div>
-          <div class="row">
-            <span class="k">Tipo:</span>
-            <span class="v"> ${tipo}</span>
-          </div>
         </div>
       </div>
       <div class="qr-panel">
-        <p class="qr-label">Codigo</p>
-        <p class="qr-label">QR</p>
+        <p class="qr-label">${qrPanelLabel}</p>
         <div class="qr-frame">
           <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
         </div>
-        <p class="cta">${supportLabel}</p>
+        <p class="cta">Soporte</p>
       </div>
     </div>
     <div class="footer">
-      <span class="hint">${statusLabel}</span>
-      <span class="id">${qrModeLabel} - ID ${idAsset}</span>
+      <span class="hint">${supportLabel}</span>
+      <span class="id">${qrModeLabel} · ${statusLabel} · ID ${idAsset}</span>
     </div>
   </div>
 </body>
