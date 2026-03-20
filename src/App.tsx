@@ -6128,9 +6128,9 @@ export default function App() {
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl border border-slate-100 p-12 text-center">
-          <div className="flex justify-center mb-6"><LogoGigantes className="w-24 h-24 animate-bounce" /></div>
-          <h1 className="text-3xl font-black text-[#F58220]">LOS GIGANTES</h1>
+        <div className="bg-white w-full max-w-md rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 p-8 sm:p-12 text-center">
+          <div className="flex justify-center mb-6"><LogoGigantes className="w-20 h-20 sm:w-24 sm:h-24 animate-bounce" /></div>
+          <h1 className="text-2xl sm:text-3xl font-black text-[#F58220]">LOS GIGANTES</h1>
           <p className="text-[#8CC63F] font-bold text-sm tracking-[0.2em] uppercase mb-8">IT Management System</p>
 
           <form onSubmit={handleLogin} className="space-y-4 text-left">
@@ -6171,11 +6171,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-700">
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-700 overflow-x-hidden">
       <AppSidebar
         view={view}
         navItems={visibleNavItems}
         sidebarOpen={sidebarOpen}
+        onCloseSidebar={() => setSidebarOpen(false)}
         authorBrand={AUTHOR_BRAND}
         onSelectView={(nextView) => {
           setView(nextView);
@@ -6186,7 +6187,7 @@ export default function App() {
         }}
       />
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
         <AppHeader
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -6200,20 +6201,20 @@ export default function App() {
           sessionUser={sessionUser}
         />
 
-        <div className="flex-1 overflow-auto p-6 lg:p-10">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">
           {isSyncing && (
-            <div className="max-w-7xl mx-auto mb-4 px-4 py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[11px] font-black uppercase tracking-wider">
+            <div className="max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
               Sincronizando datos con backend...
             </div>
           )}
-          <div className="max-w-7xl mx-auto space-y-8">
+          <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
             
             {/* VISTA DASHBOARD */}
             {view === 'dashboard' && (
               <div className="space-y-8">
-                <div className="bg-slate-800 text-white p-8 rounded-[3rem] flex flex-col md:flex-row items-center justify-between shadow-2xl relative overflow-hidden">
-                   <div className="z-10">
-                      <h2 className="text-3xl font-black uppercase tracking-tight mb-2">Estado del Sistema</h2>
+                <div className="bg-slate-800 text-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] flex flex-col gap-6 md:flex-row md:items-center md:justify-between shadow-2xl relative overflow-hidden">
+                   <div className="z-10 min-w-0">
+                      <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight mb-2">Estado del Sistema</h2>
                       <p className="text-slate-400 text-sm">Resumen operativo | Periodo: {dashboardWindow.label}</p>
                       <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-300">
                         Abiertos: {dashboardOpenTicketsCurrent.length} | Criticos: {dashboardCriticalTicketsCurrent.length} | Sin Asignar: {dashboardUnassignedCount}
@@ -6234,38 +6235,38 @@ export default function App() {
                         ))}
                       </div>
                    </div>
-                   <div className="z-10">
-                      <div className="text-right">
-                         <p className="text-5xl font-black">{systemHealth}%</p>
+                   <div className="z-10 self-start md:self-auto">
+                      <div className="text-left md:text-right">
+                         <p className="text-4xl sm:text-5xl font-black">{systemHealth}%</p>
                          <p className="text-[10px] font-black text-[#8CC63F] uppercase tracking-widest">Salud IT</p>
                       </div>
                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-8">
-                  <div onClick={() => setView('supplies')} className="bg-[#F58220] p-10 rounded-[2.5rem] text-white shadow-xl cursor-pointer">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
+                  <div onClick={() => setView('supplies')} className="bg-[#F58220] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
                     <p className="text-xs font-black uppercase opacity-60 mb-2">Stock Bajo</p>
-                    <h2 className="text-6xl font-black">{insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length}</h2>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length}</h2>
                     <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
                   </div>
-                  <div onClick={() => applyTicketFocus('ABIERTOS')} className="bg-white p-10 rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl cursor-pointer">
+                  <div onClick={() => applyTicketFocus('ABIERTOS')} className="bg-white p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl cursor-pointer">
                     <p className="text-xs font-black uppercase text-slate-400 mb-2">Tickets Abiertos</p>
-                    <h2 className="text-6xl font-black text-[#F58220]">{dashboardOpenTicketsCurrent.length}</h2>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#F58220]">{dashboardOpenTicketsCurrent.length}</h2>
                     <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardOpenTrend.toneClass}`}>{dashboardOpenTrend.label}</p>
                   </div>
-                  <div onClick={() => setView('inventory')} className="bg-[#8CC63F] p-10 rounded-[2.5rem] text-white shadow-xl cursor-pointer">
+                  <div onClick={() => setView('inventory')} className="bg-[#8CC63F] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
                     <p className="text-xs font-black uppercase opacity-60 mb-2">Activos</p>
-                    <h2 className="text-6xl font-black">{activos.length}</h2>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{activos.length}</h2>
                     <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
                   </div>
-                  <div onClick={() => applyTicketFocus('CRITICA')} className="bg-amber-50 p-10 rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl cursor-pointer">
+                  <div onClick={() => applyTicketFocus('CRITICA')} className="bg-amber-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl cursor-pointer">
                     <p className="text-xs font-black uppercase opacity-60 mb-2">Críticos</p>
-                    <h2 className="text-6xl font-black">{dashboardCriticalTicketsCurrent.length}</h2>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardCriticalTicketsCurrent.length}</h2>
                     <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardCriticalTrend.toneClass}`}>{dashboardCriticalTrend.label}</p>
                   </div>
-                  <div onClick={() => applyTicketFocus('SLA')} className="bg-red-50 p-10 rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl cursor-pointer">
+                  <div onClick={() => applyTicketFocus('SLA')} className="bg-red-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl cursor-pointer">
                     <p className="text-xs font-black uppercase opacity-60 mb-2">SLA Vencido</p>
-                    <h2 className="text-6xl font-black">{dashboardSlaExpiredCount}</h2>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardSlaExpiredCount}</h2>
                     <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardSlaTrend.toneClass}`}>{dashboardSlaTrend.label}</p>
                   </div>
                 </div>
@@ -7058,9 +7059,9 @@ export default function App() {
             {/* VISTA INVENTARIO */}
             {view === 'inventory' && (
               <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                <div className="p-8 border-b border-slate-50 flex justify-between items-center">
+                <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
                   <h3 className="font-black text-slate-800 uppercase tracking-tight text-lg">Activos IT</h3>
-                  <div className="flex items-center gap-3">
+                  <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
                     <input
                       ref={inventoryImportInputRef}
                       type="file"
@@ -7071,13 +7072,13 @@ export default function App() {
                     <button
                       disabled={!canEdit || isImportingInventory}
                       onClick={() => inventoryImportInputRef.current?.click()}
-                      className="bg-slate-800 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
+                      className="w-full xl:w-auto min-w-0 bg-slate-800 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <Upload size={16} /> {isImportingInventory ? 'Importando...' : 'Importar Excel'}
                     </button>
                     <button
                       onClick={exportarInventarioFiltrado}
-                      className="bg-white border border-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 hover:bg-slate-50"
+                      className="w-full xl:w-auto min-w-0 bg-white border border-slate-200 text-slate-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-slate-50"
                     >
                       <Download size={16} /> Exportar CSV
                     </button>
@@ -7087,7 +7088,7 @@ export default function App() {
                         setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
                         setShowQrScanner(true);
                       }}
-                      className="bg-white border border-blue-200 text-blue-700 px-6 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-50"
+                      className="w-full xl:w-auto min-w-0 bg-white border border-blue-200 text-blue-700 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-blue-50"
                     >
                       <ScanLine size={16} /> Escanear QR
                     </button>
@@ -7095,7 +7096,7 @@ export default function App() {
                       <button
                         disabled={activos.length === 0}
                         onClick={() => void eliminarTodosActivos()}
-                        className="bg-white border border-red-200 text-red-600 px-6 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 hover:bg-red-50 disabled:opacity-50"
+                        className="w-full xl:w-auto min-w-0 bg-white border border-red-200 text-red-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-red-50 disabled:opacity-50"
                       >
                         <Trash2 size={16} /> Vaciar Activos
                       </button>
@@ -7103,13 +7104,13 @@ export default function App() {
                     <button
                       disabled={!canEdit}
                       onClick={() => openModal('activo')}
-                      className="bg-[#F58220] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
+                      className="w-full xl:w-auto min-w-0 bg-[#F58220] text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <Plus size={18} /> Nuevo Activo
                     </button>
                   </div>
                 </div>
-                <div className="p-8 border-b border-slate-50 bg-slate-50/40 space-y-6">
+                <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 bg-slate-50/40 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="bg-white border border-slate-100 rounded-2xl p-4">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con IP</p>
@@ -7248,7 +7249,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
                   <table className="w-full text-left min-w-[1200px]">
                     <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       <tr>

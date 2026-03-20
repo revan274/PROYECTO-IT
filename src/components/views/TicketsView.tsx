@@ -156,7 +156,7 @@ export function TicketsView({
         <button
           disabled={!canCreateTickets}
           onClick={onOpenTicketModal}
-          className="bg-slate-800 text-white px-8 py-4 rounded-3xl font-black text-xs uppercase disabled:opacity-50"
+          className="w-full sm:w-auto bg-slate-800 text-white px-8 py-4 rounded-3xl font-black text-xs uppercase disabled:opacity-50"
         >
           Nuevo Ticket
         </button>
@@ -165,23 +165,23 @@ export function TicketsView({
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <button onClick={() => onApplyTicketFocus('ABIERTOS')} className="text-left bg-white border border-slate-100 rounded-2xl px-5 py-4 shadow-sm hover:border-slate-200">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
-          <p className="text-3xl font-black text-[#F58220]">{openTicketsCount}</p>
+          <p className="text-2xl sm:text-3xl font-black text-[#F58220]">{openTicketsCount}</p>
         </button>
         <button onClick={() => onApplyTicketFocus('CRITICA')} className="text-left bg-amber-50 border border-amber-100 rounded-2xl px-5 py-4 shadow-sm hover:border-amber-200">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Críticos</p>
-          <p className="text-3xl font-black text-amber-700">{criticalTicketsCount}</p>
+          <p className="text-2xl sm:text-3xl font-black text-amber-700">{criticalTicketsCount}</p>
         </button>
         <button onClick={() => onApplyTicketFocus('SIN_ASIGNAR')} className="text-left bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 shadow-sm hover:border-indigo-200">
           <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Sin Asignar</p>
-          <p className="text-3xl font-black text-indigo-700">{unassignedTicketsCount}</p>
+          <p className="text-2xl sm:text-3xl font-black text-indigo-700">{unassignedTicketsCount}</p>
         </button>
         <button onClick={() => onApplyTicketFocus('SLA')} className="text-left bg-red-50 border border-red-100 rounded-2xl px-5 py-4 shadow-sm hover:border-red-200">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-500">SLA Vencido</p>
-          <p className="text-3xl font-black text-red-600">{slaExpiredCount}</p>
+          <p className="text-2xl sm:text-3xl font-black text-red-600">{slaExpiredCount}</p>
         </button>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
+      <div className="bg-white border border-slate-100 rounded-[2rem] p-4 sm:p-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
           <select
             value={ticketLifecycleFilter}
@@ -252,11 +252,11 @@ export function TicketsView({
           .slice(0, 4);
 
         return (
-          <div key={ticket.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
+          <div key={ticket.id} className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
             <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-6">
-              <div className="flex items-start gap-6">
-                <div className="w-16 h-16 bg-orange-50 rounded-3xl flex items-center justify-center text-[#F58220]"><Ticket size={32} /></div>
-                <div>
+              <div className="flex items-start gap-4 sm:gap-6 min-w-0">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-50 rounded-3xl flex items-center justify-center text-[#F58220] shrink-0"><Ticket size={28} /></div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-3 mb-1 flex-wrap">
                     <Badge variant={ticket.prioridad}>{ticket.prioridad}</Badge>
                     <Badge variant={ticket.estado}>{ticket.estado}</Badge>
@@ -268,7 +268,7 @@ export function TicketsView({
                     </span>
                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">#{ticket.id}</span>
                   </div>
-                  <h4 className="font-black text-slate-800 uppercase text-md">{ticket.activoTag} | {ticket.descripcion}</h4>
+                  <h4 className="font-black text-slate-800 uppercase text-sm sm:text-md break-words">{ticket.activoTag} | {ticket.descripcion}</h4>
                   <p className="text-[10px] font-black text-slate-400 uppercase mt-2">
                     Asignado: {ticket.asignadoA || 'Sin asignar'} | Sucursal: {formatTicketBranchFromCatalog(ticket.sucursal)}
                   </p>
@@ -333,7 +333,7 @@ export function TicketsView({
                 <button
                   disabled={!canEdit || ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado'}
                   onClick={() => onResolveTicket(ticket.id)}
-                  className="bg-[#8CC63F] text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-50"
+                  className="bg-[#8CC63F] text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-50"
                 >
                   Resolver
                 </button>
@@ -371,14 +371,14 @@ export function TicketsView({
                 </div>
                 <div className="space-y-2">
                   {attachments.map((attachment) => (
-                    <div key={`attachment-${ticket.id}-${attachment.id}`} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                    <div key={`attachment-${ticket.id}-${attachment.id}`} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2">
                       <div className="min-w-0">
                         <p className="text-xs font-black text-slate-700 truncate">{attachment.fileName}</p>
                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                           {formatBytes(attachment.size)} | {formatDateTime(attachment.uploadedAt)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
                           type="button"
                           onClick={() => onDownloadAttachment(ticket.id, attachment)}
@@ -407,7 +407,7 @@ export function TicketsView({
 
               <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={ticketCommentDrafts[ticket.id] || ''}
@@ -426,7 +426,7 @@ export function TicketsView({
                     type="button"
                     disabled={!canCreateComments}
                     onClick={() => onSaveComment(ticket.id)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full sm:w-auto px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Guardar
                   </button>
@@ -453,7 +453,7 @@ export function TicketsView({
       })}
 
       {filteredTickets.length === 0 && (
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-10 text-center text-slate-400 text-xs font-black uppercase tracking-wider">
+        <div className="bg-white border border-slate-100 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-10 text-center text-slate-400 text-xs font-black uppercase tracking-wider">
           No hay tickets para los filtros seleccionados.
         </div>
       )}
