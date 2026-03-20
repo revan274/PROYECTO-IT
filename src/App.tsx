@@ -2055,12 +2055,34 @@ export default function App() {
     }
 
     const qrDataUrl = qrCanvas.toDataURL('image/png');
-    const tag = escapeHtml(selectedAsset.tag || `ID-${selectedAsset.id}`);
-    const tipo = escapeHtml(selectedAsset.tipo || 'N/D');
-    const serial = escapeHtml(selectedAsset.serial || 'N/D');
-    const ubicacion = escapeHtml(selectedAsset.ubicacion || 'N/D');
-    const idAsset = escapeHtml(String(selectedAsset.id || 'N/D'));
-    const qrModeLabel = escapeHtml(selectedAssetQrMode === 'signed' ? 'QR FIRMADO' : 'QR LOCAL');
+    const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
+    const tipoRaw = String(selectedAsset.tipo || 'Activo TI').trim() || 'Activo TI';
+    const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
+    const serialRaw = String(selectedAsset.serial || '').trim();
+    const controlOwnerRaw = String(selectedAsset.responsable || '').trim() || String(selectedAsset.departamento || '').trim();
+    const equipmentRaw = [
+      String(selectedAsset.marca || '').trim(),
+      String(selectedAsset.modelo || '').trim(),
+    ].filter(Boolean).join(' ') || String(selectedAsset.equipo || '').trim() || 'Sin especificacion';
+    const controlRaw = [
+      serialRaw ? `S/N ${serialRaw}` : '',
+      controlOwnerRaw,
+    ].filter(Boolean).join(' · ') || 'Sin datos de control';
+    const branchCode = resolveAssetBranchCode(selectedAsset, activeTicketBranchCodes);
+    const branchRaw = branchCode || String(selectedAsset.departamento || '').trim().toUpperCase();
+    const idAssetRaw = String(selectedAsset.id || 'N/D');
+    const statusLabelRaw = selectedAsset.estado === 'Falla' ? 'Revisar' : 'Operativo';
+    const qrModeLabelRaw = selectedAssetQrMode === 'signed' ? 'Firmado' : 'Local';
+
+    const tag = escapeHtml(tagRaw);
+    const tipo = escapeHtml(tipoRaw);
+    const ubicacion = escapeHtml(ubicacionRaw);
+    const equipo = escapeHtml(equipmentRaw);
+    const control = escapeHtml(controlRaw);
+    const branch = escapeHtml(branchRaw);
+    const idAsset = escapeHtml(idAssetRaw);
+    const statusLabel = escapeHtml(statusLabelRaw);
+    const qrModeLabel = escapeHtml(qrModeLabelRaw);
 
     printWindow.document.write(`<!doctype html>
 <html>
@@ -2069,24 +2091,225 @@ export default function App() {
   <title>Etiqueta QR ${tag}</title>
   <style>
     @page { size: 60mm 40mm; margin: 0; }
-    html, body { margin: 0; padding: 0; width: 60mm; height: 40mm; font-family: Arial, sans-serif; }
-    .label { box-sizing: border-box; width: 60mm; height: 40mm; display: flex; gap: 1.6mm; align-items: center; padding: 1.6mm; }
-    .qr { width: 27mm; height: 27mm; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
-    .meta { flex: 1; min-width: 0; color: #0f172a; }
-    .tag { font-size: 9.2pt; font-weight: 800; line-height: 1.05; margin: 0 0 0.6mm; }
-    .line { margin: 0.35mm 0; font-size: 6.6pt; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 60mm;
+      height: 40mm;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    .label {
+      width: 60mm;
+      height: 40mm;
+      padding: 1.6mm;
+      border: 0.25mm solid #0f172a;
+      border-radius: 2.7mm;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1.2mm;
+      padding-bottom: 0.85mm;
+      border-bottom: 0.25mm solid #cbd5e1;
+    }
+    .eyebrow {
+      margin: 0 0 0.15mm;
+      font-size: 4.4pt;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .title {
+      margin: 0;
+      font-size: 6.2pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .status {
+      font-size: 4.7pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.5mm 1.15mm;
+      border: 0.25mm solid #0f172a;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 22mm 1fr;
+      gap: 1.4mm;
+      padding-top: 1mm;
+    }
+    .qr-panel {
+      border: 0.25mm solid #cbd5e1;
+      border-radius: 2mm;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65mm;
+      padding: 0.95mm;
+      background: #ffffff;
+    }
+    .qr {
+      width: 19.2mm;
+      height: 19.2mm;
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .scan {
+      margin: 0;
+      font-size: 4.15pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 1.15;
+    }
+    .meta {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5mm;
+    }
+    .tag {
+      margin: 0;
+      font-size: 7.9pt;
+      font-weight: 900;
+      line-height: 1.02;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-height: 8.7mm;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6mm;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: 0.35mm 0.95mm;
+      border: 0.25mm solid #0f172a;
+      border-radius: 999px;
+      font-size: 4.55pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45mm;
+      min-width: 0;
+    }
+    .row {
+      min-width: 0;
+    }
+    .k {
+      display: block;
+      margin: 0 0 0.1mm;
+      font-size: 4.35pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .v {
+      display: block;
+      margin: 0;
+      font-size: 5.7pt;
+      font-weight: 800;
+      line-height: 1.08;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+      margin-top: 0.75mm;
+      padding-top: 0.75mm;
+      border-top: 0.25mm solid #cbd5e1;
+      font-size: 4.35pt;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .footer .hint {
+      color: #334155;
+      white-space: nowrap;
+    }
+    .footer .id {
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
   <div class="label">
-    <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
-    <div class="meta">
-      <p class="tag">${tag}</p>
-      <p class="line">${tipo}</p>
-      <p class="line">S/N: ${serial}</p>
-      <p class="line">${ubicacion}</p>
-      <p class="line">ID: ${idAsset}</p>
-      <p class="line">${qrModeLabel}</p>
+    <div class="header">
+      <div>
+        <p class="eyebrow">Mesa de ayuda</p>
+        <p class="title">Activo TI</p>
+      </div>
+      <div class="status">${statusLabel}</div>
+    </div>
+    <div class="body">
+      <div class="qr-panel">
+        <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
+        <p class="scan">Escanea para soporte</p>
+      </div>
+      <div class="meta">
+        <p class="tag">${tag}</p>
+        <div class="chip-row">
+          <span class="chip">${tipo}</span>
+          ${branch ? `<span class="chip">${branch}</span>` : ''}
+        </div>
+        <div class="rows">
+          <div class="row">
+            <span class="k">Equipo</span>
+            <span class="v">${equipo}</span>
+          </div>
+          <div class="row">
+            <span class="k">Ubicacion</span>
+            <span class="v">${ubicacion}</span>
+          </div>
+          <div class="row">
+            <span class="k">Control</span>
+            <span class="v">${control}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <span class="hint">Inventario TI</span>
+      <span class="id">${qrModeLabel} · ID ${idAsset}</span>
     </div>
   </div>
 </body>
@@ -2104,7 +2327,7 @@ export default function App() {
 
     printWindow.onload = triggerPrint;
     window.setTimeout(triggerPrint, 450);
-  }, [selectedAsset, selectedAssetQrMode, showToast]);
+  }, [activeTicketBranchCodes, selectedAsset, selectedAssetQrMode, showToast]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!sessionUser) return;
