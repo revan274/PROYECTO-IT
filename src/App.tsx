@@ -2059,7 +2059,15 @@ export default function App() {
     const tipoRaw = String(selectedAsset.tipo || 'Activo TI').trim() || 'Activo TI';
     const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
     const serialRaw = String(selectedAsset.serial || '').trim();
-    const responsableRaw = String(selectedAsset.responsable || '').trim() || 'Sin responsable';
+    const controlOwnerRaw = String(selectedAsset.responsable || '').trim() || String(selectedAsset.departamento || '').trim();
+    const equipmentRaw = [
+      String(selectedAsset.marca || '').trim(),
+      String(selectedAsset.modelo || '').trim(),
+    ].filter(Boolean).join(' ') || String(selectedAsset.equipo || '').trim() || 'Sin especificacion';
+    const controlRaw = [
+      serialRaw ? `S/N ${serialRaw}` : '',
+      controlOwnerRaw,
+    ].filter(Boolean).join(' · ') || 'Sin datos de control';
     const branchCode = resolveAssetBranchCode(selectedAsset, activeTicketBranchCodes);
     const branchRaw = branchCode || String(selectedAsset.departamento || '').trim().toUpperCase();
     const idAssetRaw = String(selectedAsset.id || 'N/D');
@@ -2069,8 +2077,8 @@ export default function App() {
     const tag = escapeHtml(tagRaw);
     const tipo = escapeHtml(tipoRaw);
     const ubicacion = escapeHtml(ubicacionRaw);
-    const serial = escapeHtml(serialRaw || 'Sin serie');
-    const responsable = escapeHtml(responsableRaw);
+    const equipo = escapeHtml(equipmentRaw);
+    const control = escapeHtml(controlRaw);
     const branch = escapeHtml(branchRaw);
     const idAsset = escapeHtml(idAssetRaw);
     const statusLabel = escapeHtml(statusLabelRaw);
@@ -2109,21 +2117,27 @@ export default function App() {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 1mm;
-      padding-bottom: 0.75mm;
+      gap: 1.2mm;
+      padding-bottom: 0.85mm;
       border-bottom: 0.25mm solid #cbd5e1;
     }
-    .title {
-      margin: 0;
-      font-size: 4.8pt;
+    .eyebrow {
+      margin: 0 0 0.15mm;
+      font-size: 4.4pt;
       font-weight: 900;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
       color: #64748b;
     }
+    .title {
+      margin: 0;
+      font-size: 6.2pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .status {
-      margin-top: 0.2mm;
-      font-size: 4.55pt;
+      font-size: 4.7pt;
       font-weight: 900;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -2136,9 +2150,9 @@ export default function App() {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 21.5mm 1fr;
+      grid-template-columns: 22mm 1fr;
       gap: 1.4mm;
-      padding-top: 0.85mm;
+      padding-top: 1mm;
     }
     .qr-panel {
       border: 0.25mm solid #cbd5e1;
@@ -2148,19 +2162,19 @@ export default function App() {
       align-items: center;
       justify-content: space-between;
       gap: 0.65mm;
-      padding: 0.85mm;
+      padding: 0.95mm;
       background: #ffffff;
     }
     .qr {
-      width: 19.6mm;
-      height: 19.6mm;
+      width: 19.2mm;
+      height: 19.2mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .scan {
       margin: 0;
-      font-size: 3.95pt;
+      font-size: 4.15pt;
       font-weight: 900;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -2171,11 +2185,11 @@ export default function App() {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.55mm;
+      gap: 0.5mm;
     }
     .tag {
       margin: 0;
-      font-size: 8.7pt;
+      font-size: 7.9pt;
       font-weight: 900;
       line-height: 1.02;
       letter-spacing: 0.02em;
@@ -2185,7 +2199,7 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 9.4mm;
+      max-height: 8.7mm;
     }
     .chip-row {
       display: flex;
@@ -2210,7 +2224,7 @@ export default function App() {
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 0.5mm;
+      gap: 0.45mm;
       min-width: 0;
     }
     .row {
@@ -2261,8 +2275,8 @@ export default function App() {
   <div class="label">
     <div class="header">
       <div>
+        <p class="eyebrow">Mesa de ayuda</p>
         <p class="title">Activo TI</p>
-        <p class="tag">${tag}</p>
       </div>
       <div class="status">${statusLabel}</div>
     </div>
@@ -2272,28 +2286,29 @@ export default function App() {
         <p class="scan">Escanea para soporte</p>
       </div>
       <div class="meta">
+        <p class="tag">${tag}</p>
         <div class="chip-row">
           <span class="chip">${tipo}</span>
           ${branch ? `<span class="chip">${branch}</span>` : ''}
         </div>
         <div class="rows">
           <div class="row">
+            <span class="k">Equipo</span>
+            <span class="v">${equipo}</span>
+          </div>
+          <div class="row">
             <span class="k">Ubicacion</span>
             <span class="v">${ubicacion}</span>
           </div>
           <div class="row">
-            <span class="k">Serie</span>
-            <span class="v">${serial}</span>
-          </div>
-          <div class="row">
-            <span class="k">Responsable</span>
-            <span class="v">${responsable}</span>
+            <span class="k">Control</span>
+            <span class="v">${control}</span>
           </div>
         </div>
       </div>
     </div>
     <div class="footer">
-      <span class="hint">Inventario corporativo</span>
+      <span class="hint">Inventario TI</span>
       <span class="id">${qrModeLabel} · ID ${idAsset}</span>
     </div>
   </div>
