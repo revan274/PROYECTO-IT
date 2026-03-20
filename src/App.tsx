@@ -2048,7 +2048,7 @@ export default function App() {
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=760,height=420');
+    const printWindow = window.open('', '_blank', 'width=520,height=360');
     if (!printWindow) {
       showToast('Permite ventanas emergentes para imprimir etiquetas', 'warning');
       return;
@@ -2056,7 +2056,6 @@ export default function App() {
 
     const qrDataUrl = qrCanvas.toDataURL('image/png');
     const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
-    const tipoRaw = String(selectedAsset.tipo || 'Activo').trim() || 'Activo';
     const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
     const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
     const equipmentRaw = [
@@ -2077,7 +2076,6 @@ export default function App() {
     const footerNoteRaw = 'Propiedad corporativa - No remover';
 
     const tag = escapeHtml(tagRaw);
-    const tipo = escapeHtml(tipoRaw);
     const ubicacion = escapeHtml(ubicacionFullRaw);
     const serial = escapeHtml(serialRaw);
     const equipo = escapeHtml(equipmentRaw);
@@ -2092,12 +2090,12 @@ export default function App() {
   <meta charset="utf-8" />
   <title>Etiqueta QR ${tag}</title>
   <style>
-    @page { size: 100mm 50mm; margin: 0; }
+    @page { size: 55mm 35mm; margin: 0; }
     html, body {
       margin: 0;
       padding: 0;
-      width: 100mm;
-      height: 50mm;
+      width: 55mm;
+      height: 35mm;
       font-family: "Segoe UI", Arial, sans-serif;
       background: #ffffff;
       color: #0f172a;
@@ -2106,20 +2104,20 @@ export default function App() {
       box-sizing: border-box;
     }
     .label {
-      width: 100mm;
-      height: 50mm;
-      padding: 4.1mm 4.1mm 3.1mm;
-      border: 0.42mm solid #111827;
-      border-radius: 1.1mm;
+      width: 55mm;
+      height: 35mm;
+      padding: 1.8mm 1.8mm 1.45mm;
+      border: 0.3mm solid #111827;
+      border-radius: 1.2mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .header {
       margin: 0;
-      font-size: 6.2pt;
+      font-size: 3.65pt;
       font-weight: 900;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       color: #4b5563;
       white-space: nowrap;
@@ -2128,22 +2126,22 @@ export default function App() {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 22.5mm;
-      gap: 5.1mm;
+      grid-template-columns: minmax(0, 1fr) 11.7mm;
+      gap: 1mm;
       align-items: start;
-      margin-top: 1.8mm;
+      margin-top: 0.7mm;
     }
     .info {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 2.1mm;
+      gap: 0.7mm;
     }
     .tag {
       margin: 0;
-      font-size: 13.8pt;
+      font-size: 8pt;
       font-weight: 900;
-      line-height: 1.02;
+      line-height: 1;
       letter-spacing: 0;
       text-transform: uppercase;
       word-break: break-word;
@@ -2151,42 +2149,42 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      max-height: 12.2mm;
+      max-height: 8.7mm;
     }
     .divider {
-      height: 0.4mm;
+      height: 0.22mm;
       background: #111827;
-      margin: 0.1mm 0 0;
+      margin: 0;
     }
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 1.05mm;
+      gap: 0.42mm;
       min-width: 0;
     }
     .row {
       min-width: 0;
       display: grid;
-      grid-template-columns: 8.8mm minmax(0, 1fr);
-      gap: 1.3mm;
+      grid-template-columns: 5.7mm minmax(0, 1fr);
+      gap: 0.7mm;
       align-items: center;
-      padding-bottom: 0.6mm;
-      border-bottom: 0.18mm solid #dbe2ea;
+      padding-bottom: 0.22mm;
+      border-bottom: 0.14mm solid #dbe2ea;
     }
     .k {
       display: block;
       margin: 0;
-      font-size: 5.35pt;
+      font-size: 3.2pt;
       font-weight: 800;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
       color: #6b7280;
     }
     .v {
       display: block;
       margin: 0;
-      font-size: 6.35pt;
-      line-height: 1.08;
+      font-size: 3.95pt;
+      line-height: 1;
       font-weight: 900;
       text-transform: uppercase;
       white-space: nowrap;
@@ -2199,39 +2197,39 @@ export default function App() {
     .badge-wrap {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 2.2mm;
+      margin-bottom: 0.45mm;
     }
     .qr-frame {
       border: 0.25mm solid #111827;
-      border-radius: 1mm;
-      padding: 1.55mm;
+      border-radius: 0.7mm;
+      padding: 0.55mm;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #ffffff;
     }
     .qr {
-      width: 19.2mm;
-      height: 19.2mm;
+      width: 9.4mm;
+      height: 9.4mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .footer {
       margin-top: auto;
-      padding-top: 1.55mm;
-      border-top: 0.22mm solid #111827;
+      padding-top: 0.65mm;
+      border-top: 0.18mm solid #111827;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 2.4mm;
+      gap: 0.7mm;
     }
     .footer-note {
       flex: 1;
       min-width: 0;
       margin: 0;
-      font-size: 5pt;
-      line-height: 1.05;
+      font-size: 2.95pt;
+      line-height: 1.02;
       font-weight: 900;
       text-transform: uppercase;
       color: #111827;
@@ -2243,24 +2241,24 @@ export default function App() {
       flex-shrink: 0;
       display: inline-flex;
       align-items: center;
-      gap: 2mm;
-      font-size: 4.85pt;
+      gap: 0.55mm;
+      font-size: 3.05pt;
       font-weight: 900;
       text-transform: uppercase;
       color: #111827;
     }
     .code-badge {
-      width: 11.4mm;
-      height: 7.2mm;
+      width: 6.3mm;
+      height: 4.2mm;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       background: #111827;
       color: #ffffff;
-      font-size: 9.3pt;
+      font-size: 5.05pt;
       font-weight: 900;
       line-height: 1;
-      border-radius: 0.4mm;
+      border-radius: 0.35mm;
       letter-spacing: 0.02em;
     }
   </style>
@@ -2284,10 +2282,6 @@ export default function App() {
           <div class="row">
             <span class="k">LOC:</span>
             <span class="v">${ubicacion}</span>
-          </div>
-          <div class="row">
-            <span class="k">TIPO:</span>
-            <span class="v">${tipo}</span>
           </div>
         </div>
       </div>
