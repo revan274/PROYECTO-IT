@@ -1527,7 +1527,6 @@ export default function App() {
   const [importDraft, setImportDraft] = useState<ImportDraftState | null>(null);
   const [isApplyingImport, setIsApplyingImport] = useState(false);
   const [, setAssetRiskSummary] = useState<AssetRiskSummary | null>(null);
-  const [assetRiskSource, setAssetRiskSource] = useState<'api' | 'local'>('local');
   const [newUserForm, setNewUserForm] = useState<{
     nombre: string;
     username: string;
@@ -1877,7 +1876,6 @@ export default function App() {
     setCatalogos(DEFAULT_CATALOGS);
     setBackendConnected(false);
     setAssetRiskSummary(null);
-    setAssetRiskSource('local');
     setLastSync(null);
     setImportDraft(null);
     setIsApplyingImport(false);
@@ -2126,10 +2124,8 @@ export default function App() {
       setCatalogos(normalizeCatalogState(data.catalogos));
       if (data.riskSummary) {
         setAssetRiskSummary(data.riskSummary);
-        setAssetRiskSource('api');
       } else {
         setAssetRiskSummary(calculateAssetRiskSummary(data.activos));
-        setAssetRiskSource('local');
       }
       setBackendConnected(true);
       setLastSync(new Date().toLocaleTimeString());
@@ -2151,7 +2147,6 @@ export default function App() {
       setAuditAlerts(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
       setAssetRiskSummary(null);
-      setAssetRiskSource('local');
       setUsers([]);
       setCatalogos(DEFAULT_CATALOGS);
       if (!silent) {
@@ -7252,48 +7247,6 @@ export default function App() {
                       Vida &gt;=4 ({activosVidaAlta})
                     </button>
                   </div>
-                </div>
-                <div className="px-8 py-6 border-b border-slate-50 bg-red-50/30">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Riesgos Detectados</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fuente: {assetRiskSource.toUpperCase()}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs font-black">
-                    <button
-                      onClick={() => applyInventoryFocus('DUP_RED')}
-                      className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      IP/MAC duplicadas: {duplicateIpEntries.length + duplicateMacEntries.length} | Ver afectados
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('SIN_IP')}
-                      className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      Sin IP: {effectiveRiskSummary.activosSinIp} | Ver afectados
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('SIN_MAC')}
-                      className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      Sin MAC: {effectiveRiskSummary.activosSinMac} | Ver afectados
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('SIN_RESP')}
-                      className="px-3 py-1 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      Sin responsable: {activosSinResponsable} | Ver afectados
-                    </button>
-                  </div>
-                  {(duplicateIpEntries.length > 0 || duplicateMacEntries.length > 0) && (
-                    <div className="mt-3 text-[11px] font-bold text-red-500 space-y-1">
-                      {duplicateIpEntries.length > 0 && (
-                        <p>IPs en conflicto: {duplicateIpEntries.map((entry) => `${entry.value} (${entry.count})`).slice(0, 6).join(', ')}</p>
-                      )}
-                      {duplicateMacEntries.length > 0 && (
-                        <p>MACs en conflicto: {duplicateMacEntries.map((entry) => `${entry.value} (${entry.count})`).slice(0, 6).join(', ')}</p>
-                      )}
-                    </div>
-                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left min-w-[1200px]">
