@@ -1,18 +1,8 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronRight,
-  Download,
-  History,
-  MinusCircle,
   Moon,
-  Plus,
-  PlusCircle,
   Save,
-  ScanLine,
-  Search,
   Sun,
-  Trash2,
-  Upload,
   User,
   X,
 } from 'lucide-react';
@@ -23,7 +13,7 @@ import { AssetDetailModal } from './components/modals/AssetDetailModal';
 import { ImportPreviewModal } from './components/modals/ImportPreviewModal';
 import { QrScannerModal } from './components/modals/QrScannerModal';
 import { SupplyHistoryModal } from './components/modals/SupplyHistoryModal';
-import { Badge } from './components/ui/Badge';
+
 import { Toast } from './components/ui/Toast';
 import { TicketsView } from './components/views/TicketsView';
 import {
@@ -33,7 +23,7 @@ import {
   CLIENT_ATTACHMENT_MAX_BYTES,
   CLIENT_ATTACHMENT_MAX_COUNT,
   COMMON_TICKET_ISSUES,
-  DASHBOARD_RANGES,
+
   DEFAULT_CATALOGS,
   NAV_ITEMS,
   NORMALIZED_API_BASE_URL,
@@ -99,7 +89,7 @@ import type {
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
-  TravelMonthRange,
+
   TravelReportRow,
   UserItem,
   UserRole,
@@ -146,7 +136,7 @@ import {
   normalizeCatalogState,
   normalizeIpAddress,
   normalizeMacAddress,
-  normalizeSpreadsheetKey,
+
   parseAssetLifeYears,
   resolveAssetBranchCode,
   spreadsheetCellToText,
@@ -175,519 +165,68 @@ import {
   ticketAuditActionLabel,
 } from './utils/tickets';
 
-const LazyQRCodeCanvas = React.lazy(async () => {
+
+import {
+  buildAssetQrCanvasId,
+  buildAssetQrPayload,
+
+  extractSignedQrToken,
+  parseLocalQrAsset,
+  toActivoFromQrLookup,
+} from './utils/qrTokens';
+
+import {
+  ticketTimestamp,
+  ticketCreatedTimestamp,
+  parseMonthInputRange,
+  formatMonthInputLabel,
+  formatTravelDate,
+  compactBranchLabel,
+  parseNonNegativeNumber,
+  roundToTwoDecimals,
+  formatTravelNumber,
+  parseTicketTravelCreatedAt,
+  resolveTicketTravelDestinationCode,
+  getTicketAreaLabel,
+  extractTicketIssueDescription,
+  normalizeIncidentCause,
+  matchesReportBranch,
+  matchesReportArea,
+  matchesReportState,
+  matchesReportPriority,
+  matchesReportAttention,
+  matchesReportTechnician,
+  collectResolutionHours,
+  startOfLocalDayTimestamp,
+  startOfLocalWeekTimestamp,
+  resolveDashboardRangeWindow,
+  formatDashboardTrend,
+  formatMetricTrend,
+  roundHours,
+  calculatePercentile,
+  calculateMedian,
+  ticketBelongsToSessionUser,
+  buildInitialFormDataForModal,
+  getModalTitle,
+  getModalSubmitLabel,
+  getSupplyHealthStatus,
+  getSupplyCriticalityRank,
+  parseInventoryRow,
+} from './utils/appHelpers';
+
+const LazyUsersView = lazy(() => import('./components/views/UsersView'));
+const LazyDashboardView = lazy(() => import('./components/views/DashboardView'));
+const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
+const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
+const LazyAuditView = lazy(() => import('./components/views/AuditView'));
+
+type SpreadsheetRow = Record<string, unknown>;
+type NetworkSheetRow = any[];
+
+const LazyQRCodeCanvas = lazy(async () => {
   const module = await import('qrcode.react');
   return { default: module.QRCodeCanvas };
 });
-
-function buildAssetQrCanvasId(assetId: number): string {
-  return `asset-qr-${assetId}`;
-}
-
-const LOCAL_QR_PREFIX = 'mtiqr0';
-const LOCAL_QR_TOKEN_PATTERN = /mtiqr0\.\d+\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)?/;
-
-function sanitizeQrTokenSegment(value: string, fallback: string): string {
-  const sanitized = String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^A-Z0-9-]/g, '')
-    .slice(0, 80);
-  return sanitized || fallback;
-}
-
-function buildAssetQrPayload(asset: Activo): string {
-  const idRaw = Number(asset.id);
-  const id = Number.isFinite(idRaw) && idRaw > 0 ? Math.trunc(idRaw) : 0;
-  const tag = sanitizeQrTokenSegment(asset.tag || '', 'ACTIVO');
-  const serial = sanitizeQrTokenSegment(asset.serial || '', 'NA');
-  return `${LOCAL_QR_PREFIX}.${id}.${tag}.${serial}`;
-}
-
-function extractSignedQrToken(value: string): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  const tokenPattern = /mtiqr1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
-  const direct = raw.match(tokenPattern);
-  if (direct) return direct[0];
-
-  try {
-    const url = new URL(raw);
-    const tokenFromQuery = String(url.searchParams.get('token') || '').trim();
-    if (tokenFromQuery && tokenPattern.test(tokenFromQuery)) return tokenFromQuery;
-    const fromPath = decodeURIComponent(url.pathname).match(tokenPattern);
-    if (fromPath) return fromPath[0];
-  } catch {
-    return '';
-  }
-
-  return '';
-}
-
-function extractLocalQrToken(value: string): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  const direct = raw.match(LOCAL_QR_TOKEN_PATTERN);
-  if (direct) return direct[0];
-
-  try {
-    const url = new URL(raw);
-    const tokenFromQuery = String(url.searchParams.get('token') || '').trim();
-    if (tokenFromQuery && LOCAL_QR_TOKEN_PATTERN.test(tokenFromQuery)) {
-      const matched = tokenFromQuery.match(LOCAL_QR_TOKEN_PATTERN);
-      if (matched) return matched[0];
-    }
-    const fromPath = decodeURIComponent(url.pathname).match(LOCAL_QR_TOKEN_PATTERN);
-    if (fromPath) return fromPath[0];
-  } catch {
-    return '';
-  }
-
-  return '';
-}
-
-function parseLocalQrAsset(value: string): Activo | null {
-  const token = extractLocalQrToken(value);
-  if (!token) return null;
-  const parts = token.split('.');
-  if (parts.length < 3) return null;
-
-  const id = Number(parts[1]);
-  const tag = String(parts[2] || '').trim().toUpperCase();
-  const serial = String(parts[3] || '').trim().toUpperCase();
-  if (!Number.isFinite(id) || id <= 0 || !tag) return null;
-
-  return toActivoFromQrLookup({
-    id: Math.trunc(id),
-    tag,
-    serial: serial || `${tag}-SN`,
-  });
-}
-
-function toActivoFromQrLookup(lookup: AssetQrResolveResponse['asset'] | Record<string, unknown>): Activo | null {
-  if (!lookup || typeof lookup !== 'object') return null;
-  const id = Number((lookup as { id?: unknown }).id);
-  const tag = String((lookup as { tag?: unknown }).tag || '').trim().toUpperCase();
-  const tipo = String((lookup as { tipo?: unknown }).tipo || '').trim().toUpperCase() || 'EQUIPO';
-  const marca = String((lookup as { marca?: unknown }).marca || '').trim() || 'SIN MARCA';
-  const serial = String((lookup as { serial?: unknown }).serial || '').trim().toUpperCase();
-  const estadoRaw = String((lookup as { estado?: unknown }).estado || '').trim().toLowerCase();
-  const estado: EstadoActivo = estadoRaw.includes('falla') ? 'Falla' : 'Operativo';
-  const ubicacion = String((lookup as { ubicacion?: unknown }).ubicacion || '').trim() || 'SIN UBICACION';
-  const responsable = String((lookup as { responsable?: unknown }).responsable || '').trim();
-  const departamento = String((lookup as { departamento?: unknown }).departamento || '').trim().toUpperCase();
-  const modelo = String((lookup as { modelo?: unknown }).modelo || '').trim();
-  if (!Number.isFinite(id) || id <= 0 || !tag) return null;
-
-  return {
-    id: Math.trunc(id),
-    tag,
-    tipo,
-    marca,
-    modelo,
-    ubicacion,
-    estado,
-    serial: serial || `${tag}-SN`,
-    fechaCompra: '',
-    responsable,
-    departamento,
-  };
-}
-
-function ticketTimestamp(ticket: TicketItem): number {
-  const source = ticket.fechaCreacion || ticket.fechaCierre || ticket.fecha;
-  if (!source) return Number(ticket.id || 0);
-  const parsed = parseDateToTimestamp(source);
-  if (parsed === null) return Number(ticket.id || 0);
-  return parsed;
-}
-
-function ticketCreatedTimestamp(ticket: TicketItem): number {
-  const source = ticket.fechaCreacion || ticket.fecha;
-  if (!source) return ticketTimestamp(ticket);
-  const parsed = parseDateToTimestamp(source);
-  if (parsed === null) return ticketTimestamp(ticket);
-  return parsed;
-}
-
-function parseMonthInputRange(value?: string): TravelMonthRange | null {
-  const raw = String(value || '').trim();
-  const match = raw.match(/^(\d{4})-(\d{2})$/);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
-
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  return {
-    year,
-    monthIndex: month - 1,
-    startMs: start.getTime(),
-    endMs: end.getTime() - 1,
-  };
-}
-
-function formatMonthInputLabel(value?: string): string {
-  const range = parseMonthInputRange(value);
-  if (!range) return 'N/D';
-  return new Date(range.year, range.monthIndex, 1)
-    .toLocaleDateString('es-MX', { month: 'long' })
-    .toUpperCase();
-}
-
-function formatTravelDate(value?: string): string {
-  const timestamp = parseDateToTimestamp(value);
-  if (timestamp === null) return 'N/D';
-  return new Date(timestamp).toLocaleDateString('es-MX');
-}
-
-function compactBranchLabel(value?: string): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  return raw.replace(/^sucursal\s+/i, '').trim().toUpperCase();
-}
-
-function parseNonNegativeNumber(value: unknown, fallback = 0): number {
-  const normalized = String(value ?? '')
-    .trim()
-    .replace(',', '.');
-  if (!normalized) return fallback;
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return parsed;
-}
-
-function roundToTwoDecimals(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.round(value * 100) / 100;
-}
-
-function formatTravelNumber(value: number): string {
-  return String(roundToTwoDecimals(value));
-}
-
-function parseTicketTravelCreatedAt(ticket: TicketItem): number | null {
-  return parseDateToTimestamp(ticket.fechaCreacion || ticket.fecha);
-}
-
-function resolveTicketTravelDestinationCode(ticket: TicketItem, validBranchCodes: ReadonlySet<string>): string {
-  const byBranch = String(ticket.sucursal || '').trim().toUpperCase();
-  if (byBranch && validBranchCodes.has(byBranch)) return byBranch;
-
-  const byDepartment = String(ticket.departamento || '').trim().toUpperCase();
-  if (byDepartment && validBranchCodes.has(byDepartment)) return byDepartment;
-  return '';
-}
-
-function getTicketAreaLabel(ticket: TicketItem): string {
-  const description = String(ticket.descripcion || '').trim();
-  if (description) {
-    const match = description.match(/^(?:[aá]rea afectada:)\s*([^|]+)\|/i);
-    if (match?.[1]) {
-      const area = match[1].trim();
-      if (area) return area;
-    }
-  }
-  const departamento = String(ticket.departamento || '').trim();
-  if (departamento) return departamento;
-  return 'Sin area';
-}
-
-function extractTicketIssueDescription(ticket: TicketItem): string {
-  const description = String(ticket.descripcion || '').trim();
-  if (!description) return 'Sin descripcion';
-
-  const cleaned = description
-    .replace(/^(?:[aá]rea afectada:)\s*[^|]+(?:\|\s*)?/i, '')
-    .trim();
-  return cleaned || description;
-}
-
-function normalizeIncidentCause(value: string): string {
-  const normalized = normalizeForCompare(value || '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return normalized || 'sin descripcion';
-}
-
-function matchesReportBranch(ticket: TicketItem, filter: string): boolean {
-  if (filter === 'TODAS') return true;
-  return String(ticket.sucursal || '').trim().toUpperCase() === filter;
-}
-
-function matchesReportArea(ticket: TicketItem, filter: string): boolean {
-  if (filter === 'TODAS') return true;
-  return normalizeForCompare(getTicketAreaLabel(ticket)) === normalizeForCompare(filter);
-}
-
-function matchesReportState(ticket: TicketItem, filter: ReportStateFilter): boolean {
-  if (filter === 'TODOS') return true;
-  return ticket.estado === filter;
-}
-
-function matchesReportPriority(ticket: TicketItem, filter: ReportPriorityFilter): boolean {
-  if (filter === 'TODAS') return true;
-  return ticket.prioridad === filter;
-}
-
-function matchesReportAttention(ticket: TicketItem, filter: ReportAttentionFilter): boolean {
-  if (filter === 'TODAS') return true;
-  return normalizeTicketAttentionType(ticket.atencionTipo) === filter;
-}
-
-function matchesReportTechnician(ticket: TicketItem, filter: string): boolean {
-  const assignee = String(ticket.asignadoA || '').trim();
-  if (filter === 'TODOS') return true;
-  if (filter === 'SIN_ASIGNAR') return !assignee;
-  return normalizeForCompare(assignee) === normalizeForCompare(filter);
-}
-
-function collectResolutionHours(rows: TicketItem[]): number[] {
-  return rows
-    .filter((ticket) => ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado')
-    .map((ticket) => {
-      const start = ticketCreatedTimestamp(ticket);
-      const end = parseDateToTimestamp(ticket.fechaCierre || '');
-      if (end === null || end <= start) return null;
-      return (end - start) / (60 * 60 * 1000);
-    })
-    .filter((value): value is number => value !== null);
-}
-
-function startOfLocalDayTimestamp(value: number): number {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
-}
-
-function startOfLocalWeekTimestamp(value: number): number {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  const day = (date.getDay() + 6) % 7;
-  date.setDate(date.getDate() - day);
-  return date.getTime();
-}
-
-function resolveDashboardRangeWindow(range: DashboardRange, nowMs = Date.now()): {
-  label: string;
-  startMs: number;
-  endMs: number;
-  previousStartMs: number;
-  previousEndMs: number;
-} {
-  const dayMs = 24 * 60 * 60 * 1000;
-  const selected = DASHBOARD_RANGES.find((item) => item.value === range) || DASHBOARD_RANGES[1];
-
-  if (selected.value === 'TODAY') {
-    const startMs = startOfLocalDayTimestamp(nowMs);
-    const elapsed = Math.max(1, nowMs - startMs);
-    const previousStartMs = startMs - dayMs;
-    const previousEndMs = previousStartMs + elapsed;
-    return {
-      label: selected.label,
-      startMs,
-      endMs: nowMs,
-      previousStartMs,
-      previousEndMs,
-    };
-  }
-
-  const spanMs = selected.days * dayMs;
-  const startMs = nowMs - spanMs;
-  const endMs = nowMs;
-  const previousStartMs = startMs - spanMs;
-  const previousEndMs = startMs;
-  return {
-    label: selected.label,
-    startMs,
-    endMs,
-    previousStartMs,
-    previousEndMs,
-  };
-}
-
-function formatDashboardTrend(current: number, previous: number, positiveIsGood = true): {
-  label: string;
-  toneClass: string;
-} {
-  const diff = current - previous;
-  if (diff === 0) {
-    return {
-      label: `Sin cambio vs periodo anterior (${previous})`,
-      toneClass: 'text-slate-400',
-    };
-  }
-
-  const pct = previous > 0
-    ? Math.round((Math.abs(diff) / previous) * 100)
-    : 100;
-  const sign = diff > 0 ? '+' : '-';
-  const isPositiveResult = positiveIsGood ? diff > 0 : diff < 0;
-  return {
-    label: `${sign}${Math.abs(diff)} (${pct}%) vs periodo anterior (${previous})`,
-    toneClass: isPositiveResult ? 'text-green-500' : 'text-red-500',
-  };
-}
-
-function formatMetricTrend(
-  current: number | null,
-  previous: number | null,
-  options?: {
-    positiveIsGood?: boolean;
-    decimals?: number;
-    unitSuffix?: string;
-    usePoints?: boolean;
-    unavailableLabel?: string;
-  },
-): {
-  label: string;
-  toneClass: string;
-} {
-  const positiveIsGood = options?.positiveIsGood ?? true;
-  const decimals = options?.decimals ?? 0;
-  const unitSuffix = options?.unitSuffix ?? '';
-  const usePoints = options?.usePoints ?? false;
-  const unavailableLabel = options?.unavailableLabel ?? 'Comparativo no disponible';
-
-  if (current === null || previous === null) {
-    return {
-      label: unavailableLabel,
-      toneClass: 'text-slate-400',
-    };
-  }
-
-  const normalizedCurrent = Number(current.toFixed(decimals));
-  const normalizedPrevious = Number(previous.toFixed(decimals));
-  const diff = Number((normalizedCurrent - normalizedPrevious).toFixed(decimals));
-  const formatValue = (value: number) => (decimals > 0 ? value.toFixed(decimals) : String(Math.round(value)));
-
-  if (diff === 0) {
-    return {
-      label: `Sin cambio vs periodo anterior (${formatValue(normalizedPrevious)}${unitSuffix})`,
-      toneClass: 'text-slate-400',
-    };
-  }
-
-  const sign = diff > 0 ? '+' : '-';
-  const absDiff = Math.abs(diff);
-  const isPositiveResult = positiveIsGood ? diff > 0 : diff < 0;
-
-  if (usePoints) {
-    return {
-      label: `${sign}${formatValue(absDiff)} pts vs periodo anterior (${formatValue(normalizedPrevious)}${unitSuffix})`,
-      toneClass: isPositiveResult ? 'text-green-500' : 'text-red-500',
-    };
-  }
-
-  const pct = Math.abs(normalizedPrevious) > 0
-    ? Math.round((absDiff / Math.abs(normalizedPrevious)) * 100)
-    : 100;
-  return {
-    label: `${sign}${formatValue(absDiff)}${unitSuffix} (${pct}%) vs periodo anterior (${formatValue(normalizedPrevious)}${unitSuffix})`,
-    toneClass: isPositiveResult ? 'text-green-500' : 'text-red-500',
-  };
-}
-
-function roundHours(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function calculatePercentile(values: number[], percentile: number): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  if (sorted.length === 1) return roundHours(sorted[0]);
-
-  const clamped = Math.min(100, Math.max(0, percentile));
-  const index = (clamped / 100) * (sorted.length - 1);
-  const lowerIndex = Math.floor(index);
-  const upperIndex = Math.ceil(index);
-  const lower = sorted[lowerIndex];
-  const upper = sorted[upperIndex];
-  if (lowerIndex === upperIndex) return roundHours(lower);
-
-  const ratio = index - lowerIndex;
-  return roundHours(lower + ((upper - lower) * ratio));
-}
-
-function calculateMedian(values: number[]): number | null {
-  return calculatePercentile(values, 50);
-}
-
-function ticketBelongsToSessionUser(ticket: TicketItem, user: UserSession | null): boolean {
-  if (!user) return false;
-  if (user.rol !== 'solicitante') return true;
-
-  const userId = Number(user.id);
-  const ticketUserId = Number(ticket.solicitadoPorId);
-  if (Number.isFinite(userId) && Number.isFinite(ticketUserId) && userId === ticketUserId) {
-    return true;
-  }
-
-  const userName = normalizeForCompare(user.nombre || '');
-  const userUsername = normalizeForCompare(user.username || '');
-  const ticketName = normalizeForCompare(ticket.solicitadoPor || '');
-  const ticketUsername = normalizeForCompare(ticket.solicitadoPorUsername || '');
-  if (userUsername && ticketUsername && userUsername === ticketUsername) return true;
-  if (userName && ticketName && userName === ticketName) return true;
-  return false;
-}
-
-function buildInitialFormDataForModal(
-  modal: Exclude<ModalType, null>,
-  defaultBranchCode: string,
-): FormDataState {
-  if (modal === 'ticket') {
-    return {
-      prioridad: 'MEDIA',
-      atencionTipo: undefined,
-      asignadoA: '',
-      sucursal: defaultBranchCode,
-      areaAfectada: '',
-      fallaComun: '',
-    };
-  }
-  if (modal === 'activo') {
-    return {
-      estado: 'Operativo',
-      fechaCompra: new Date().toISOString().slice(0, 10),
-    };
-  }
-  if (modal === 'insumo') {
-    return { unidad: 'Piezas' };
-  }
-  return {};
-}
-
-function getModalTitle(
-  modal: ModalType,
-  editingAssetId: number | null,
-  editingInsumoId: number | null,
-): string {
-  if (modal === 'activo') return editingAssetId !== null ? 'Editar Equipo' : 'Alta Equipo';
-  if (modal === 'insumo') return editingInsumoId !== null ? 'Editar Insumo' : 'Ingreso Material';
-  if (modal === 'ticket') return 'Ticket';
-  return '';
-}
-
-function getModalSubmitLabel(
-  modal: ModalType,
-  isModalSaving: boolean,
-  editingAssetId: number | null,
-  editingInsumoId: number | null,
-): string {
-  if (isModalSaving) return 'Guardando...';
-  if (modal === 'activo' && editingAssetId !== null) return 'Guardar Cambios';
-  if (modal === 'insumo' && editingInsumoId !== null) return 'Guardar Cambios';
-  return 'Guardar';
-}
 
 function useDebouncedValue<T>(value: T, delayMs = 220): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -698,104 +237,6 @@ function useDebouncedValue<T>(value: T, delayMs = 220): T {
   }, [delayMs, value]);
 
   return debouncedValue;
-}
-
-function getSupplyHealthStatus(item: Insumo): Exclude<SupplyStatusFilter, 'TODOS'> {
-  if (item.stock <= 0) return 'AGOTADO';
-  if (item.stock <= item.min) return 'BAJO';
-  return 'OK';
-}
-
-function getSupplyCriticalityRank(status: Exclude<SupplyStatusFilter, 'TODOS'>): number {
-  if (status === 'AGOTADO') return 0;
-  if (status === 'BAJO') return 1;
-  return 2;
-}
-
-type SpreadsheetRow = Record<string, unknown>;
-type NetworkSheetRow = [unknown, unknown, unknown];
-
-function parseInventoryRow(row: SpreadsheetRow, rowNumber: number): Omit<Activo, 'id'> | null {
-  const values = new Map<string, string>();
-  Object.entries(row).forEach(([key, value]) => {
-    values.set(normalizeSpreadsheetKey(key), spreadsheetCellToText(value));
-  });
-
-  const pick = (...aliases: string[]) => {
-    for (const alias of aliases) {
-      const value = values.get(normalizeSpreadsheetKey(alias));
-      if (!value) continue;
-      const clean = value.trim();
-      if (!clean || clean.toUpperCase() === 'NA' || clean.toUpperCase() === 'N/A') continue;
-      return clean;
-    }
-    return '';
-  };
-
-  const numero = pick('NUM', 'NUMERO');
-  const idInterno = pick('ID INTERNO', 'ID_INTERNO', 'ID');
-  const equipo = pick('EQUIPO', 'TIPO EQUIPO', 'TIPO');
-  const marca = pick('MARCA');
-  const modelo = pick('MODELO');
-  const serialBase = pick('S/N', 'SN', 'SERIAL', 'NO SERIE');
-  const cpu = pick('CPU');
-  const ram = pick('RAM');
-  const ramTipo = pick('TIPORAM', 'TIPO RAM', 'RAM TIPO', 'TIPO_RAM');
-  const disco = pick('DD', 'DISCO', 'HDD', 'SSD');
-  const tipoDisco = pick('TIPO_1', 'TIPODISCO', 'TIPO DISCO', 'TIPOALMACENAMIENTO');
-  const macAddress = normalizeMacAddress(pick('MAC ADDRESS', 'MAC', 'MACADDRESS'));
-  const ipAddress = normalizeIpAddress(pick('IP'));
-  const departamento = pick('DEPTO', 'DEPARTAMENTO');
-  const ubicacion = pick('UBIC.', 'UBICACION', 'UBIC');
-  const responsable = pick('RESP', 'RESPONSABLE');
-  const estadoRaw = pick('EDO', 'ESTADO');
-  const anydesk = pick('ANYDESK');
-  const passwordRemota = pick('PASS', 'PASSWORD');
-  const aniosVida = pick('AÑOS DE VIDA', 'ANOS DE VIDA', 'AÑOS', 'ANOS');
-  const comentarios = pick('COMENTARIOS');
-  const tagSource = idInterno || pick('TAG') || [equipo, numero].filter(Boolean).join('-') || `INV-${rowNumber}`;
-  const tipo = (equipo || 'EQUIPO').toUpperCase();
-  const tag = tagSource
-    .toUpperCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^A-Z0-9-]/g, '')
-    .slice(0, 80);
-
-  if (!tag) return null;
-
-  const marcaFinal = marca || 'SIN MARCA';
-  const ubicacionFinal = [departamento, ubicacion].filter(Boolean).join(' | ').trim() || 'SIN UBICACION';
-  const serial = (serialBase || idInterno || `${tag}-SN`).toUpperCase();
-  const estado: EstadoActivo = /falla|dan|malo|fuera|off|inoper|down|bad/i.test(normalizeForCompare(estadoRaw))
-    ? 'Falla'
-    : 'Operativo';
-
-  return {
-    tag,
-    tipo,
-    marca: marcaFinal,
-    modelo,
-    ubicacion: ubicacionFinal,
-    estado,
-    serial,
-    fechaCompra: new Date().toISOString().slice(0, 10),
-    idInterno: idInterno.toUpperCase(),
-    equipo: tipo,
-    cpu: cpu.toUpperCase(),
-    ram: ram.toUpperCase(),
-    ramTipo: ramTipo.toUpperCase(),
-    disco: disco.toUpperCase(),
-    tipoDisco: tipoDisco.toUpperCase(),
-    macAddress,
-    ipAddress,
-    responsable,
-    departamento: departamento.toUpperCase(),
-    edo: estadoRaw.toUpperCase(),
-    anydesk,
-    passwordRemota,
-    aniosVida: aniosVida.toUpperCase(),
-    comentarios,
-  };
 }
 
 function parseNetworkSheetRows(rows: NetworkSheetRow[]): Array<{ macAddress: string; ipAddress: string; deviceLabel: string }> {
@@ -1953,7 +1394,7 @@ export default function App() {
   useEffect(() => {
     if (view !== 'history') return;
     void fetchAuditHistory();
-  }, [fetchAuditHistory, view]);
+  }, [view, fetchAuditHistory]);
 
   useEffect(() => {
     if (view === 'users' && !canManageUsers) {
@@ -5930,286 +5371,47 @@ export default function App() {
           )}
           <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
             
+
+
             {/* VISTA DASHBOARD */}
             {view === 'dashboard' && (
-              <div className="space-y-8">
-                <div className="bg-slate-800 text-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] flex flex-col gap-6 md:flex-row md:items-center md:justify-between shadow-2xl relative overflow-hidden">
-                   <div className="z-10 min-w-0">
-                      <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight mb-2">Estado del Sistema</h2>
-                      <p className="text-slate-400 text-sm">Resumen operativo | Periodo: {dashboardWindow.label}</p>
-                      <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-300">
-                        Abiertos: {dashboardOpenTicketsCurrent.length} | Criticos: {dashboardCriticalTicketsCurrent.length} | Sin Asignar: {dashboardUnassignedCount}
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {DASHBOARD_RANGES.map((range) => (
-                          <button
-                            key={`dash-range-${range.value}`}
-                            onClick={() => setDashboardRange(range.value)}
-                            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                              dashboardRange === range.value
-                                ? 'bg-[#F58220] text-white border-[#F58220]'
-                                : 'bg-white/5 text-slate-200 border-white/20 hover:bg-white/10'
-                            }`}
-                          >
-                            {range.label}
-                          </button>
-                        ))}
-                      </div>
-                   </div>
-                   <div className="z-10 self-start md:self-auto">
-                      <div className="text-left md:text-right">
-                         <p className="text-4xl sm:text-5xl font-black">{systemHealth}%</p>
-                         <p className="text-[10px] font-black text-[#8CC63F] uppercase tracking-widest">Salud IT</p>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
-                  <div onClick={() => setView('supplies')} className="bg-[#F58220] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
-                    <p className="text-xs font-black uppercase opacity-60 mb-2">Stock Bajo</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length}</h2>
-                    <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-                  </div>
-                  <div onClick={() => applyTicketFocus('ABIERTOS')} className="bg-white p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl cursor-pointer">
-                    <p className="text-xs font-black uppercase text-slate-400 mb-2">Tickets Abiertos</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#F58220]">{dashboardOpenTicketsCurrent.length}</h2>
-                    <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardOpenTrend.toneClass}`}>{dashboardOpenTrend.label}</p>
-                  </div>
-                  <div onClick={() => setView('inventory')} className="bg-[#8CC63F] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
-                    <p className="text-xs font-black uppercase opacity-60 mb-2">Activos</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{activos.length}</h2>
-                    <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-                  </div>
-                  <div onClick={() => applyTicketFocus('CRITICA')} className="bg-amber-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl cursor-pointer">
-                    <p className="text-xs font-black uppercase opacity-60 mb-2">Críticos</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardCriticalTicketsCurrent.length}</h2>
-                    <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardCriticalTrend.toneClass}`}>{dashboardCriticalTrend.label}</p>
-                  </div>
-                  <div onClick={() => applyTicketFocus('SLA')} className="bg-red-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl cursor-pointer">
-                    <p className="text-xs font-black uppercase opacity-60 mb-2">SLA Vencido</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardSlaExpiredCount}</h2>
-                    <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardSlaTrend.toneClass}`}>{dashboardSlaTrend.label}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                  <div className="xl:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad Reciente | {dashboardWindow.label}</p>
-                        <h3 className="text-lg font-black uppercase text-slate-800">Ultimos Tickets del Periodo</h3>
-                      </div>
-                      <button
-                        onClick={() => setView('tickets')}
-                        className="px-5 py-2 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-                      >
-                        Ver Todo
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {dashboardRecentTickets.map((ticket) => (
-                        <button
-                          key={`recent-${ticket.id}`}
-                          onClick={() => {
-                            setView('tickets');
-                            setSearchTerm(ticket.activoTag);
-                          }}
-                          className="w-full text-left border border-slate-100 rounded-2xl p-4 hover:border-slate-200 hover:bg-slate-50/70 transition-colors"
-                        >
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <Badge variant={ticket.prioridad}>{ticket.prioridad}</Badge>
-                            <Badge variant={ticket.estado}>{ticket.estado}</Badge>
-                            <Badge variant={normalizeTicketAttentionType(ticket.atencionTipo) || 'sin definir'}>
-                              {formatTicketAttentionType(ticket.atencionTipo)}
-                            </Badge>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getSlaStatus(ticket).className}`}>
-                              {getSlaStatus(ticket).label}
-                            </span>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">#{ticket.id}</span>
-                          </div>
-                          <p className="text-sm font-black uppercase text-slate-800">{ticket.activoTag} | {ticket.descripcion}</p>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
-                            Asignado: {ticket.asignadoA || 'Sin asignar'} | Creado: {formatDateTime(ticket.fechaCreacion || ticket.fecha)}
-                          </p>
-                        </button>
-                      ))}
-                      {dashboardRecentTickets.length === 0 && (
-                        <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                          Sin tickets en el periodo seleccionado.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carga Operativa</p>
-                      <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Tickets por Tecnico</h3>
-                      <div className="space-y-3">
-                        {dashboardTopOwners.map(([owner, count]) => (
-                          <div key={`owner-${owner}`} className="space-y-2 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-black uppercase text-slate-700">{owner}</span>
-                              <span className="text-xs font-black text-[#F58220]">{count}</span>
-                            </div>
-                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className="h-full bg-[#F58220]"
-                                style={{ width: `${Math.round((count / dashboardOwnerMax) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                        {dashboardTopOwners.length === 0 && (
-                          <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs font-black uppercase text-slate-400">
-                            Sin tickets asignados.
-                          </div>
-                        )}
-                        <button
-                          onClick={() => applyTicketFocus('SIN_ASIGNAR')}
-                          className="w-full bg-amber-50 border border-amber-100 text-amber-700 rounded-2xl px-4 py-3 text-xs font-black uppercase text-left"
-                        >
-                          Sin asignar: {dashboardUnassignedCount}
-                        </button>
-                        <button
-                          onClick={() => applyTicketFocus('EN_PROCESO')}
-                          className="w-full bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl px-4 py-3 text-xs font-black uppercase text-left"
-                        >
-                          En proceso: {dashboardInProcessCount}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Riesgos Inventario</p>
-                      <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Atencion Prioritaria</h3>
-                      <div className="space-y-3">
-                        <button
-                          onClick={() => {
-                            setView('inventory');
-                            applyInventoryFocus('SIN_RESP');
-                          }}
-                          className="w-full border border-slate-100 rounded-2xl px-4 py-3 text-left hover:bg-slate-50"
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sin Responsable</p>
-                          <p className="text-xl font-black text-red-500">{activosSinResponsable}</p>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setView('inventory');
-                            applyInventoryFocus('VIDA_ALTA');
-                          }}
-                          className="w-full border border-slate-100 rounded-2xl px-4 py-3 text-left hover:bg-slate-50"
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vida Util Alta</p>
-                          <p className="text-xl font-black text-amber-500">{activosVidaAlta}</p>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setView('inventory');
-                            applyInventoryFocus('DUP_RED');
-                          }}
-                          className="w-full border border-slate-100 rounded-2xl px-4 py-3 text-left hover:bg-slate-50"
-                        >
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duplicados de Red</p>
-                          <p className="text-xl font-black text-slate-700">{effectiveRiskSummary.duplicateIpCount + effectiveRiskSummary.duplicateMacCount}</p>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8 space-y-6">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distribucion de Tickets</p>
-                      <h3 className="text-lg font-black uppercase text-slate-800">Estado y Sucursal ({dashboardWindow.label})</h3>
-                    </div>
-
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Por estado</p>
-                      {dashboardStateBars.map((item) => (
-                        <div key={`state-${item.label}`} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                            <span>{item.label}</span>
-                            <span>{item.count}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full bg-[#8CC63F]"
-                              style={{ width: `${Math.round((item.count / dashboardStateMax) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Por sucursal</p>
-                      {dashboardBranchBars.map((item) => (
-                        <div key={`branch-${item.label}`} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                            <span>{item.label}</span>
-                            <span>{item.count}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full bg-indigo-500"
-                              style={{ width: `${Math.round((item.count / dashboardBranchMax) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      {dashboardBranchBars.length === 0 && (
-                        <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          Sin tickets en el periodo.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8 space-y-6">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA y Aging</p>
-                      <h3 className="text-lg font-black uppercase text-slate-800">Cumplimiento y Antiguedad ({dashboardWindow.label})</h3>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase text-slate-600">SLA Cumplido</p>
-                        <p className="text-xl font-black text-green-600">{dashboardSlaCompliancePct}%</p>
-                      </div>
-                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full bg-green-500" style={{ width: `${dashboardSlaCompliancePct}%` }} />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-500">
-                        <span>Cumplidos: {dashboardSlaCompliantCount}</span>
-                        <span>Vencidos: {dashboardSlaExpiredCount}</span>
-                        <span>Total: {dashboardSlaTotalCount}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aging tickets abiertos</p>
-                      {dashboardAgingBars.map((item) => (
-                        <div key={`aging-${item.label}`} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                            <span>{item.label}</span>
-                            <span>{item.count}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full bg-red-500"
-                              style={{ width: `${Math.round((item.count / dashboardAgingMax) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Dashboard...</div>}>
+                <LazyDashboardView
+                  dashboardWindow={dashboardWindow}
+                  dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
+                  dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
+                  dashboardUnassignedCount={dashboardUnassignedCount}
+                  dashboardRange={dashboardRange}
+                  setDashboardRange={setDashboardRange}
+                  systemHealth={systemHealth}
+                  insumos={insumos}
+                  dashboardOpenTrend={dashboardOpenTrend}
+                  activos={activos}
+                  dashboardCriticalTrend={dashboardCriticalTrend}
+                  dashboardSlaExpiredCount={dashboardSlaExpiredCount}
+                  dashboardSlaTrend={dashboardSlaTrend}
+                  setView={setView}
+                  applyTicketFocus={applyTicketFocus}
+                  dashboardRecentTickets={dashboardRecentTickets}
+                  setSearchTerm={setSearchTerm}
+                  dashboardTopOwners={dashboardTopOwners}
+                  dashboardOwnerMax={dashboardOwnerMax}
+                  dashboardInProcessCount={dashboardInProcessCount}
+                  applyInventoryFocus={applyInventoryFocus}
+                  activosSinResponsable={activosSinResponsable}
+                  activosVidaAlta={activosVidaAlta}
+                  effectiveRiskSummary={effectiveRiskSummary}
+                  dashboardStateBars={dashboardStateBars}
+                  dashboardStateMax={dashboardStateMax}
+                  dashboardBranchBars={dashboardBranchBars}
+                  dashboardBranchMax={dashboardBranchMax}
+                  dashboardSlaCompliancePct={dashboardSlaCompliancePct}
+                  dashboardSlaCompliantCount={dashboardSlaCompliantCount}
+                  dashboardSlaTotalCount={dashboardSlaTotalCount}
+                  dashboardAgingBars={dashboardAgingBars}
+                  dashboardAgingMax={dashboardAgingMax}
+                />
+              </React.Suspense>
             )}
 
             {/* VISTA REPORTERIA */}
@@ -6770,1029 +5972,137 @@ export default function App() {
 
             {/* VISTA INVENTARIO */}
             {view === 'inventory' && (
-              <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-                  <h3 className="font-black text-slate-800 uppercase tracking-tight text-lg">Activos IT</h3>
-                  <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
-                    <input
-                      ref={inventoryImportInputRef}
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      className="hidden"
-                      onChange={(event) => void handleImportInventory(event)}
-                    />
-                    <button
-                      disabled={!canEdit || isImportingInventory}
-                      onClick={() => inventoryImportInputRef.current?.click()}
-                      className="w-full xl:w-auto min-w-0 bg-slate-800 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      <Upload size={16} /> {isImportingInventory ? 'Importando...' : 'Importar Excel'}
-                    </button>
-                    <button
-                      onClick={exportarInventarioFiltrado}
-                      className="w-full xl:w-auto min-w-0 bg-white border border-slate-200 text-slate-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-slate-50"
-                    >
-                      <Download size={16} /> Exportar CSV
-                    </button>
-                    <button
-                      onClick={() => {
-                        setQrManualInput('');
-                        setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
-                        setShowQrScanner(true);
-                      }}
-                      className="w-full xl:w-auto min-w-0 bg-white border border-blue-200 text-blue-700 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-blue-50"
-                    >
-                      <ScanLine size={16} /> Escanear QR
-                    </button>
-                    {canManageUsers && (
-                      <button
-                        disabled={activos.length === 0}
-                        onClick={() => void eliminarTodosActivos()}
-                        className="w-full xl:w-auto min-w-0 bg-white border border-red-200 text-red-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        <Trash2 size={16} /> Vaciar Activos
-                      </button>
-                    )}
-                    <button
-                      disabled={!canEdit}
-                      onClick={() => openModal('activo')}
-                      className="w-full xl:w-auto min-w-0 bg-[#F58220] text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      <Plus size={18} /> Nuevo Activo
-                    </button>
-                  </div>
-                </div>
-                <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 bg-slate-50/40 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con IP</p>
-                      <p className="text-2xl font-black text-slate-800">{activosConIp} <span className="text-sm text-slate-400">/ {activosEvaluablesIp}</span></p>
-                    </div>
-                    <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con MAC</p>
-                      <p className="text-2xl font-black text-slate-800">{activosConMac} <span className="text-sm text-slate-400">/ {activosEvaluablesMac}</span></p>
-                    </div>
-                    <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sin Responsable</p>
-                      <p className="text-2xl font-black text-red-500">{activosSinResponsable} <span className="text-sm text-slate-400">/ {activosEvaluablesResponsable}</span></p>
-                    </div>
-                    <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Vida Util Alta (&gt;=4)</p>
-                      <p className="text-2xl font-black text-amber-500">{activosVidaAlta}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
-                    <select
-                      value={inventoryDepartmentFilter}
-                      onChange={(e) => setInventoryDepartmentFilter(e.target.value)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="TODOS">Todos los departamentos</option>
-                      {departamentoOptions.map((departamento) => (
-                        <option key={departamento} value={departamento}>{departamento}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={inventoryEquipmentFilter}
-                      onChange={(e) => setInventoryEquipmentFilter(e.target.value)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="TODOS">Todos los equipos</option>
-                      {equipoOptions.map((equipo) => (
-                        <option key={equipo} value={equipo}>{equipo}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={inventoryStatusFilter}
-                      onChange={(e) => setInventoryStatusFilter(e.target.value as 'TODOS' | EstadoActivo)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="TODOS">Todos los estados</option>
-                      <option value="Operativo">Operativo</option>
-                      <option value="Falla">Falla</option>
-                    </select>
-                    <select
-                      value={inventoryRiskFilter}
-                      onChange={(e) => setInventoryRiskFilter(e.target.value as InventoryRiskFilter)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="TODOS">Todos los riesgos</option>
-                      <option value="SIN_IP">Sin IP</option>
-                      <option value="SIN_MAC">Sin MAC</option>
-                      <option value="SIN_RESP">Sin responsable</option>
-                      <option value="DUP_RED">Duplicado de red</option>
-                      <option value="VIDA_ALTA">Vida útil &gt;= 4</option>
-                    </select>
-                    <select
-                      value={inventorySortField}
-                      onChange={(e) => setInventorySortField(e.target.value as InventorySortField)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="tag">Orden: Tag</option>
-                      <option value="tipo">Orden: Equipo</option>
-                      <option value="estado">Orden: Estado</option>
-                      <option value="responsable">Orden: Responsable</option>
-                      <option value="ubicacion">Orden: Ubicacion</option>
-                      <option value="aniosVida">Orden: Vida útil</option>
-                    </select>
-                    <select
-                      value={inventorySortDirection}
-                      onChange={(e) => setInventorySortDirection(e.target.value as InventorySortDirection)}
-                      className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="asc">Ascendente</option>
-                      <option value="desc">Descendente</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        setInventoryDepartmentFilter('TODOS');
-                        setInventoryEquipmentFilter('TODOS');
-                        setInventoryStatusFilter('TODOS');
-                        setInventoryRiskFilter('TODOS');
-                        setInventorySortField('tag');
-                        setInventorySortDirection('asc');
-                        setSearchTerm('');
-                      }}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-                    >
-                      Limpiar Filtros
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => applyInventoryFocus('FALLA')}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                        inventoryStatusFilter === 'Falla' && inventoryRiskFilter === 'TODOS'
-                          ? 'bg-slate-800 text-white border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      Solo Fallas ({activosEnFalla})
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('SIN_RESP')}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                        inventoryRiskFilter === 'SIN_RESP'
-                          ? 'bg-slate-800 text-white border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      Sin Responsable ({activosSinResponsable})
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('DUP_RED')}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                        inventoryRiskFilter === 'DUP_RED'
-                          ? 'bg-slate-800 text-white border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      Duplicados Red ({duplicateIpEntries.length + duplicateMacEntries.length})
-                    </button>
-                    <button
-                      onClick={() => applyInventoryFocus('VIDA_ALTA')}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                        inventoryRiskFilter === 'VIDA_ALTA'
-                          ? 'bg-slate-800 text-white border-slate-800'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      Vida &gt;=4 ({activosVidaAlta})
-                    </button>
-                  </div>
-                </div>
-                <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                  <table className="w-full text-left min-w-[1200px]">
-                    <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <tr>
-                        <th className="px-6 py-6">
-                          <button
-                            onClick={() => updateInventorySort('tag')}
-                            className="flex items-center gap-1 hover:text-slate-600 transition-colors"
-                          >
-                            TAG / Serial <span>{getInventorySortIndicator('tag')}</span>
-                          </button>
-                        </th>
-                        <th className="px-6 py-6">
-                          <button
-                            onClick={() => updateInventorySort('tipo')}
-                            className="flex items-center gap-1 hover:text-slate-600 transition-colors"
-                          >
-                            Equipo <span>{getInventorySortIndicator('tipo')}</span>
-                          </button>
-                        </th>
-                        <th className="px-6 py-6">Hardware</th>
-                        <th className="px-6 py-6">
-                          <button
-                            onClick={() => updateInventorySort('responsable')}
-                            className="flex items-center gap-1 hover:text-slate-600 transition-colors"
-                          >
-                            Red / Responsable <span>{getInventorySortIndicator('responsable')}</span>
-                          </button>
-                        </th>
-                        <th className="px-6 py-6">
-                          <button
-                            onClick={() => updateInventorySort('ubicacion')}
-                            className="flex items-center gap-1 hover:text-slate-600 transition-colors"
-                          >
-                            Ubicacion <span>{getInventorySortIndicator('ubicacion')}</span>
-                          </button>
-                        </th>
-                        <th className="px-6 py-6">
-                          <button
-                            onClick={() => updateInventorySort('estado')}
-                            className="flex items-center gap-1 hover:text-slate-600 transition-colors"
-                          >
-                            Estado <span>{getInventorySortIndicator('estado')}</span>
-                          </button>
-                        </th>
-                        <th className="px-6 py-6 text-right">Accion</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {sortedFilteredActivos.map(a => (
-                        <tr key={a.id} onClick={() => setSelectedAsset(a)} className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                          <td className="px-6 py-6">
-                            <p className="font-black text-slate-800 uppercase text-sm">{a.tag}</p>
-                            <p className="text-[10px] text-slate-400 font-bold">{a.serial}</p>
-                            <p className="text-[10px] text-slate-400 font-bold">{a.idInterno || 'SIN ID INTERNO'}</p>
-                          </td>
-                          <td className="px-6 py-6 text-xs">
-                            <p className="font-black text-slate-700 uppercase">{a.tipo}</p>
-                            <p className="font-bold text-slate-500 uppercase">
-                              {a.marca}
-                              {a.modelo ? ` | ${a.modelo}` : ''}
-                            </p>
-                          </td>
-                          <td className="px-6 py-6 text-xs">
-                            <p className="font-black text-slate-600 uppercase">
-                              {a.cpu || 'CPU N/D'} | {a.ram ? `${a.ram}${a.ramTipo ? ` ${a.ramTipo}` : ''}` : 'RAM N/D'}
-                            </p>
-                            <p className="font-bold text-slate-500 uppercase">
-                              {a.disco ? `${a.disco}${a.tipoDisco ? ` ${a.tipoDisco}` : ''}` : 'DISCO N/D'}
-                            </p>
-                          </td>
-                          <td className="px-6 py-6 text-xs">
-                            <p className="font-black text-slate-600">{a.ipAddress || 'IP N/D'} | {a.macAddress || 'MAC N/D'}</p>
-                            <p className="font-bold text-slate-500 uppercase">
-                              {a.responsable || 'SIN RESPONSABLE'}
-                              {a.departamento ? ` | ${a.departamento}` : ''}
-                            </p>
-                          </td>
-                          <td className="px-6 py-6 text-xs font-bold text-slate-500 uppercase">{a.ubicacion}</td>
-                          <td className="px-6 py-6">
-                            <Badge variant={a.estado}>{a.estado}</Badge>
-                            <p className="text-[10px] mt-2 text-slate-400 font-black uppercase">{a.aniosVida || 'N/D'}</p>
-                          </td>
-                          <td className="px-6 py-6 text-right">
-                             <div className="flex justify-end gap-3 items-center">
-                                <button
-                                  disabled={!canEdit}
-                                  onClick={(e) => eliminarActivo(a.id, e)}
-                                  className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all z-30 disabled:opacity-40"
-                                >
-                                  <Trash2 size={18} />
-                                </button>
-                                <ChevronRight className="text-slate-300" />
-                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {sortedFilteredActivos.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-10 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                            No hay activos con los filtros actuales.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Inventario...</div>}>
+                <LazyInventoryView
+                  inventoryImportInputRef={inventoryImportInputRef}
+                  handleImportInventory={handleImportInventory}
+                  canEdit={canEdit}
+                  isImportingInventory={isImportingInventory}
+                  exportarInventarioFiltrado={exportarInventarioFiltrado}
+                  setQrManualInput={setQrManualInput}
+                  setQrScannerStatus={setQrScannerStatus}
+                  setShowQrScanner={setShowQrScanner}
+                  canManageUsers={canManageUsers}
+                  activos={activos}
+                  eliminarTodosActivos={eliminarTodosActivos}
+                  openModal={openModal}
+                  activosConIp={activosConIp}
+                  activosEvaluablesIp={activosEvaluablesIp}
+                  activosConMac={activosConMac}
+                  activosEvaluablesMac={activosEvaluablesMac}
+                  activosSinResponsable={activosSinResponsable}
+                  activosEvaluablesResponsable={activosEvaluablesResponsable}
+                  activosVidaAlta={activosVidaAlta}
+                  inventoryDepartmentFilter={inventoryDepartmentFilter}
+                  setInventoryDepartmentFilter={setInventoryDepartmentFilter}
+                  departamentoOptions={departamentoOptions}
+                  inventoryEquipmentFilter={inventoryEquipmentFilter}
+                  setInventoryEquipmentFilter={setInventoryEquipmentFilter}
+                  equipoOptions={equipoOptions}
+                  inventoryStatusFilter={inventoryStatusFilter}
+                  setInventoryStatusFilter={setInventoryStatusFilter}
+                  inventoryRiskFilter={inventoryRiskFilter}
+                  setInventoryRiskFilter={setInventoryRiskFilter}
+                  inventorySortField={inventorySortField}
+                  setInventorySortField={setInventorySortField}
+                  inventorySortDirection={inventorySortDirection}
+                  setInventorySortDirection={setInventorySortDirection}
+                  setSearchTerm={setSearchTerm}
+                  applyInventoryFocus={applyInventoryFocus}
+                  activosEnFalla={activosEnFalla}
+                  duplicateIpEntries={duplicateIpEntries}
+                  duplicateMacEntries={duplicateMacEntries}
+                  updateInventorySort={updateInventorySort}
+                  getInventorySortIndicator={getInventorySortIndicator}
+                  sortedFilteredActivos={sortedFilteredActivos}
+                  setSelectedAsset={setSelectedAsset}
+                  eliminarActivo={eliminarActivo}
+                />
+              </React.Suspense>
             )}
-
             {/* VISTA INSUMOS */}
             {view === 'supplies' && (
-              <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-                  <h3 className="font-black text-slate-800 uppercase text-xl">Gestión de Stock</h3>
-                  <button
-                    disabled={!canEdit}
-                    onClick={() => openModal('insumo')}
-                    className="bg-[#8CC63F] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <PlusCircle size={18} /> Registrar Insumo
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Insumos</p>
-                    <p className="text-2xl font-black text-slate-800">{supplySummary.totalInsumos}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bajo Mínimo</p>
-                    <p className="text-2xl font-black text-amber-500">{supplySummary.bajoMinimo}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agotados</p>
-                    <p className="text-2xl font-black text-red-500">{supplySummary.agotados}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Unidades Totales</p>
-                    <p className="text-2xl font-black text-slate-800">{supplySummary.totalUnidades}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="relative md:col-span-2">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                    <input
-                      value={supplySearchTerm}
-                      onChange={(e) => setSupplySearchTerm(e.target.value)}
-                      placeholder="Buscar insumo..."
-                      className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500 outline-none"
-                    />
-                  </div>
-                  <select
-                    value={supplyCategoryFilter}
-                    onChange={(e) => setSupplyCategoryFilter(e.target.value)}
-                    className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                  >
-                    <option value="TODAS">Todas categorías</option>
-                    {supplyCategoryOptions.map((categoria) => (
-                      <option key={categoria} value={categoria}>{categoria}</option>
-                    ))}
-                  </select>
-                  <div className="flex gap-2">
-                    <select
-                      value={supplyStatusFilter}
-                      onChange={(e) => setSupplyStatusFilter(e.target.value as SupplyStatusFilter)}
-                      className="flex-1 px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
-                    >
-                      <option value="TODOS">Todos</option>
-                      <option value="AGOTADO">Agotado</option>
-                      <option value="BAJO">Bajo</option>
-                      <option value="OK">OK</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        setSupplySearchTerm('');
-                        setSupplyCategoryFilter('TODAS');
-                        setSupplyStatusFilter('TODOS');
-                      }}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Mostrando: {filteredSupplies.length} / {insumos.length}
-                  </p>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                    Orden: Agotado &gt; Bajo &gt; OK
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setSupplyStatusFilter('AGOTADO')}
-                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                      supplyStatusFilter === 'AGOTADO'
-                        ? 'bg-red-500 text-white border-red-500'
-                        : 'bg-white text-red-500 border-red-200 hover:bg-red-50'
-                    }`}
-                  >
-                    Ver agotados ({supplySummary.agotados})
-                  </button>
-                  <button
-                    onClick={() => setSupplyStatusFilter('BAJO')}
-                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                      supplyStatusFilter === 'BAJO'
-                        ? 'bg-amber-500 text-white border-amber-500'
-                        : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
-                    }`}
-                  >
-                    Ver bajo mínimo ({supplySummary.bajoMinimo})
-                  </button>
-                  <button
-                    onClick={() => setSupplyStatusFilter('TODOS')}
-                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                      supplyStatusFilter === 'TODOS'
-                        ? 'bg-slate-700 text-white border-slate-700'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    Ver todos
-                  </button>
-                  <button
-                    disabled={!canEdit}
-                    onClick={() => void reponerCriticos(5)}
-                    className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border bg-[#f4fce3] text-[#5e8f1d] border-[#d8f5a2] hover:bg-[#e8f9c8] disabled:opacity-50"
-                  >
-                    Reponer críticos +5
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {filteredSupplies.map((item) => {
-                    const supplyStatus = getSupplyHealthStatus(item);
-                    const isLow = supplyStatus === 'BAJO' || supplyStatus === 'AGOTADO';
-                    const progress =
-                      item.min > 0
-                        ? Math.max(0, Math.min(100, Math.round((item.stock / item.min) * 100)))
-                        : item.stock > 0
-                          ? 100
-                          : 0;
-                    const statusTone =
-                      supplyStatus === 'AGOTADO'
-                        ? 'text-red-500'
-                        : supplyStatus === 'BAJO'
-                          ? 'text-amber-500'
-                          : 'text-slate-800';
-                    const supplyMovements = supplyAuditMovementsByInsumoId[item.id] || [];
-                    const latestMovement = supplyMovements[0];
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`bg-white p-8 rounded-[2.5rem] border ${isLow ? 'border-red-100 ring-2 ring-red-50' : 'border-slate-100'} shadow-xl relative`}
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <span className="px-3 py-1 bg-slate-50 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {item.categoria}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              disabled={!canEdit}
-                              onClick={() => openInsumoEditModal(item)}
-                              className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                              title="Editar insumo"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              disabled={!canEdit}
-                              onClick={(e) => eliminarInsumo(item.id, e)}
-                              className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all disabled:opacity-40"
-                              title="Eliminar insumo"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <h4 className="font-black text-slate-800 uppercase text-sm mb-4 h-10">{item.nombre}</h4>
-                        <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            Último movimiento
-                          </p>
-                          {latestMovement ? (
-                            <>
-                              <p className="mt-1 text-[11px] font-black uppercase text-slate-700">
-                                {latestMovement.accion} {latestMovement.cantidad > 0 ? `(${latestMovement.cantidad})` : ''}
-                              </p>
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                {latestMovement.usuario} | {formatDateTime(latestMovement.fecha)}
-                              </p>
-                            </>
-                          ) : (
-                            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                              Sin movimientos registrados
-                            </p>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSupplyHistoryItem(item)}
-                            className="mt-2 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#F58220] hover:text-orange-600"
-                          >
-                            <History size={12} /> Historial ({supplyMovements.length})
-                          </button>
-                        </div>
-
-                        <div className="mb-3">
-                          <span
-                            className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                              supplyStatus === 'AGOTADO'
-                                ? 'bg-red-50 text-red-600 border-red-200'
-                                : supplyStatus === 'BAJO'
-                                  ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                  : 'bg-green-50 text-green-600 border-green-200'
-                            }`}
-                          >
-                            {supplyStatus}
-                          </span>
-                        </div>
-
-                        <div className="mb-6">
-                          <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className={`h-full ${supplyStatus === 'AGOTADO' ? 'bg-red-500' : supplyStatus === 'BAJO' ? 'bg-amber-500' : 'bg-[#8CC63F]'}`}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            Cobertura mín: {progress}% | Estado: {supplyStatus}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-center gap-3 mb-2 h-16">
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => ajustarStock(item.id, -1)}
-                            title="Reducir stock (-1)"
-                            className="w-12 h-12 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all border border-red-100 shadow-sm disabled:opacity-40"
-                          >
-                            <MinusCircle size={24} />
-                          </button>
-
-                          <div className="flex flex-col items-center">
-                            <input
-                              type="number"
-                              disabled={!canEdit}
-                              className={`w-24 text-center text-4xl font-black bg-transparent outline-none ${statusTone}`}
-                              value={supplyStockDrafts[item.id] ?? String(item.stock)}
-                              onChange={(e) =>
-                                setSupplyStockDrafts((prev) => ({
-                                  ...prev,
-                                  [item.id]: e.target.value,
-                                }))
-                              }
-                              onBlur={() => void confirmarStockManual(item.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  e.currentTarget.blur();
-                                }
-                                if (e.key === 'Escape') {
-                                  setSupplyStockDrafts((prev) => {
-                                    if (!(item.id in prev)) return prev;
-                                    const next = { ...prev };
-                                    delete next[item.id];
-                                    return next;
-                                  });
-                                  e.currentTarget.blur();
-                                }
-                              }}
-                            />
-                            <span className="text-[10px] font-black text-slate-400 uppercase -mt-1">
-                              Mín: {item.min} | Unidad: {item.unidad || 'Piezas'}
-                            </span>
-                          </div>
-
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => ajustarStock(item.id, 1)}
-                            title="Incrementar stock (+1)"
-                            className="w-12 h-12 flex items-center justify-center bg-[#f4fce3] hover:bg-[#e8f9c8] text-[#5e8f1d] rounded-xl transition-all border border-[#d8f5a2] shadow-sm disabled:opacity-40"
-                          >
-                            <PlusCircle size={24} />
-                          </button>
-                        </div>
-
-                        <div className="flex justify-center gap-2">
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => ajustarStock(item.id, -5)}
-                            className="px-3 py-1 rounded-lg border border-red-100 bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-                            title="Reducir stock (-5)"
-                          >
-                            -5
-                          </button>
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => ajustarStock(item.id, 5)}
-                            className="px-3 py-1 rounded-lg border border-lime-100 bg-[#f4fce3] text-[#5e8f1d] text-[10px] font-black uppercase disabled:opacity-40"
-                            title="Incrementar stock (+5)"
-                          >
-                            +5
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {filteredSupplies.length === 0 && (
-                  <div className="bg-white border border-slate-100 rounded-[2rem] p-8 text-center text-slate-400 text-xs font-black uppercase tracking-wider">
-                    No hay insumos con los filtros actuales.
-                  </div>
-                )}
-              </div>
+              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Insumos...</div>}>
+                <LazySuppliesView
+                  canEdit={canEdit}
+                  openModal={openModal}
+                  supplySummary={supplySummary}
+                  supplySearchTerm={supplySearchTerm}
+                  setSupplySearchTerm={setSupplySearchTerm}
+                  supplyCategoryFilter={supplyCategoryFilter}
+                  setSupplyCategoryFilter={setSupplyCategoryFilter}
+                  supplyCategoryOptions={supplyCategoryOptions}
+                  supplyStatusFilter={supplyStatusFilter}
+                  setSupplyStatusFilter={setSupplyStatusFilter}
+                  filteredSupplies={filteredSupplies}
+                  insumos={insumos}
+                  reponerCriticos={reponerCriticos}
+                  getSupplyHealthStatus={getSupplyHealthStatus}
+                  supplyAuditMovementsByInsumoId={supplyAuditMovementsByInsumoId}
+                  openInsumoEditModal={openInsumoEditModal}
+                  eliminarInsumo={eliminarInsumo}
+                  formatDateTime={formatDateTime}
+                  setSelectedSupplyHistoryItem={setSelectedSupplyHistoryItem}
+                  ajustarStock={ajustarStock}
+                  supplyStockDrafts={supplyStockDrafts}
+                  setSupplyStockDrafts={setSupplyStockDrafts}
+                  confirmarStockManual={confirmarStockManual}
+                />
+              </React.Suspense>
             )}
-
             {/* VISTA AUDITORÍA */}
             {view === 'history' && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                  <div className="p-8 md:p-10 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trazabilidad</p>
-                      <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Auditoría Ejecutiva</h3>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
-                        {isAuditLoading ? 'Consultando registros...' : `Registros mostrados: ${auditRowsForGrouping.length}`}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={resetAuditFilters}
-                        className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-                      >
-                        Limpiar Filtros
-                      </button>
-                      <button
-                        onClick={() => void fetchAuditHistory()}
-                        className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-                      >
-                        Actualizar
-                      </button>
-                      <button
-                        onClick={() => descargarAuditoria()}
-                        className="px-6 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <Download size={16} /> Exportar
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <select
-                      value={auditFilters.module}
-                      onChange={(e) => updateAuditFilters({ module: (e.target.value || '') as '' | AuditModule })}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
-                    >
-                      <option value="">Modulo: Todos</option>
-                      <option value="tickets">Tickets</option>
-                      <option value="insumos">Insumos</option>
-                      <option value="activos">Activos</option>
-                      <option value="otros">Otros</option>
-                    </select>
-                    <select
-                      value={auditFilters.result}
-                      onChange={(e) => updateAuditFilters({ result: (e.target.value || '') as '' | 'ok' | 'error' })}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
-                    >
-                      <option value="">Resultado: Todos</option>
-                      <option value="ok">OK</option>
-                      <option value="error">Error</option>
-                    </select>
-                    <input
-                      value={auditFilters.user}
-                      onChange={(e) => updateAuditFilters({ user: e.target.value })}
-                      placeholder="Usuario / rol / depto"
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                    <input
-                      value={auditFilters.action}
-                      onChange={(e) => updateAuditFilters({ action: e.target.value })}
-                      placeholder="Acción"
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                    <input
-                      value={auditFilters.entity}
-                      onChange={(e) => updateAuditFilters({ entity: e.target.value })}
-                      placeholder="Entidad"
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                    <input
-                      value={auditFilters.q}
-                      onChange={(e) => updateAuditFilters({ q: e.target.value })}
-                      placeholder="Búsqueda libre"
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                    <input
-                      type="date"
-                      value={auditFilters.from}
-                      onChange={(e) => updateAuditFilters({ from: e.target.value })}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                    <input
-                      type="date"
-                      value={auditFilters.to}
-                      onChange={(e) => updateAuditFilters({ to: e.target.value })}
-                      className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Tickets</p>
-                    <p className="text-3xl font-black text-blue-700">{auditModuleTotals.tickets}</p>
-                  </div>
-                  <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Insumos</p>
-                    <p className="text-3xl font-black text-green-700">{auditModuleTotals.insumos}</p>
-                  </div>
-                  <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Activos IT</p>
-                    <p className="text-3xl font-black text-orange-700">{auditModuleTotals.activos}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Otros</p>
-                    <p className="text-3xl font-black text-slate-700">{auditModuleTotals.otros}</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">OK / ERROR</p>
-                    <p className="text-xl font-black text-emerald-700">{auditResultTotals.ok} / {auditResultTotals.error}</p>
-                  </div>
-                  <div className={auditIntegrity?.ok === false ? 'rounded-2xl border border-red-100 bg-red-50 p-4' : 'rounded-2xl border border-lime-100 bg-lime-50 p-4'}>
-                    <p className={auditIntegrity?.ok === false ? 'text-[10px] font-black uppercase tracking-widest text-red-500' : 'text-[10px] font-black uppercase tracking-widest text-lime-600'}>
-                      Integridad
-                    </p>
-                    <p className={auditIntegrity?.ok === false ? 'text-sm font-black uppercase text-red-700' : 'text-sm font-black uppercase text-lime-700'}>
-                      {auditIntegrity?.ok === false ? `Incidencias: ${auditIntegrity.invalid}` : 'Cadena OK'}
-                    </p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
-                      Alertas 24h: {auditAlerts?.errorCount24h || 0}
-                    </p>
-                  </div>
-                </div>
-
-                {([
-                  { module: 'tickets' as AuditModule, title: 'Auditoría Tickets', rows: auditByModule.tickets },
-                  { module: 'insumos' as AuditModule, title: 'Auditoría Insumos', rows: auditByModule.insumos },
-                  { module: 'activos' as AuditModule, title: 'Auditoría Activos IT', rows: auditByModule.activos },
-                  { module: 'otros' as AuditModule, title: 'Auditoría Otros', rows: auditByModule.otros },
-                ]).map((section) => (
-                  <div key={`audit-${section.module}`} className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                    <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <h4 className="font-black text-slate-800 uppercase tracking-tight">{section.title}</h4>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{section.rows.length} registros</span>
-                      </div>
-                      <button
-                        onClick={() => descargarAuditoria(section.module)}
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <Download size={14} /> CSV
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left min-w-[820px]">
-                        <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <tr>
-                            <th className="px-8 py-4">Fecha</th>
-                            <th className="px-8 py-4">Usuario</th>
-                            <th className="px-8 py-4">Acción</th>
-                            <th className="px-8 py-4">Item</th>
-                            <th className="px-8 py-4">Resultado</th>
-                            <th className="px-8 py-4 text-right">Cant.</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {section.rows.map((log) => (
-                            <tr key={`${section.module}-${log.id}`}>
-                              <td className="px-8 py-4 text-xs font-bold text-slate-500 tracking-tighter">{log.fecha}</td>
-                              <td className="px-8 py-4 text-[10px] font-black text-[#8CC63F] uppercase tracking-widest">{log.usuario}</td>
-                              <td className="px-8 py-4"><Badge variant={log.accion}>{log.accion}</Badge></td>
-                              <td className="px-8 py-4 font-black text-slate-800 uppercase text-xs">{log.item}</td>
-                              <td className="px-8 py-4">
-                                <span
-                                  className={
-                                    (log.resultado || 'ok') === 'error'
-                                      ? 'inline-flex px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest border-red-200 bg-red-50 text-red-600'
-                                      : 'inline-flex px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest border-emerald-200 bg-emerald-50 text-emerald-600'
-                                  }
-                                >
-                                  {(log.resultado || 'ok').toUpperCase()}
-                                </span>
-                              </td>
-                              <td className="px-8 py-4 font-black text-slate-800 text-right">{log.cantidad}</td>
-                            </tr>
-                          ))}
-                          {section.rows.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="px-8 py-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                                Sin movimientos registrados para {section.title.toLowerCase()}.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-
-                {backendConnected && !isRequesterOnlyUser && (
-                  <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setAuditPage((prev) => Math.max(1, prev - 1))}
-                        disabled={isAuditLoading || auditPagination.page <= 1}
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 disabled:opacity-40"
-                      >
-                        Anterior
-                      </button>
-                      <button
-                        onClick={() => setAuditPage((prev) => Math.min(auditPagination.totalPages || 1, prev + 1))}
-                        disabled={isAuditLoading || auditPagination.page >= (auditPagination.totalPages || 1)}
-                        className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 disabled:opacity-40"
-                      >
-                        Siguiente
-                      </button>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Página {auditPagination.page} de {auditPagination.totalPages} | Total {auditPagination.total}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tamaño</span>
-                      <select
-                        value={String(auditPageSize)}
-                        onChange={(e) => {
-                          const size = Number(e.target.value) || 25;
-                          setAuditPageSize(size);
-                          setAuditPage(1);
-                        }}
-                        className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
-                      >
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Historial...</div>}>
+                <LazyAuditView
+                  isAuditLoading={isAuditLoading}
+                  auditRowsForGrouping={auditRowsForGrouping}
+                  resetAuditFilters={resetAuditFilters}
+                  fetchAuditHistory={fetchAuditHistory}
+                  descargarAuditoria={descargarAuditoria}
+                  auditFilters={auditFilters}
+                  updateAuditFilters={updateAuditFilters}
+                  auditModuleTotals={auditModuleTotals}
+                  auditResultTotals={auditResultTotals}
+                  auditIntegrity={auditIntegrity}
+                  auditAlerts={auditAlerts}
+                  auditByModule={auditByModule}
+                  backendConnected={backendConnected}
+                  isRequesterOnlyUser={isRequesterOnlyUser}
+                  setAuditPage={setAuditPage}
+                  auditPagination={auditPagination}
+                  auditPageSize={auditPageSize}
+                  setAuditPageSize={setAuditPageSize}
+                />
+              </React.Suspense>
             )}
+
             {/* VISTA USUARIOS */}
             {view === 'users' && (
-              <div className="space-y-6">
-                {!canManageUsers ? (
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-10 text-center text-slate-400 text-xs font-black uppercase tracking-wider">
-                    Solo administradores pueden gestionar usuarios.
-                  </div>
-                ) : (
-                  <>
-                    <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                      <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Control de Accesos</p>
-                          <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Alta de Usuarios por Cargo</h3>
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          Usuarios que pueden generar tickets
-                        </span>
-                      </div>
-                      <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total Usuarios</p>
-                          <p className="text-3xl font-black text-blue-700">{users.length}</p>
-                        </div>
-                        <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Activos</p>
-                          <p className="text-3xl font-black text-green-700">{activeUsersCount}</p>
-                        </div>
-                        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Solicitantes</p>
-                          <p className="text-3xl font-black text-orange-700">{requesterUsersCount}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                      <form onSubmit={handleCreateUser} className="xl:col-span-2 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-4">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{editingUserId !== null ? 'Editar Usuario' : 'Nuevo Usuario'}</p>
-                          <h4 className="font-black text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualizacion de Cuenta' : 'Registro de Cuenta'}</h4>
-                        </div>
-                        <input
-                          required
-                          placeholder="NOMBRE COMPLETO"
-                          value={newUserForm.nombre}
-                          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                          onChange={(e) => setNewUserForm((prev) => ({ ...prev, nombre: e.target.value }))}
-                        />
-                        <input
-                          required
-                          placeholder="USUARIO"
-                          value={newUserForm.username}
-                          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black lowercase outline-none"
-                          onChange={(e) => setNewUserForm((prev) => ({ ...prev, username: e.target.value }))}
-                        />
-                        <input
-                          required={editingUserId === null}
-                          type="password"
-                          placeholder={editingUserId !== null ? 'PASSWORD (OPCIONAL)' : 'PASSWORD (MIN 6)'}
-                          value={newUserForm.password}
-                          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none"
-                          onChange={(e) => setNewUserForm((prev) => ({ ...prev, password: e.target.value }))}
-                        />
-                        <select
-                          required
-                          value={newUserForm.departamento}
-                          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                          onChange={(e) => setNewUserForm((prev) => ({ ...prev, departamento: e.target.value }))}
-                        >
-                          <option value="">Selecciona cargo...</option>
-                          {userCargoOptions.map((cargo) => (
-                            <option key={cargo.value} value={cargo.value}>{cargo.label}</option>
-                          ))}
-                        </select>
-                        <select
-                          value={newUserForm.rol}
-                          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                          onChange={(e) => setNewUserForm((prev) => ({ ...prev, rol: e.target.value as UserRole }))}
-                        >
-                          {roleCatalogOptions.map((role) => (
-                            <option key={role.value} value={role.value}>{role.label}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="submit"
-                          disabled={isCreatingUser}
-                          className="w-full py-4 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl disabled:opacity-50"
-                        >
-                          {isCreatingUser ? (editingUserId !== null ? 'Guardando...' : 'Creando...') : (editingUserId !== null ? 'Guardar Cambios' : 'Crear Usuario')}
-                        </button>
-                        {editingUserId !== null && (
-                          <button
-                            type="button"
-                            onClick={resetNewUserForm}
-                            className="w-full py-3 border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-xs hover:bg-slate-50"
-                          >
-                            Cancelar Edicion
-                          </button>
-                        )}
-                      </form>
-
-                      <div className="xl:col-span-3 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                        <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30">
-                          <h4 className="font-black text-slate-800 uppercase tracking-tight">Usuarios Registrados</h4>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left min-w-[720px]">
-                            <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              <tr>
-                                <th className="px-8 py-4">Nombre</th>
-                                <th className="px-8 py-4">Usuario</th>
-                                <th className="px-8 py-4">Cargo</th>
-                                <th className="px-8 py-4">Rol</th>
-                                <th className="px-8 py-4">Permisos</th>
-                                <th className="px-8 py-4">Estado</th>
-                                <th className="px-8 py-4 text-right">Acciones</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                              {sortedUsers.map((user) => (
-                                <tr key={`user-${user.id}`}>
-                                  <td className="px-8 py-4 text-xs font-black text-slate-800 uppercase">{user.nombre}</td>
-                                  <td className="px-8 py-4 text-xs font-black text-slate-500">{user.username}</td>
-                                  <td className="px-8 py-4 text-xs font-black text-slate-500">{formatCargoFromCatalog(user.departamento)}</td>
-                                  <td className="px-8 py-4 text-xs font-black text-slate-500 uppercase">{roleLabelByValue[user.rol] || USER_ROLE_LABEL[user.rol]}</td>
-                                  <td className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-wider">{rolePermissionsByValue[user.rol] || USER_ROLE_PERMISSIONS[user.rol]}</td>
-                                  <td className="px-8 py-4">
-                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${user.activo !== false ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                                      {user.activo !== false ? 'Activo' : 'Inactivo'}
-                                    </span>
-                                  </td>
-                                  <td className="px-8 py-4 text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <button
-                                        type="button"
-                                        disabled={userActionLoadingId === user.id}
-                                        onClick={() => handleEditUser(user)}
-                                        className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                                      >
-                                        Editar
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={userActionLoadingId === user.id || (sessionUser?.id === user.id)}
-                                        onClick={() => void handleToggleUserActive(user)}
-                                        className="px-3 py-1 rounded-lg border border-amber-200 text-[10px] font-black uppercase text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-40"
-                                      >
-                                        {user.activo !== false ? 'Desactivar' : 'Activar'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={userActionLoadingId === user.id || (sessionUser?.id === user.id)}
-                                        onClick={() => void handleDeleteUser(user)}
-                                        className="px-3 py-1 rounded-lg border border-red-200 text-[10px] font-black uppercase text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40"
-                                      >
-                                        Eliminar
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {sortedUsers.length === 0 && (
-                                <tr>
-                                  <td colSpan={7} className="px-8 py-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                                    Sin usuarios registrados.
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Usuarios...</div>}>
+                <LazyUsersView
+                  canManageUsers={canManageUsers}
+                  users={users}
+                  activeUsersCount={activeUsersCount}
+                  requesterUsersCount={requesterUsersCount}
+                  handleCreateUser={handleCreateUser}
+                  editingUserId={editingUserId}
+                  newUserForm={newUserForm}
+                  setNewUserForm={setNewUserForm}
+                  userCargoOptions={userCargoOptions}
+                  roleCatalogOptions={roleCatalogOptions}
+                  isCreatingUser={isCreatingUser}
+                  resetNewUserForm={resetNewUserForm}
+                  sortedUsers={sortedUsers}
+                  formatCargoFromCatalog={formatCargoFromCatalog}
+                  roleLabelByValue={roleLabelByValue}
+                  rolePermissionsByValue={rolePermissionsByValue}
+                  sessionUser={sessionUser}
+                  userActionLoadingId={userActionLoadingId}
+                  handleEditUser={handleEditUser}
+                  handleToggleUserActive={handleToggleUserActive}
+                  handleDeleteUser={handleDeleteUser}
+                />
+              </React.Suspense>
             )}
 
             {/* VISTA TICKETS */}
