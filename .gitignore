@@ -37,3 +37,20 @@ server/data/backups/
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+# One-off refactor scratch files
+/apply_refactor.cjs
+/extractInventoryAndSupplies.cjs
+/extract_backend.cjs
+/extract_domain.cjs
+/extract_insumos.cjs
+/extract_users.cjs
+/find_views.cjs
+/fix_di.cjs
+/migrate_app_routing.cjs
+/refactor-auth.cjs
+/src/extractAudit.cjs
+/src/extractDashboard.cjs
+/src/audit_block.txt
+/src/audit_block_utf8.txt
+/src/return_lines.txt
