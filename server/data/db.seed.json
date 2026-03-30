@@ -1,0 +1,170 @@
+{
+  "meta": {
+    "nextId": 1000
+  },
+  "catalogos": {
+    "sucursales": [
+      { "code": "TJ01", "name": "Sucursal Estrella", "activo": true },
+      { "code": "TC01", "name": "Sucursal Camargo", "activo": true },
+      { "code": "TJ02", "name": "Sucursal CBtis", "activo": true },
+      { "code": "TJ03", "name": "Sucursal Sor Juana", "activo": true },
+      { "code": "CEDIS", "name": "CeDis", "activo": true }
+    ],
+    "cargos": [
+      "Coordinador de Sistemas",
+      "Gerente",
+      "Director",
+      "Desarrollador",
+      "Auxiliar de Sistemas",
+      "CeDis"
+    ],
+    "roles": [
+      { "value": "admin", "label": "Administrador", "permissions": "Acceso total", "activo": true },
+      { "value": "tecnico", "label": "Tecnico", "permissions": "Operacion IT + tickets", "activo": true },
+      { "value": "consulta", "label": "Consulta", "permissions": "Solo consulta", "activo": true },
+      { "value": "solicitante", "label": "Solicitante", "permissions": "Crear tickets", "activo": true }
+    ]
+  },
+  "users": [
+    {
+      "id": 501,
+      "nombre": "Admin IT",
+      "username": "admin",
+      "passwordHash": "scrypt-v1$4923721e0ded78534bbd638be30ae5f1$1993ab737237283782f648c1dfa3abc737309abc2bbe5a2e3600a4e1a2ed33660abb03efd5bfdd7a4b44d065e9fe400a6444df09f2661ecda0b2119ddc2d39f9",
+      "rol": "admin",
+      "departamento": "IT",
+      "activo": true
+    },
+    {
+      "id": 502,
+      "nombre": "Tecnico 1",
+      "username": "tecnico1",
+      "passwordHash": "scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456",
+      "rol": "tecnico",
+      "departamento": "IT",
+      "activo": true
+    },
+    {
+      "id": 503,
+      "nombre": "Supervisor",
+      "username": "consulta",
+      "passwordHash": "scrypt-v1$a992b6ad1d54ff5171d08b30f1eb3d1a$2e59f85b782d7dc3d2774617c2d37333c7cba81c83999f39db1a5a93a4a5b87498199d2143cbae6cd35cec8a35989d4b0c8d749f42ef566d3dae916c2b571967",
+      "rol": "consulta",
+      "departamento": "OPERACIONES",
+      "activo": true
+    }
+  ],
+  "activos": [
+    {
+      "id": 1,
+      "tag": "POS-001",
+      "tipo": "POS",
+      "marca": "IBM SurePOS",
+      "ubicacion": "Caja Rapida 1",
+      "estado": "Operativo",
+      "serial": "SN-99201",
+      "fechaCompra": "2022-01-15"
+    },
+    {
+      "id": 2,
+      "tag": "POS-002",
+      "tipo": "POS",
+      "marca": "IBM SurePOS",
+      "ubicacion": "Caja Rapida 2",
+      "estado": "Operativo",
+      "serial": "SN-99202",
+      "fechaCompra": "2022-01-15"
+    },
+    {
+      "id": 3,
+      "tag": "BAS-010",
+      "tipo": "Bascula",
+      "marca": "Datalogic",
+      "ubicacion": "Frutas y Verduras",
+      "estado": "Falla",
+      "serial": "SN-10293",
+      "fechaCompra": "2023-05-10"
+    },
+    {
+      "id": 4,
+      "tag": "SRV-001",
+      "tipo": "Servidor",
+      "marca": "Dell PowerEdge",
+      "ubicacion": "Site",
+      "estado": "Operativo",
+      "serial": "SN-SRV-01",
+      "fechaCompra": "2021-11-20"
+    }
+  ],
+  "insumos": [
+    {
+      "id": 11,
+      "nombre": "Cable Ethernet Cat6",
+      "unidad": "Metros",
+      "stock": 150,
+      "min": 50,
+      "categoria": "REDES",
+      "activo": true
+    },
+    {
+      "id": 12,
+      "nombre": "Papel Termico 80mm",
+      "unidad": "Rollos",
+      "stock": 12,
+      "min": 20,
+      "categoria": "CONSUMIBLES",
+      "activo": true
+    },
+    {
+      "id": 13,
+      "nombre": "Conectores RJ45",
+      "unidad": "Piezas",
+      "stock": 100,
+      "min": 30,
+      "categoria": "REDES",
+      "activo": true
+    },
+    {
+      "id": 14,
+      "nombre": "Teclado USB",
+      "unidad": "Piezas",
+      "stock": 5,
+      "min": 5,
+      "categoria": "HARDWARE",
+      "activo": true
+    }
+  ],
+  "tickets": [
+    {
+      "id": 101,
+      "activoTag": "BAS-010",
+      "descripcion": "Falla en el pesaje",
+      "prioridad": "CRITICA",
+      "estado": "Abierto",
+      "atencionTipo": "PRESENCIAL",
+      "fecha": "2023-10-24 09:00",
+      "fechaCreacion": "2023-10-24T09:00:00.000Z",
+      "fechaLimite": "2023-10-24T11:00:00.000Z",
+      "asignadoA": "Tecnico 1",
+      "historial": [
+        {
+          "fecha": "2023-10-24 09:00",
+          "usuario": "Admin IT",
+          "accion": "Ticket Creado",
+          "estado": "Abierto",
+          "comentario": "Registro inicial"
+        }
+      ]
+    }
+  ],
+  "auditoria": [
+    {
+      "id": 201,
+      "accion": "Entrada",
+      "item": "Papel Termico",
+      "cantidad": 50,
+      "fecha": "2024-05-20 10:30",
+      "usuario": "Admin IT"
+    }
+  ]
+}

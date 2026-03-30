@@ -7,13 +7,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
+const DEFAULT_SEED_FILE = path.join(DEFAULT_DATA_DIR, 'db.seed.json');
+const DEFAULT_RUNTIME_DIR = path.join(DEFAULT_DATA_DIR, 'runtime');
 const DB_FILE = process.env.DB_FILE
   ? path.resolve(process.cwd(), process.env.DB_FILE)
-  : path.join(DEFAULT_DATA_DIR, 'db.json');
+  : path.join(DEFAULT_RUNTIME_DIR, 'db.json');
 const DATA_DIR = path.dirname(DB_FILE);
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_BACKUP_KEEP = Math.max(1, Math.trunc(Number(process.env.DB_BACKUP_KEEP || 50)));
 const DB_BACKUP_ENABLE = String(process.env.DB_BACKUP_ENABLE || 'true').toLowerCase() !== 'false';
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+const ALLOW_PRODUCTION_SEED = String(process.env.ALLOW_PRODUCTION_SEED || 'false').trim().toLowerCase() === 'true';
 
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
 const PASSWORD_KEYLEN = 64;
@@ -790,7 +794,22 @@ async function ensureDbFile() {
   try {
     await fs.access(DB_FILE);
   } catch {
-    await fs.writeFile(DB_FILE, JSON.stringify(DEFAULT_DB, null, 2), 'utf8');
+    if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
+      throw new Error(
+        `DB_FILE no existe en produccion (${DB_FILE}). Provisiona el runtime DB o habilita ALLOW_PRODUCTION_SEED=true temporalmente.`,
+      );
+    }
+    const seedDb = await loadSeedDb();
+    await fs.writeFile(DB_FILE, JSON.stringify(seedDb, null, 2), 'utf8');
+  }
+}
+
+async function loadSeedDb() {
+  try {
+    const raw = await fs.readFile(DEFAULT_SEED_FILE, 'utf8');
+    return normalizeDbShape(JSON.parse(raw));
+  } catch {
+    return JSON.parse(JSON.stringify(DEFAULT_DB));
   }
 }
 

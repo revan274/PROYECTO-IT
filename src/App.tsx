@@ -104,10 +104,6 @@ import {
   buildDefaultAuditPagination,
   buildDefaultReportFilterSnapshot,
   buildDefaultTravelKmsByBranch,
-  cloneInitialActivos,
-  cloneInitialAuditoria,
-  cloneInitialInsumos,
-  cloneInitialTickets,
   createEmptyInsumoTouched,
   getStoredSessionToken,
   normalizeReportFilterSnapshot,
@@ -382,12 +378,12 @@ export default function App() {
   const isReportsView = view === 'reports';
 
   // Estado de Datos
-  const [activos, setActivos] = useState<Activo[]>(() => cloneInitialActivos());
-  const [insumos, setInsumos] = useState<Insumo[]>(() => cloneInitialInsumos());
-  const [tickets, setTickets] = useState<TicketItem[]>(() => cloneInitialTickets());
+  const [activos, setActivos] = useState<Activo[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [catalogos, setCatalogos] = useState<CatalogState>(DEFAULT_CATALOGS);
-  const [auditoria, setAuditoria] = useState<RegistroAuditoria[]>(() => cloneInitialAuditoria());
+  const [auditoria, setAuditoria] = useState<RegistroAuditoria[]>([]);
   const [auditRemoteRows, setAuditRemoteRows] = useState<RegistroAuditoria[] | null>(null);
   const [auditFilters, setAuditFilters] = useState<AuditFiltersState>(() => buildDefaultAuditFilters());
   const [auditPage, setAuditPage] = useState(1);
@@ -793,10 +789,10 @@ export default function App() {
     setSessionUser(null);
     setLoginForm({ username: '', password: '' });
     setView('dashboard');
-    setActivos(cloneInitialActivos());
-    setInsumos(cloneInitialInsumos());
-    setTickets(cloneInitialTickets());
-    setAuditoria(cloneInitialAuditoria());
+    setActivos([]);
+    setInsumos([]);
+    setTickets([]);
+    setAuditoria([]);
     setAuditRemoteRows(null);
     setAuditFilters(buildDefaultAuditFilters());
     setAuditPage(1);
@@ -841,6 +837,12 @@ export default function App() {
     setIsQrScannerActive(false);
     setIsResolvingQr(false);
   }, [applyReportFilterSnapshot, setSessionUser]);
+
+  const ensureBackendConnected = useCallback((action: string) => {
+    if (backendConnected) return true;
+    showToast(`${action} requiere conexion con el backend.`, 'warning');
+    return false;
+  }, [backendConnected, showToast]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -1289,21 +1291,12 @@ export default function App() {
         return;
       }
       setBackendConnected(false);
-      setActivos(cloneInitialActivos());
-      setInsumos(cloneInitialInsumos());
-      setTickets(cloneInitialTickets());
-      setAuditoria(cloneInitialAuditoria());
       setAuditRemoteRows(null);
       setAuditSummary(null);
       setAuditIntegrity(null);
       setAuditAlerts(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-      setAssetRiskSummary(null);
-      setUsers([]);
-      setCatalogos(DEFAULT_CATALOGS);
-      if (!silent) {
-        showToast('No se pudo sincronizar con el backend', 'warning');
-      }
+      showToast(getApiErrorMessage(error) || 'No se pudo sincronizar con el backend', 'warning');
     } finally {
       if (!silent) setIsSyncing(false);
     }
@@ -1675,101 +1668,33 @@ export default function App() {
       showToast('El usuario ya existe', 'warning');
       return;
     }
+    if (!ensureBackendConnected('Guardar usuarios')) return;
 
     setIsCreatingUser(true);
     try {
-      if (backendConnected) {
-        if (isEditing && editingUserId !== null) {
-          const payload: Record<string, unknown> = { nombre, username, departamento, rol };
-          if (password) payload.password = password;
-          await apiRequest<UserItem>(`/users/${editingUserId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-        } else {
-          await apiRequest<UserItem>('/users', {
-            method: 'POST',
-            body: JSON.stringify({
-              nombre,
-              username,
-              password,
-              departamento,
-              rol,
-            }),
-          });
-        }
-        await refreshData(true);
-        showToast(isEditing ? `Usuario ${username} actualizado` : `Usuario ${username} creado`, 'success');
+      if (isEditing && editingUserId !== null) {
+        const payload: Record<string, unknown> = { nombre, username, departamento, rol };
+        if (password) payload.password = password;
+        await apiRequest<UserItem>(`/users/${editingUserId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
       } else {
-        if (isEditing && editingUserId !== null) {
-          const current = users.find((user) => user.id === editingUserId);
-          const activeAdmins = users.filter((user) => user.activo !== false && user.rol === 'admin').length;
-          if (current && current.id === sessionUser?.id && current.rol === 'admin' && rol !== 'admin') {
-            showToast('No puedes quitarte el rol administrador', 'warning');
-            return;
-          }
-          if (current && current.rol === 'admin' && current.activo !== false && rol !== 'admin' && activeAdmins <= 1) {
-            showToast('Debe existir al menos un administrador activo', 'warning');
-            return;
-          }
-          setUsers((prev) =>
-            prev.map((user) =>
-              user.id === editingUserId
-                ? {
-                  ...user,
-                  nombre,
-                  username,
-                  departamento,
-                  rol,
-                }
-                : user,
-            ),
-          );
-          showToast(`Usuario ${username} actualizado en modo local`, 'warning');
-        } else {
-          const localUser: UserItem = {
-            id: Date.now(),
+        await apiRequest<UserItem>('/users', {
+          method: 'POST',
+          body: JSON.stringify({
             nombre,
             username,
-            rol,
+            password,
             departamento,
-            activo: true,
-          };
-          setUsers((prev) => [...prev, localUser]);
-          showToast(`Usuario ${username} agregado en modo local`, 'warning');
-        }
+            rol,
+          }),
+        });
       }
-
+      await refreshData(true);
+      showToast(isEditing ? `Usuario ${username} actualizado` : `Usuario ${username} creado`, 'success');
       resetNewUserForm();
     } catch (error) {
-      if (backendConnected && isEditing && editingUserId !== null && isRouteNotFoundApiError(error)) {
-        const current = users.find((user) => user.id === editingUserId);
-        const activeAdmins = users.filter((user) => user.activo !== false && user.rol === 'admin').length;
-        if (current && current.id === sessionUser?.id && current.rol === 'admin' && rol !== 'admin') {
-          showToast('No puedes quitarte el rol administrador', 'warning');
-          return;
-        }
-        if (current && current.rol === 'admin' && current.activo !== false && rol !== 'admin' && activeAdmins <= 1) {
-          showToast('Debe existir al menos un administrador activo', 'warning');
-          return;
-        }
-        setUsers((prev) =>
-          prev.map((user) =>
-            user.id === editingUserId
-              ? {
-                ...user,
-                nombre,
-                username,
-                departamento,
-                rol,
-              }
-              : user,
-          ),
-        );
-        resetNewUserForm();
-        showToast('Usuario actualizado en modo local. Reinicia backend para guardar cambios permanentes.', 'warning');
-        return;
-      }
       showToast(getApiErrorMessage(error) || 'No se pudo guardar el usuario', 'error');
     } finally {
       setIsCreatingUser(false);
@@ -1798,34 +1723,16 @@ export default function App() {
     }
 
     const nextActive = user.activo === false;
+    if (!ensureBackendConnected('Actualizar usuarios')) return;
     setUserActionLoadingId(user.id);
     try {
-      if (backendConnected) {
-        await apiRequest<UserItem>(`/users/${user.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ activo: nextActive }),
-        });
-        await refreshData(true);
-      } else {
-        const activeAdmins = users.filter((u) => u.activo !== false && u.rol === 'admin').length;
-        if (!nextActive && user.rol === 'admin' && activeAdmins <= 1) {
-          showToast('Debe existir al menos un administrador activo', 'warning');
-          return;
-        }
-        setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, activo: nextActive } : item)));
-      }
+      await apiRequest<UserItem>(`/users/${user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ activo: nextActive }),
+      });
+      await refreshData(true);
       showToast(nextActive ? 'Usuario activado' : 'Usuario desactivado', 'success');
     } catch (error) {
-      if (backendConnected && isRouteNotFoundApiError(error)) {
-        const activeAdmins = users.filter((u) => u.activo !== false && u.rol === 'admin').length;
-        if (!nextActive && user.rol === 'admin' && activeAdmins <= 1) {
-          showToast('Debe existir al menos un administrador activo', 'warning');
-          return;
-        }
-        setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, activo: nextActive } : item)));
-        showToast(`${nextActive ? 'Usuario activado' : 'Usuario desactivado'} en modo local. Reinicia backend para persistir.`, 'warning');
-        return;
-      }
       showToast(getApiErrorMessage(error) || 'No se pudo actualizar el estado del usuario', 'error');
     } finally {
       setUserActionLoadingId(null);
@@ -1841,40 +1748,19 @@ export default function App() {
     const ok = window.confirm(`Eliminar usuario ${user.username}?`);
     if (!ok) return;
 
+    if (!ensureBackendConnected('Eliminar usuarios')) return;
     setUserActionLoadingId(user.id);
     try {
-      if (backendConnected) {
-        await apiRequest<{ ok: boolean }>(`/users/${user.id}`, {
-          method: 'DELETE',
-        });
-        await refreshData(true);
-      } else {
-        const activeAdmins = users.filter((u) => u.activo !== false && u.rol === 'admin').length;
-        if (user.rol === 'admin' && user.activo !== false && activeAdmins <= 1) {
-          showToast('Debe existir al menos un administrador activo', 'warning');
-          return;
-        }
-        setUsers((prev) => prev.filter((item) => item.id !== user.id));
-      }
+      await apiRequest<{ ok: boolean }>(`/users/${user.id}`, {
+        method: 'DELETE',
+      });
+      await refreshData(true);
 
       if (editingUserId === user.id) {
         resetNewUserForm();
       }
       showToast('Usuario eliminado', 'success');
     } catch (error) {
-      if (backendConnected && isRouteNotFoundApiError(error)) {
-        const activeAdmins = users.filter((u) => u.activo !== false && u.rol === 'admin').length;
-        if (user.rol === 'admin' && user.activo !== false && activeAdmins <= 1) {
-          showToast('Debe existir al menos un administrador activo', 'warning');
-          return;
-        }
-        setUsers((prev) => prev.filter((item) => item.id !== user.id));
-        if (editingUserId === user.id) {
-          resetNewUserForm();
-        }
-        showToast('Usuario eliminado en modo local. Reinicia backend para persistir.', 'warning');
-        return;
-      }
       showToast(getApiErrorMessage(error) || 'No se pudo eliminar el usuario', 'error');
     } finally {
       setUserActionLoadingId(null);
@@ -1890,6 +1776,7 @@ export default function App() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (!ensureBackendConnected('Importar inventario')) return;
 
     setIsImportingInventory(true);
     setImportDraft(null);
@@ -2204,7 +2091,7 @@ export default function App() {
       showToast('Tu rol es solo consulta', 'warning');
       return;
     }
-
+    if (!ensureBackendConnected('Actualizar stock')) return;
     if (!backendConnected) {
       setInsumos((prev) =>
         prev.map((item) => {
@@ -2255,6 +2142,7 @@ export default function App() {
       return;
     }
 
+    if (!ensureBackendConnected('Reponer insumos')) return;
     if (!backendConnected) {
       setInsumos((prev) =>
         prev.map((item) => {
@@ -2301,6 +2189,7 @@ export default function App() {
     const parsedValue = Number(rawValue);
     if (!Number.isFinite(parsedValue) || parsedValue < 0) return false;
     const nuevaCantidad = Math.trunc(parsedValue);
+    if (!ensureBackendConnected('Establecer stock manual')) return false;
 
     if (!backendConnected) {
       setInsumos((prev) =>
@@ -2395,6 +2284,7 @@ export default function App() {
 
     const confirmacion = window.confirm(`¿Estás seguro de eliminar "${itemToDelete.nombre}"?`);
     if (!confirmacion) return;
+    if (!ensureBackendConnected('Eliminar insumos')) return;
 
     if (!backendConnected) {
       setInsumos((prev) => prev.filter((i) => i.id !== id));
@@ -2432,6 +2322,7 @@ export default function App() {
 
     const confirmacion = window.confirm(`Eliminar activo ${activoToDelete.tag}?`);
     if (!confirmacion) return false;
+    if (!ensureBackendConnected('Eliminar activos')) return false;
 
     if (!backendConnected) {
       setActivos((prev) => prev.filter((a) => a.id !== id));
@@ -2472,6 +2363,7 @@ export default function App() {
 
     const confirmacionFinal = window.confirm('Esta acción no se puede deshacer. ¿Confirmas borrar TODO el inventario de activos IT?');
     if (!confirmacionFinal) return false;
+    if (!ensureBackendConnected('Eliminar el inventario completo')) return false;
 
     if (!backendConnected) {
       const removedCount = activos.length;
@@ -2525,6 +2417,7 @@ export default function App() {
       showToast('Tu rol no permite esta acción', 'warning');
       return;
     }
+    if (!ensureBackendConnected(isTicketModal ? 'Crear tickets' : 'Guardar cambios')) return;
     const prioridad = formData.prioridad || 'MEDIA';
     setIsModalSaving(true);
 
@@ -2774,6 +2667,7 @@ export default function App() {
       showToast('Tu rol no permite resolver tickets', 'warning');
       return;
     }
+    if (!ensureBackendConnected('Resolver tickets')) return;
 
     if (!backendConnected) {
       const ticketToResolve = tickets.find((ticket) => ticket.id === id);
@@ -2834,6 +2728,7 @@ export default function App() {
       `Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`,
     );
     if (!confirmed) return;
+    if (!ensureBackendConnected('Eliminar tickets')) return;
 
     if (!backendConnected) {
       const remainingTickets = tickets.filter((ticket) => ticket.id !== ticketId);
@@ -2873,6 +2768,7 @@ export default function App() {
       showToast('Tu rol no permite editar tickets', 'warning');
       return;
     }
+    if (!ensureBackendConnected('Actualizar tickets')) return;
 
     if (!backendConnected) {
       const ticketCurrent = tickets.find((ticket) => ticket.id === ticketId);
@@ -2966,6 +2862,7 @@ export default function App() {
       showToast('Solo puedes comentar tus propios tickets', 'warning');
       return;
     }
+    if (!ensureBackendConnected('Agregar comentarios')) return;
 
     try {
       if (backendConnected) {
@@ -3029,6 +2926,7 @@ export default function App() {
       showToast(`Adjunto excede limite de ${maxMb} MB`, 'warning');
       return;
     }
+    if (!ensureBackendConnected('Adjuntar archivos')) return;
 
     setTicketAttachmentLoadingId(ticketId);
     try {
@@ -3131,6 +3029,7 @@ export default function App() {
     if (!target) return;
     const confirmacion = window.confirm(`Eliminar adjunto "${attachment.fileName}" del ticket #${ticketId}?`);
     if (!confirmacion) return;
+    if (!ensureBackendConnected('Eliminar adjuntos')) return;
 
     try {
       if (backendConnected && !attachment.localOnly) {

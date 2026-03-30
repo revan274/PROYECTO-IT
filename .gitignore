@@ -32,6 +32,8 @@ dist-ssr
 
 # Local database backups
 server/data/backups/
+/server/data/db.json
+/server/data/runtime/
 
 # wrangler files
 .wrangler

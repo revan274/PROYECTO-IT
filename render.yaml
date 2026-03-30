@@ -13,7 +13,7 @@ services:
       - key: AUTH_DISALLOW_DEMO_PASSWORDS
         value: "true"
       - key: DB_FILE
-        value: /var/data/db.json
+        value: /var/data/runtime/db.json
       - key: DB_BACKUP_ENABLE
         value: "true"
       - key: DB_BACKUP_KEEP

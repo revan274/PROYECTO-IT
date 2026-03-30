@@ -2,9 +2,20 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const QR_TOKEN_PREFIX = 'mtiqr1';
 export const QR_TOKEN_SCHEME = 'mti-hs256-v1';
+const DEFAULT_QR_SIGNING_SECRET = 'mesa-it-qr-dev-secret-change-me';
+const INSECURE_QR_SECRETS = new Set([
+  '',
+  'change-this-secret',
+  DEFAULT_QR_SIGNING_SECRET,
+]);
 const QR_SIGNING_SECRET = String(
-  process.env.QR_SIGNING_SECRET || process.env.AUTH_TOKEN_SECRET || 'mesa-it-qr-dev-secret-change-me',
-).trim() || 'mesa-it-qr-dev-secret-change-me';
+  process.env.QR_SIGNING_SECRET || process.env.AUTH_TOKEN_SECRET || DEFAULT_QR_SIGNING_SECRET,
+).trim() || DEFAULT_QR_SIGNING_SECRET;
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+
+if (IS_PRODUCTION && INSECURE_QR_SECRETS.has(QR_SIGNING_SECRET)) {
+  throw new Error('QR_SIGNING_SECRET es obligatorio en produccion y no puede usar un valor por defecto.');
+}
 
 function asNonEmptyString(value) {
   if (typeof value !== 'string') return '';

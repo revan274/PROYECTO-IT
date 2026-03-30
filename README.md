@@ -32,6 +32,8 @@ npm run dev:server
 - `npm run build`
 - `npm run lint`
 - `npm run test`
+- `npm run test:server`
+- `npm run test:ui`
 
 ## Variables de entorno
 Revisa `.env.example`. Variables principales:
@@ -46,6 +48,7 @@ Revisa `.env.example`. Variables principales:
 - `AUTH_LOGIN_TRACK_WINDOW_MS`
 - `AUTH_LOGIN_GC_MS`
 - `AUTH_DISALLOW_DEMO_PASSWORDS`
+- `ALLOW_PRODUCTION_SEED`
 - `TICKET_ATTACHMENT_MAX_BYTES`
 - `TICKET_ATTACHMENT_MAX_COUNT`
 - `VITE_TICKET_ATTACHMENT_MAX_BYTES`
@@ -55,6 +58,13 @@ Revisa `.env.example`. Variables principales:
 - `DB_FILE`
 - `DB_BACKUP_ENABLE`
 - `DB_BACKUP_KEEP`
+
+## Datos locales
+- El repo conserva un seed sanitizado en `server/data/db.seed.json`.
+- La base runtime local no se versiona y por defecto vive en `server/data/runtime/db.json`.
+- Si el runtime DB no existe, el backend lo inicializa automaticamente desde el seed.
+- En produccion, si `DB_FILE` no existe, el backend falla por seguridad salvo que habilites `ALLOW_PRODUCTION_SEED=true` de forma temporal.
+- `server/data/backups/` y `server/data/runtime/` se consideran datos locales.
 
 ## API (resumen)
 - `GET /api/health`
@@ -90,6 +100,7 @@ Revisa `.env.example`. Variables principales:
 - Todas las rutas de datos requieren `Authorization: Bearer <token>`.
 - Los permisos se validan por rol en sesion autenticada.
 - `passwordRemota` de activos solo se entrega a rol `admin`.
+- En produccion debes definir `QR_SIGNING_SECRET`; el backend rechaza valores inseguros por defecto.
 
 ## Despliegue en Render (1 servicio)
 Este repo incluye `render.yaml` para desplegar frontend + API en el mismo dominio.

@@ -323,4 +323,39 @@ describe('App UI flow', () => {
     expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexion al servidor/i)).toBeTruthy();
     expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
   });
+
+  test('si bootstrap falla muestra backend offline y no rellena tickets locales', async () => {
+    installFetchMock([
+      {
+        method: 'POST',
+        path: '/api/auth/login',
+        response: {
+          user: ADMIN_USER,
+          token: 'token-admin-offline-ui',
+          loggedAt: '2026-03-30T18:20:00.000Z',
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/bootstrap',
+        response: {
+          error: 'Backend de pruebas fuera de linea',
+        },
+        status: 503,
+      },
+    ]);
+
+    render(<App />);
+
+    fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
+
+    await screen.findByText('Backend Offline');
+    await screen.findByText(/Backend de pruebas fuera de linea/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Tickets$/i }));
+
+    await screen.findByText('Tickets IT');
+    expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
+    expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
+  });
 });
