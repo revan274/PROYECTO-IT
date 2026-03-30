@@ -1834,6 +1834,14 @@ app.use((error, _req, res, _next) => {
   return res.status(500).json({ error: 'Error interno del servidor.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Mesa IT API corriendo en http://localhost:${PORT}`);
-});
+export { app };
+
+export function startServer(port = PORT) {
+  return app.listen(port, () => {
+    console.log(`Mesa IT API corriendo en http://localhost:${port}`);
+  });
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  startServer();
+}

@@ -226,7 +226,7 @@ async function waitForServer(baseUrl, child, getLogs) {
 async function startTestServer(dbFile) {
   const port = await reservePort();
   let logs = '';
-  const child = spawn(process.execPath, ['server/index.js'], {
+  const child = spawn(process.execPath, ['server/main.js'], {
     cwd: process.cwd(),
     env: {
       ...process.env,

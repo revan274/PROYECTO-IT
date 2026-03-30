@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "node --watch server/index.js",
+    "dev:server": "node --watch server/main.js",
     "dev:full": "concurrently -k -n API,WEB \"npm:dev:server\" \"npm:dev\"",
-    "start:server": "node server/index.js",
+    "start:server": "node server/main.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "npm run test:server && npm run test:ui",
