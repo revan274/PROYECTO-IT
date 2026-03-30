@@ -328,6 +328,10 @@ async function login(username, password) {
   return data;
 }
 
+async function readPersistedDb() {
+  return JSON.parse(await readFile(dbFilePath, 'utf8'));
+}
+
 test('POST /api/auth/login emite token y sanea el usuario', async () => {
   const data = await login(ADMIN_USER.username, ADMIN_PASSWORD);
 
@@ -397,4 +401,196 @@ test('GET /api/bootstrap sanea credenciales remotas legacy en API y runtime DB',
   assert.equal(Array.isArray(persisted.activos), true);
   assert.equal(Object.hasOwn(persisted.activos[0], 'passwordRemota'), false);
   assert.equal(Object.hasOwn(persisted.activos[0], 'pass'), false);
+});
+
+test('POST/PATCH /api/users crea y actualiza usuarios sanitizados', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const username = 'usuario.integration';
+
+  const created = await requestJson('/api/users', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre: 'Usuario Integracion',
+      username,
+      password: 'Usuario.Integration.123',
+      cargo: 'Coordinador de Sistemas',
+      rol: 'tecnico',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.username, username);
+  assert.equal(created.data.rol, 'tecnico');
+  assert.equal(created.data.departamento, 'COORDINADOR DE SISTEMAS');
+  assert.equal(Object.hasOwn(created.data, 'passwordHash'), false);
+
+  const updated = await requestJson(`/api/users/${created.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      nombre: 'Usuario Integracion Editado',
+      cargo: 'Auxiliar de Sistemas',
+      rol: 'solicitante',
+      activo: false,
+    },
+  });
+
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.nombre, 'Usuario Integracion Editado');
+  assert.equal(updated.data.rol, 'solicitante');
+  assert.equal(updated.data.activo, false);
+  assert.equal(updated.data.departamento, 'AUXILIAR DE SISTEMAS');
+  assert.equal(Object.hasOwn(updated.data, 'passwordHash'), false);
+
+  const listed = await requestJson('/api/users', {
+    token: session.token,
+  });
+
+  assert.equal(listed.response.status, 200);
+  const listedUser = listed.data.find((item) => item.username === username);
+  assert.ok(listedUser);
+  assert.equal(listedUser.departamento, 'AUXILIAR DE SISTEMAS');
+  assert.equal(listedUser.rol, 'solicitante');
+  assert.equal(Object.hasOwn(listedUser, 'passwordHash'), false);
+
+  const persisted = await readPersistedDb();
+  const storedUser = persisted.users.find((item) => item.username === username);
+  assert.ok(storedUser);
+  assert.equal(storedUser.nombre, 'Usuario Integracion Editado');
+  assert.equal(storedUser.departamento, 'Auxiliar de Sistemas');
+  assert.equal(storedUser.rol, 'solicitante');
+  assert.equal(storedUser.activo, false);
+  assert.equal(typeof storedUser.passwordHash, 'string');
+  assert.ok(storedUser.passwordHash.length > 20);
+});
+
+test('POST/PATCH /api/activos crea y actualiza activos persistidos', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const assetPayload = {
+    tag: 'LAP-INT-900',
+    tipo: 'Laptop',
+    marca: 'Dell',
+    modelo: 'Latitude 5440',
+    ubicacion: 'Oficina TI',
+    serial: 'LAP-INT-900-SN',
+    fechaCompra: '2026-01-15',
+    estado: 'Operativo',
+    idInterno: 'INT-900',
+    equipo: 'Laptop',
+    cpu: 'Intel Core i7',
+    ram: '16 GB',
+    ramTipo: 'DDR5',
+    disco: '512 GB',
+    tipoDisco: 'SSD',
+    macAddress: 'AA:BB:CC:DD:EE:91',
+    ipAddress: '10.10.10.91',
+    responsable: 'Mesa IT',
+    departamento: 'IT',
+    anydesk: '123456789',
+    aniosVida: '1',
+    comentarios: 'Alta de prueba',
+  };
+
+  const created = await requestJson('/api/activos', {
+    method: 'POST',
+    token: session.token,
+    body: assetPayload,
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.tag, 'LAP-INT-900');
+  assert.equal(created.data.marca, 'Dell');
+  assert.equal(Object.hasOwn(created.data, 'passwordRemota'), false);
+  assert.equal(Object.hasOwn(created.data, 'pass'), false);
+
+  const updated = await requestJson(`/api/activos/${created.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      ...assetPayload,
+      marca: 'Lenovo',
+      modelo: 'ThinkPad T14',
+      estado: 'Falla',
+      ipAddress: '10.10.10.92',
+      macAddress: 'AA:BB:CC:DD:EE:92',
+      responsable: 'Soporte Campo',
+      comentarios: 'Actualizacion de prueba',
+    },
+  });
+
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.marca, 'Lenovo');
+  assert.equal(updated.data.modelo, 'ThinkPad T14');
+  assert.equal(updated.data.estado, 'Falla');
+  assert.equal(updated.data.ipAddress, '10.10.10.92');
+  assert.equal(updated.data.macAddress, 'aa:bb:cc:dd:ee:92');
+
+  const listed = await requestJson('/api/activos?search=LAP-INT-900', {
+    token: session.token,
+  });
+
+  assert.equal(listed.response.status, 200);
+  assert.equal(Array.isArray(listed.data), true);
+  const listedAsset = listed.data.find((item) => item.tag === 'LAP-INT-900');
+  assert.ok(listedAsset);
+  assert.equal(listedAsset.marca, 'Lenovo');
+
+  const persisted = await readPersistedDb();
+  const storedAsset = persisted.activos.find((item) => item.tag === 'LAP-INT-900');
+  assert.ok(storedAsset);
+  assert.equal(storedAsset.marca, 'Lenovo');
+  assert.equal(storedAsset.modelo, 'ThinkPad T14');
+  assert.equal(storedAsset.estado, 'Falla');
+  assert.equal(storedAsset.ipAddress, '10.10.10.92');
+  assert.equal(storedAsset.macAddress, 'aa:bb:cc:dd:ee:92');
+});
+
+test('POST/PATCH stock/DELETE /api/insumos persiste cambios de inventario', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const nombre = 'Mouse Optico Integracion';
+
+  const created = await requestJson('/api/insumos', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre,
+      unidad: 'Piezas',
+      stock: 12,
+      min: 4,
+      categoria: 'PERIFERICOS',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.nombre, nombre);
+  assert.equal(created.data.stock, 12);
+  assert.equal(created.data.activo, true);
+
+  const adjusted = await requestJson(`/api/insumos/${created.data.id}/stock`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      delta: -3,
+    },
+  });
+
+  assert.equal(adjusted.response.status, 200, JSON.stringify(adjusted.data));
+  assert.equal(adjusted.data.stock, 9);
+
+  const removed = await requestJson(`/api/insumos/${created.data.id}`, {
+    method: 'DELETE',
+    token: session.token,
+  });
+
+  assert.equal(removed.response.status, 200, JSON.stringify(removed.data));
+  assert.equal(removed.data.ok, true);
+  assert.equal(removed.data.deactivated.activo, false);
+
+  const persisted = await readPersistedDb();
+  const storedSupply = persisted.insumos.find((item) => item.nombre === nombre);
+  assert.ok(storedSupply);
+  assert.equal(storedSupply.stock, 9);
+  assert.equal(storedSupply.activo, false);
+  assert.equal(storedSupply.categoria, 'PERIFERICOS');
 });

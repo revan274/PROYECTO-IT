@@ -4,6 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
+import { createInsumosRouter } from './routes/insumos.js';
+import { createActivosRouter } from './routes/activos.js';
+import { createTicketsRouter } from './routes/tickets.js';
+import { createUsersRouter } from './routes/users.js';
 import {
   buildAssetQrLookupResponse,
   buildSignedAssetQrToken,
@@ -23,7 +27,6 @@ import {
   verifyUserPassword,
 } from './store.js';
 
-const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,9 +96,6 @@ const DEMO_PASSWORD_HASHES = new Set([
   'scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456',
   'scrypt-v1$a992b6ad1d54ff5171d08b30f1eb3d1a$2e59f85b782d7dc3d2774617c2d37333c7cba81c83999f39db1a5a93a4a5b87498199d2143cbae6cd35cec8a35989d4b0c8d749f42ef566d3dae916c2b571967',
 ]);
-const authSessions = new Map();
-const loginAttempts = new Map();
-let lastLoginAttemptGcAt = 0;
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -104,7 +104,8 @@ class HttpError extends Error {
   }
 }
 
-if (typeof TRUST_PROXY === 'string' && TRUST_PROXY.trim()) {
+function configureTrustProxy(app) {
+  if (typeof TRUST_PROXY !== 'string' || !TRUST_PROXY.trim()) return;
   const rawTrustProxy = TRUST_PROXY.trim();
   const normalizedTrustProxy = rawTrustProxy.toLowerCase();
   if (normalizedTrustProxy === 'true') app.set('trust proxy', true);
@@ -113,27 +114,25 @@ if (typeof TRUST_PROXY === 'string' && TRUST_PROXY.trim()) {
   else app.set('trust proxy', rawTrustProxy);
 }
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (CORS_ALLOW_ALL) return callback(null, true);
-    if (CORS_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new HttpError(403, 'Origen no permitido por CORS.'));
-  },
-  credentials: true,
-}));
-app.use(express.json({ limit: '8mb' }));
-import { createInsumosRouter } from './routes/insumos.js';
-import { createActivosRouter } from './routes/activos.js';
-import { createTicketsRouter } from './routes/tickets.js';
-import { createUsersRouter } from './routes/users.js';
-app.use((req, res, next) => {
-  const incoming = asNonEmptyString(req.headers['x-request-id']);
-  const requestId = incoming || randomUUID();
-  req.requestId = requestId;
-  res.setHeader('X-Request-Id', requestId);
-  next();
-});
+function configureCommonMiddleware(app) {
+  app.use(cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (CORS_ALLOW_ALL) return callback(null, true);
+      if (CORS_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new HttpError(403, 'Origen no permitido por CORS.'));
+    },
+    credentials: true,
+  }));
+  app.use(express.json({ limit: '8mb' }));
+  app.use((req, res, next) => {
+    const incoming = asNonEmptyString(req.headers['x-request-id']);
+    const requestId = incoming || randomUUID();
+    req.requestId = requestId;
+    res.setHeader('X-Request-Id', requestId);
+    next();
+  });
+}
 
 function normalizePrioridad(value) {
   const raw = String(value || 'MEDIA').toUpperCase();
@@ -306,26 +305,6 @@ function createAuthToken() {
   return `mti_${randomUUID()}`;
 }
 
-function registerSession(user) {
-  const token = createAuthToken();
-  authSessions.set(token, {
-    userId: Number(user.id),
-    username: String(user.username).toLowerCase(),
-    issuedAt: Date.now(),
-  });
-  return token;
-}
-
-function getValidSession(token) {
-  const session = authSessions.get(token);
-  if (!session) return null;
-  if (Date.now() - Number(session.issuedAt || 0) > AUTH_TOKEN_TTL_MS) {
-    authSessions.delete(token);
-    return null;
-  }
-  return session;
-}
-
 function getRequestActor(req) {
   return {
     userId: Number.isFinite(Number(req.authUser?.id)) ? Math.trunc(Number(req.authUser.id)) : null,
@@ -359,52 +338,6 @@ function pushAuditWithContext(db, req, payload) {
   return pushAudit(db, withContext);
 }
 
-async function writeSecurityAudit(req, payload) {
-  try {
-    await updateDb((db) =>
-      pushAuditWithContext(db, req, {
-        modulo: 'otros',
-        entidad: 'sesion',
-        ...payload,
-      }));
-  } catch {
-    // No interrumpir el flujo de autenticacion por fallas de auditoria.
-  }
-}
-
-async function requireAuth(req, res, next) {
-  try {
-    const token = parseBearerToken(req.headers.authorization);
-    if (!token) {
-      return res.status(401).json({ error: 'Sesion requerida.' });
-    }
-
-    const session = getValidSession(token);
-    if (!session) {
-      return res.status(401).json({ error: 'Sesion invalida o expirada.' });
-    }
-
-    const db = await readDb();
-    const user = db.users.find(
-      (u) =>
-        Number(u.id) === Number(session.userId) &&
-        String(u.username).toLowerCase() === String(session.username).toLowerCase() &&
-        u.activo !== false,
-    );
-
-    if (!user) {
-      authSessions.delete(token);
-      return res.status(401).json({ error: 'Usuario no autorizado.' });
-    }
-
-    req.authToken = token;
-    req.authUser = sanitizeUser(user);
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
-
 function ensureCanEdit(req, res) {
   if (!canEditByRole(req.authUser?.rol)) {
     res.status(403).json({ error: 'No autorizado para ejecutar esta operación.' });
@@ -434,14 +367,6 @@ function countActiveAdmins(users, excludeUserId = null) {
     if (excludeUserId !== null && Number(user.id) === Number(excludeUserId)) return false;
     return user.activo !== false && user.rol === 'admin';
   }).length;
-}
-
-function revokeSessionsByUserId(userId) {
-  for (const [token, session] of authSessions.entries()) {
-    if (Number(session?.userId) === Number(userId)) {
-      authSessions.delete(token);
-    }
-  }
 }
 
 function normalizeCatalogBranchItem(value) {
@@ -722,64 +647,160 @@ function isDemoPasswordUser(user) {
   return DEMO_PASSWORD_HASHES.has(hash);
 }
 
-function gcLoginAttempts() {
-  const nowTs = Date.now();
-  if (nowTs - lastLoginAttemptGcAt < LOGIN_ATTEMPT_GC_MS) return;
-  for (const [key, item] of loginAttempts.entries()) {
-    const expired = !item
-      || (item.lockedUntil && item.lockedUntil <= nowTs && nowTs - item.lastFailedAt > LOGIN_TRACK_WINDOW_MS)
-      || (!item.lockedUntil && nowTs - item.windowStartedAt > LOGIN_TRACK_WINDOW_MS);
-    if (expired) loginAttempts.delete(key);
-  }
-  lastLoginAttemptGcAt = nowTs;
-}
+function createAuthRuntime() {
+  const authSessions = new Map();
+  const loginAttempts = new Map();
+  let lastLoginAttemptGcAt = 0;
 
-function getLoginThrottle(req, username) {
-  gcLoginAttempts();
-  const key = getLoginAttemptKey(req, username);
-  const item = loginAttempts.get(key);
-  if (!item) return null;
-  if (item.lockedUntil && item.lockedUntil > Date.now()) {
+  function gcLoginAttempts() {
+    const nowTs = Date.now();
+    if (nowTs - lastLoginAttemptGcAt < LOGIN_ATTEMPT_GC_MS) return;
+    for (const [key, item] of loginAttempts.entries()) {
+      const expired = !item
+        || (item.lockedUntil && item.lockedUntil <= nowTs && nowTs - item.lastFailedAt > LOGIN_TRACK_WINDOW_MS)
+        || (!item.lockedUntil && nowTs - item.windowStartedAt > LOGIN_TRACK_WINDOW_MS);
+      if (expired) loginAttempts.delete(key);
+    }
+    lastLoginAttemptGcAt = nowTs;
+  }
+
+  function registerSession(user) {
+    const token = createAuthToken();
+    authSessions.set(token, {
+      userId: Number(user.id),
+      username: String(user.username).toLowerCase(),
+      issuedAt: Date.now(),
+    });
+    return token;
+  }
+
+  function getValidSession(token) {
+    const session = authSessions.get(token);
+    if (!session) return null;
+    if (Date.now() - Number(session.issuedAt || 0) > AUTH_TOKEN_TTL_MS) {
+      authSessions.delete(token);
+      return null;
+    }
+    return session;
+  }
+
+  function getLoginThrottle(req, username) {
+    gcLoginAttempts();
+    const key = getLoginAttemptKey(req, username);
+    const item = loginAttempts.get(key);
+    if (!item) return null;
+    if (item.lockedUntil && item.lockedUntil > Date.now()) {
+      return {
+        key,
+        lockedUntil: item.lockedUntil,
+        retryAfterSec: Math.max(1, Math.ceil((item.lockedUntil - Date.now()) / 1000)),
+      };
+    }
+    return null;
+  }
+
+  function registerLoginFailure(req, username) {
+    gcLoginAttempts();
+    const key = getLoginAttemptKey(req, username);
+    const nowTs = Date.now();
+    const current = loginAttempts.get(key);
+    const windowExpired = !current || nowTs - Number(current.windowStartedAt || 0) > LOGIN_TRACK_WINDOW_MS;
+
+    const next = windowExpired
+      ? { count: 1, windowStartedAt: nowTs, lastFailedAt: nowTs, lockedUntil: 0 }
+      : {
+          ...current,
+          count: Number(current.count || 0) + 1,
+          lastFailedAt: nowTs,
+        };
+
+    if (next.count >= LOGIN_MAX_ATTEMPTS) {
+      next.lockedUntil = nowTs + LOGIN_LOCK_MS;
+      next.count = 0;
+      next.windowStartedAt = nowTs;
+    }
+
+    loginAttempts.set(key, next);
     return {
-      key,
-      lockedUntil: item.lockedUntil,
-      retryAfterSec: Math.max(1, Math.ceil((item.lockedUntil - Date.now()) / 1000)),
+      locked: next.lockedUntil > nowTs,
+      retryAfterSec: next.lockedUntil > nowTs ? Math.max(1, Math.ceil((next.lockedUntil - nowTs) / 1000)) : 0,
     };
   }
-  return null;
-}
 
-function registerLoginFailure(req, username) {
-  gcLoginAttempts();
-  const key = getLoginAttemptKey(req, username);
-  const nowTs = Date.now();
-  const current = loginAttempts.get(key);
-  const windowExpired = !current || nowTs - Number(current.windowStartedAt || 0) > LOGIN_TRACK_WINDOW_MS;
-
-  const next = windowExpired
-    ? { count: 1, windowStartedAt: nowTs, lastFailedAt: nowTs, lockedUntil: 0 }
-    : {
-        ...current,
-        count: Number(current.count || 0) + 1,
-        lastFailedAt: nowTs,
-      };
-
-  if (next.count >= LOGIN_MAX_ATTEMPTS) {
-    next.lockedUntil = nowTs + LOGIN_LOCK_MS;
-    next.count = 0;
-    next.windowStartedAt = nowTs;
+  function clearLoginFailures(req, username) {
+    const key = getLoginAttemptKey(req, username);
+    loginAttempts.delete(key);
   }
 
-  loginAttempts.set(key, next);
-  return {
-    locked: next.lockedUntil > nowTs,
-    retryAfterSec: next.lockedUntil > nowTs ? Math.max(1, Math.ceil((next.lockedUntil - nowTs) / 1000)) : 0,
-  };
-}
+  async function writeSecurityAudit(req, payload) {
+    try {
+      await updateDb((db) =>
+        pushAuditWithContext(db, req, {
+          modulo: 'otros',
+          entidad: 'sesion',
+          ...payload,
+        }));
+    } catch {
+      // No interrumpir el flujo de autenticacion por fallas de auditoria.
+    }
+  }
 
-function clearLoginFailures(req, username) {
-  const key = getLoginAttemptKey(req, username);
-  loginAttempts.delete(key);
+  async function requireAuth(req, res, next) {
+    try {
+      const token = parseBearerToken(req.headers.authorization);
+      if (!token) {
+        return res.status(401).json({ error: 'Sesion requerida.' });
+      }
+
+      const session = getValidSession(token);
+      if (!session) {
+        return res.status(401).json({ error: 'Sesion invalida o expirada.' });
+      }
+
+      const db = await readDb();
+      const user = db.users.find(
+        (u) =>
+          Number(u.id) === Number(session.userId) &&
+          String(u.username).toLowerCase() === String(session.username).toLowerCase() &&
+          u.activo !== false,
+      );
+
+      if (!user) {
+        authSessions.delete(token);
+        return res.status(401).json({ error: 'Usuario no autorizado.' });
+      }
+
+      req.authToken = token;
+      req.authUser = sanitizeUser(user);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  function revokeSessionsByUserId(userId) {
+    for (const [token, session] of authSessions.entries()) {
+      if (Number(session?.userId) === Number(userId)) {
+        authSessions.delete(token);
+      }
+    }
+  }
+
+  function destroySession(token) {
+    if (!token) return;
+    authSessions.delete(token);
+  }
+
+  return {
+    clearLoginFailures,
+    destroySession,
+    getLoginThrottle,
+    registerLoginFailure,
+    registerSession,
+    requireAuth,
+    revokeSessionsByUserId,
+    writeSecurityAudit,
+  };
 }
 
 async function ensureUploadDir() {
@@ -1253,6 +1274,18 @@ function importAssets(db, options) {
   return report;
 }
 
+function registerRoutes(app, authRuntime) {
+  const {
+    clearLoginFailures,
+    destroySession,
+    getLoginThrottle,
+    registerLoginFailure,
+    registerSession,
+    requireAuth,
+    revokeSessionsByUserId,
+    writeSecurityAudit,
+  } = authRuntime;
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -1467,7 +1500,7 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
   try {
     const actor = getRequestActor(req);
-    if (req.authToken) authSessions.delete(req.authToken);
+    destroySession(req.authToken);
     await writeSecurityAudit(req, {
       accion: 'Logout',
       item: actor.username || actor.usuario || 'N/A',
@@ -1833,10 +1866,23 @@ app.use((error, _req, res, _next) => {
   return res.status(500).json({ error: 'Error interno del servidor.' });
 });
 
+}
+
+export function createApp() {
+  const app = express();
+  const authRuntime = createAuthRuntime();
+  configureTrustProxy(app);
+  configureCommonMiddleware(app);
+  registerRoutes(app, authRuntime);
+  return app;
+}
+
+const app = createApp();
+
 export { app };
 
-export function startServer(port = PORT) {
-  return app.listen(port, () => {
+export function startServer(port = PORT, appInstance = app) {
+  return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
   });
 }
