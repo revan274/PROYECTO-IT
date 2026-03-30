@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react';
 import { LogoGigantes } from './components/brand/LogoGigantes';
+import { useAppStore } from './store/useAppStore';
 import { AppHeader } from './components/layout/AppHeader';
 import { AppSidebar } from './components/layout/AppSidebar';
 import { AssetDetailModal } from './components/modals/AssetDetailModal';
@@ -80,7 +81,6 @@ import type {
   ReportStateFilter,
   SupplyAuditMovement,
   SupplyStatusFilter,
-  ThemeMode,
   ToastState,
   ToastType,
   TicketAttentionType,
@@ -93,8 +93,6 @@ import type {
   TravelReportRow,
   UserItem,
   UserRole,
-  UserSession,
-  ViewType,
 } from './types/app';
 import {
   ApiError,
@@ -114,8 +112,6 @@ import {
   getStoredSessionToken,
   normalizeReportFilterSnapshot,
   readStoredReportFilterPresets,
-  readStoredSession,
-  readStoredTheme,
   writeStoredReportFilterPresets,
   writeStoredSession,
   writeStoredTheme,
@@ -221,7 +217,7 @@ const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
 const LazyAuditView = lazy(() => import('./components/views/AuditView'));
 
 type SpreadsheetRow = Record<string, unknown>;
-type NetworkSheetRow = any[];
+type NetworkSheetRow = unknown[];
 
 const LazyQRCodeCanvas = lazy(async () => {
   const module = await import('qrcode.react');
@@ -378,15 +374,13 @@ function isRouteNotFoundApiError(error: unknown): boolean {
 // --- APP PRINCIPAL ---
 
 export default function App() {
-  const [sessionUser, setSessionUser] = useState<UserSession | null>(() => readStoredSession()?.user || null);
-  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme());
+  const { sessionUser, setSessionUser, theme, toggleTheme, sidebarOpen, setSidebarOpen } = useAppStore();
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
-  const [view, setView] = useState<ViewType>('dashboard');
+  const [view, setView] = useState('dashboard'); // temporal
   const isDashboardView = view === 'dashboard';
   const isReportsView = view === 'reports';
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   // Estado de Datos
   const [activos, setActivos] = useState<Activo[]>(() => cloneInitialActivos());
   const [insumos, setInsumos] = useState<Insumo[]>(() => cloneInitialInsumos());
@@ -403,7 +397,7 @@ export default function App() {
   const [auditIntegrity, setAuditIntegrity] = useState<AuditIntegrityState | null>(null);
   const [auditAlerts, setAuditAlerts] = useState<AuditAlertsState | null>(null);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
-  
+
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>('30D');
@@ -426,7 +420,7 @@ export default function App() {
   const [travelReportFinance, setTravelReportFinance] = useState(TRAVEL_DEFAULT_FINANCE);
   const [travelKmsByBranch, setTravelKmsByBranch] = useState<Record<string, string>>(() => buildDefaultTravelKmsByBranch());
   const [showModal, setShowModal] = useState<ModalType>(null);
-  const [selectedAsset, setSelectedAsset] = useState<Activo | null>(null); 
+  const [selectedAsset, setSelectedAsset] = useState<Activo | null>(null);
   const [selectedSupplyHistoryItem, setSelectedSupplyHistoryItem] = useState<Insumo | null>(null);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrScannerStatus, setQrScannerStatus] = useState('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
@@ -456,7 +450,7 @@ export default function App() {
   const qrScannerStreamRef = useRef<MediaStream | null>(null);
   const qrScannerIntervalRef = useRef<number | null>(null);
   const qrScannerBusyRef = useRef(false);
-  const fetchAuditHistoryRef = useRef<(options?: { force?: boolean }) => void>(() => {});
+  const fetchAuditHistoryRef = useRef<(options?: { force?: boolean }) => void>(() => { });
   const [isImportingInventory, setIsImportingInventory] = useState(false);
   const [inventoryDepartmentFilter, setInventoryDepartmentFilter] = useState('TODOS');
   const [inventoryEquipmentFilter, setInventoryEquipmentFilter] = useState('TODOS');
@@ -569,9 +563,6 @@ export default function App() {
   }, [editingInsumoId, formData.categoria, formData.min, formData.nombre, formData.stock, formData.unidad, insumos]);
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     setToast({ message, type });
-  }, []);
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
   const selectedAssetFallbackQrPayload = useMemo(
     () => (selectedAsset ? buildAssetQrPayload(selectedAsset) : ''),
@@ -849,7 +840,7 @@ export default function App() {
     setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
     setIsQrScannerActive(false);
     setIsResolvingQr(false);
-  }, [applyReportFilterSnapshot]);
+  }, [applyReportFilterSnapshot, setSessionUser]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -1265,7 +1256,7 @@ export default function App() {
 
     printWindow.onload = triggerPrint;
     window.setTimeout(triggerPrint, 450);
-  }, [activeTicketBranchCodes, selectedAsset, selectedAssetQrMode, showToast]);
+  }, [activeTicketBranchCodes, selectedAsset, showToast]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!sessionUser) return;
@@ -1725,12 +1716,12 @@ export default function App() {
             prev.map((user) =>
               user.id === editingUserId
                 ? {
-                    ...user,
-                    nombre,
-                    username,
-                    departamento,
-                    rol,
-                  }
+                  ...user,
+                  nombre,
+                  username,
+                  departamento,
+                  rol,
+                }
                 : user,
             ),
           );
@@ -1766,12 +1757,12 @@ export default function App() {
           prev.map((user) =>
             user.id === editingUserId
               ? {
-                  ...user,
-                  nombre,
-                  username,
-                  departamento,
-                  rol,
-                }
+                ...user,
+                nombre,
+                username,
+                departamento,
+                rol,
+              }
               : user,
           ),
         );
@@ -2790,14 +2781,14 @@ export default function App() {
         prev.map((ticket) =>
           ticket.id === id
             ? {
-                ...ticket,
-                estado: 'Resuelto',
-                fechaCierre: ticket.fechaCierre || new Date().toISOString(),
-                historial: [
-                  buildTicketHistoryEntry('Ticket Resuelto', 'Resuelto', sessionUser?.nombre || 'Admin IT', 'Resolucion en modo local'),
-                  ...(ticket.historial || []),
-                ],
-              }
+              ...ticket,
+              estado: 'Resuelto',
+              fechaCierre: ticket.fechaCierre || new Date().toISOString(),
+              historial: [
+                buildTicketHistoryEntry('Ticket Resuelto', 'Resuelto', sessionUser?.nombre || 'Admin IT', 'Resolucion en modo local'),
+                ...(ticket.historial || []),
+              ],
+            }
             : ticket,
         ),
       );
@@ -2992,12 +2983,12 @@ export default function App() {
           prev.map((ticket) =>
             ticket.id === ticketId
               ? {
-                  ...ticket,
-                  historial: [
-                    buildTicketHistoryEntry('Comentario', ticket.estado, sessionUser?.nombre || 'Sistema', comentario),
-                    ...(ticket.historial || []),
-                  ],
-                }
+                ...ticket,
+                historial: [
+                  buildTicketHistoryEntry('Comentario', ticket.estado, sessionUser?.nombre || 'Sistema', comentario),
+                  ...(ticket.historial || []),
+                ],
+              }
               : ticket,
           ),
         );
@@ -3070,13 +3061,13 @@ export default function App() {
           prev.map((ticket) =>
             ticket.id === ticketId
               ? {
-                  ...ticket,
-                  attachments: [attachment, ...(ticket.attachments || [])],
-                  historial: [
-                    buildTicketHistoryEntry('Adjunto agregado', ticket.estado, sessionUser?.nombre || 'Sistema', file.name),
-                    ...(ticket.historial || []),
-                  ],
-                }
+                ...ticket,
+                attachments: [attachment, ...(ticket.attachments || [])],
+                historial: [
+                  buildTicketHistoryEntry('Adjunto agregado', ticket.estado, sessionUser?.nombre || 'Sistema', file.name),
+                  ...(ticket.historial || []),
+                ],
+              }
               : ticket,
           ),
         );
@@ -3156,13 +3147,13 @@ export default function App() {
           prev.map((ticket) =>
             ticket.id === ticketId
               ? {
-                  ...ticket,
-                  attachments: (ticket.attachments || []).filter((item) => item.id !== attachment.id),
-                  historial: [
-                    buildTicketHistoryEntry('Adjunto eliminado', ticket.estado, sessionUser?.nombre || 'Sistema', attachment.fileName),
-                    ...(ticket.historial || []),
-                  ],
-                }
+                ...ticket,
+                attachments: (ticket.attachments || []).filter((item) => item.id !== attachment.id),
+                historial: [
+                  buildTicketHistoryEntry('Adjunto eliminado', ticket.estado, sessionUser?.nombre || 'Sistema', attachment.fileName),
+                  ...(ticket.historial || []),
+                ],
+              }
               : ticket,
           ),
         );
@@ -3531,8 +3522,8 @@ export default function App() {
 
   const importIssueRows = importDraft
     ? [...(importDraft.preview.details || []), ...importDraft.localInvalidDetails].filter(
-        (detail) => detail.status === 'invalid' || detail.status === 'skipped',
-      )
+      (detail) => detail.status === 'invalid' || detail.status === 'skipped',
+    )
     : [];
 
   const effectiveAuditRows = useMemo(
@@ -3687,10 +3678,10 @@ export default function App() {
       !isDashboardView
         ? []
         :
-      scopedTickets.filter((ticket) => {
-        const ts = ticketCreatedTimestamp(ticket);
-        return ts >= dashboardWindow.startMs && ts <= dashboardWindow.endMs;
-      }),
+        scopedTickets.filter((ticket) => {
+          const ts = ticketCreatedTimestamp(ticket);
+          return ts >= dashboardWindow.startMs && ts <= dashboardWindow.endMs;
+        }),
     [dashboardWindow.endMs, dashboardWindow.startMs, isDashboardView, scopedTickets],
   );
   const dashboardTicketsPrevious = useMemo(
@@ -3698,10 +3689,10 @@ export default function App() {
       !isDashboardView
         ? []
         :
-      scopedTickets.filter((ticket) => {
-        const ts = ticketCreatedTimestamp(ticket);
-        return ts >= dashboardWindow.previousStartMs && ts <= dashboardWindow.previousEndMs;
-      }),
+        scopedTickets.filter((ticket) => {
+          const ts = ticketCreatedTimestamp(ticket);
+          return ts >= dashboardWindow.previousStartMs && ts <= dashboardWindow.previousEndMs;
+        }),
     [dashboardWindow.previousEndMs, dashboardWindow.previousStartMs, isDashboardView, scopedTickets],
   );
   const dashboardOpenTicketsCurrent = useMemo(
@@ -3888,12 +3879,12 @@ export default function App() {
       !isReportsView
         ? []
         :
-      scopedTickets.filter((ticket) => {
-        const createdAt = ticketCreatedTimestamp(ticket);
-        if (reportStartMs !== null && createdAt < reportStartMs) return false;
-        if (reportEndMs !== null && createdAt > reportEndMs) return false;
-        return true;
-      }),
+        scopedTickets.filter((ticket) => {
+          const createdAt = ticketCreatedTimestamp(ticket);
+          if (reportStartMs !== null && createdAt < reportStartMs) return false;
+          if (reportEndMs !== null && createdAt > reportEndMs) return false;
+          return true;
+        }),
     [isReportsView, reportEndMs, reportStartMs, scopedTickets],
   );
   const reportBranchOptions = useMemo(
@@ -3944,8 +3935,8 @@ export default function App() {
       !isReportsView
         ? []
         :
-      scopedTickets
-        .filter((ticket) => matchesReportCoreFilters(ticket)),
+        scopedTickets
+          .filter((ticket) => matchesReportCoreFilters(ticket)),
     [isReportsView, matchesReportCoreFilters, scopedTickets],
   );
   const travelTechnicianOptions = useMemo(
@@ -4095,9 +4086,9 @@ export default function App() {
       !isReportsView
         ? []
         :
-      scopedTickets
-        .filter((ticket) => matchesReportCoreFilters(ticket))
-        .filter((ticket) => matchesReportTechnician(ticket, reportTechnicianFilter)),
+        scopedTickets
+          .filter((ticket) => matchesReportCoreFilters(ticket))
+          .filter((ticket) => matchesReportTechnician(ticket, reportTechnicianFilter)),
     [isReportsView, matchesReportCoreFilters, reportTechnicianFilter, scopedTickets],
   );
   const reportTickets = useMemo(
@@ -4105,14 +4096,14 @@ export default function App() {
       !isReportsView
         ? []
         :
-      reportScopedTicketsByFilters
-        .filter((ticket) => {
-          const createdAt = ticketCreatedTimestamp(ticket);
-          if (reportStartMs !== null && createdAt < reportStartMs) return false;
-          if (reportEndMs !== null && createdAt > reportEndMs) return false;
-          return true;
-        })
-        .sort((a, b) => ticketTimestamp(b) - ticketTimestamp(a)),
+        reportScopedTicketsByFilters
+          .filter((ticket) => {
+            const createdAt = ticketCreatedTimestamp(ticket);
+            if (reportStartMs !== null && createdAt < reportStartMs) return false;
+            if (reportEndMs !== null && createdAt > reportEndMs) return false;
+            return true;
+          })
+          .sort((a, b) => ticketTimestamp(b) - ticketTimestamp(a)),
     [isReportsView, reportEndMs, reportScopedTicketsByFilters, reportStartMs],
   );
   const reportPreviousTickets = useMemo(() => {
@@ -4268,10 +4259,10 @@ export default function App() {
     () => (
       reportComparisonWindow
         ? formatMetricTrend(reportSlaCompliancePct, reportPreviousSlaCompliancePct, {
-            positiveIsGood: true,
-            unitSuffix: '%',
-            usePoints: true,
-          })
+          positiveIsGood: true,
+          unitSuffix: '%',
+          usePoints: true,
+        })
         : reportDefaultTrend
     ),
     [reportComparisonWindow, reportDefaultTrend, reportPreviousSlaCompliancePct, reportSlaCompliancePct],
@@ -4280,10 +4271,10 @@ export default function App() {
     () => (
       reportComparisonWindow
         ? formatMetricTrend(reportMedianResolutionHours, reportPreviousMedianResolutionHours, {
-            positiveIsGood: false,
-            decimals: 1,
-            unitSuffix: ' h',
-          })
+          positiveIsGood: false,
+          decimals: 1,
+          unitSuffix: ' h',
+        })
         : reportDefaultTrend
     ),
     [reportComparisonWindow, reportDefaultTrend, reportMedianResolutionHours, reportPreviousMedianResolutionHours],
@@ -4292,10 +4283,10 @@ export default function App() {
     () => (
       reportComparisonWindow
         ? formatMetricTrend(reportP90ResolutionHours, reportPreviousP90ResolutionHours, {
-            positiveIsGood: false,
-            decimals: 1,
-            unitSuffix: ' h',
-          })
+          positiveIsGood: false,
+          decimals: 1,
+          unitSuffix: ' h',
+        })
         : reportDefaultTrend
     ),
     [reportComparisonWindow, reportDefaultTrend, reportP90ResolutionHours, reportPreviousP90ResolutionHours],
@@ -5370,7 +5361,7 @@ export default function App() {
             </div>
           )}
           <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
-            
+
 
 
             {/* VISTA DASHBOARD */}
@@ -6212,8 +6203,8 @@ export default function App() {
               </button>
             </div>
             <form onSubmit={handleSave} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
-               {isAssetModal && (
-                 <>
+              {isAssetModal && (
+                <>
                   <div className="space-y-6">
                     <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
                       <div className="flex justify-between items-center">
@@ -6401,268 +6392,263 @@ export default function App() {
                       />
                     </section>
                   </div>
-                 </>
-               )}
-               {isSupplyModal && (
-                 <>
-                   <div className="space-y-1">
-                     <input
-                       required
-                       autoFocus
-                       placeholder="NOMBRE"
-                       value={formData.nombre || ''}
-                       onBlur={() => markInsumoTouched('nombre')}
-                       onChange={(e) => updateFormData({ nombre: e.target.value })}
-                       className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${
-                         insumoTouched.nombre && insumoFormValidation.errors.nombre
-                           ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                           : 'bg-slate-50 border border-slate-100'
-                       }`}
-                     />
-                     {insumoTouched.nombre && insumoFormValidation.errors.nombre && (
-                       <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                         {insumoFormValidation.errors.nombre}
-                       </p>
-                     )}
-                   </div>
-                   <div className="space-y-1">
-                     <input
-                       required
-                       placeholder="UNIDAD"
-                       value={formData.unidad || ''}
-                       onBlur={() => markInsumoTouched('unidad')}
-                       onChange={(e) => updateFormData({ unidad: e.target.value })}
-                       list="supply-unit-options"
-                       className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${
-                         insumoTouched.unidad && insumoFormValidation.errors.unidad
-                           ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                           : 'bg-slate-50 border border-slate-100'
-                       }`}
-                     />
-                     <datalist id="supply-unit-options">
-                       {SUPPLY_UNIT_OPTIONS.map((unidad) => (
-                         <option key={unidad} value={unidad} />
-                       ))}
-                     </datalist>
-                     {insumoTouched.unidad && insumoFormValidation.errors.unidad && (
-                       <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                         {insumoFormValidation.errors.unidad}
-                       </p>
-                     )}
-                   </div>
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-1">
-                       <input
-                         required
-                         type="number"
-                         min={0}
-                         step={1}
-                         inputMode="numeric"
-                         placeholder="STOCK"
-                         value={String(formData.stock ?? '')}
-                         onBlur={() => markInsumoTouched('stock')}
-                         onKeyDown={preventInvalidIntegerInputKeys}
-                         onChange={(e) => updateFormData({ stock: digitsOnly(e.target.value) })}
-                         className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${
-                           insumoTouched.stock && insumoFormValidation.errors.stock
-                             ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                             : 'bg-slate-50 border border-slate-100'
-                         }`}
-                       />
-                       {insumoTouched.stock && insumoFormValidation.errors.stock && (
-                         <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                           {insumoFormValidation.errors.stock}
-                         </p>
-                       )}
-                     </div>
-                     <div className="space-y-1">
-                       <input
-                         required
-                         type="number"
-                         min={0}
-                         step={1}
-                         inputMode="numeric"
-                         placeholder="MÍNIMO"
-                         value={String(formData.min ?? '')}
-                         onBlur={() => markInsumoTouched('min')}
-                         onKeyDown={preventInvalidIntegerInputKeys}
-                         onChange={(e) => updateFormData({ min: digitsOnly(e.target.value) })}
-                         className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${
-                           insumoTouched.min && insumoFormValidation.errors.min
-                             ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                             : 'bg-slate-50 border border-slate-100'
-                         }`}
-                       />
-                       {insumoTouched.min && insumoFormValidation.errors.min && (
-                         <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                           {insumoFormValidation.errors.min}
-                         </p>
-                       )}
-                     </div>
-                   </div>
-                   <div className="space-y-1">
-                     <select
-                       required
-                       value={formData.categoria || ''}
-                       onBlur={() => markInsumoTouched('categoria')}
-                       onChange={(e) => updateFormData({ categoria: e.target.value.toUpperCase() })}
-                       className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${
-                         insumoTouched.categoria && insumoFormValidation.errors.categoria
-                           ? 'bg-red-50/40 border border-red-200 text-red-700'
-                           : 'bg-slate-50 border border-slate-100 text-slate-700'
-                       }`}
-                     >
-                       <option value="" disabled>Selecciona categoría...</option>
-                       {CATEGORIAS_INSUMO.map((categoria) => (
-                         <option key={categoria} value={categoria}>{categoria}</option>
-                       ))}
-                     </select>
-                     {insumoTouched.categoria && insumoFormValidation.errors.categoria && (
-                       <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                         {insumoFormValidation.errors.categoria}
-                       </p>
-                     )}
-                   </div>
-                 </>
-               )}
-               {isTicketModal && (
-                 <>
-                   <select
-                     required
-                     className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                     value={formData.sucursal || ''}
-                     onChange={e => updateFormData({ sucursal: e.target.value.toUpperCase() })}
-                   >
-                         {activeTicketBranches.length === 0 ? (
-                           <option value="">Sin sucursales configuradas</option>
-                         ) : (
-                           activeTicketBranches.map((branch) => (
-                             <option key={branch.code} value={branch.code}>{branch.code} - {branch.name}</option>
-                           ))
-                         )}
-                   </select>
-                   <select
-                     required
-                     disabled={!formData.sucursal || ticketAssetOptions.length === 0}
-                     className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
-                     value={formData.activoTag || ''}
-                     onChange={e => updateFormData({ activoTag: e.target.value.toUpperCase() })}
-                   >
-                     <option value="">
-                       {!formData.sucursal
-                         ? 'Primero selecciona sucursal...'
-                         : ticketAssetOptions.length === 0
-                           ? 'Sin activos registrados en esta sucursal'
-                           : 'Selecciona TAG equipo...'}
-                     </option>
-                     {ticketAssetOptions.map((assetOption) => (
-                       <option key={assetOption.tag} value={assetOption.tag}>
-                         {assetOption.label}
-                       </option>
-                     ))}
-                   </select>
-                   <p className="text-[10px] text-slate-400 font-black uppercase">
-                     Activos en sucursal seleccionada: {ticketAssetOptions.length}
-                   </p>
-                    <select
+                </>
+              )}
+              {isSupplyModal && (
+                <>
+                  <div className="space-y-1">
+                    <input
                       required
-                      value={formData.areaAfectada || ''}
-                      onChange={e => updateFormData({ areaAfectada: e.target.value, fallaComun: '' })}
-                      className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                   >
-                     <option value="">Área afectada...</option>
-                     {TICKET_AREA_OPTIONS.map((area) => (
-                        <option key={`afe-${area}`} value={area}>{area}</option>
+                      autoFocus
+                      placeholder="NOMBRE"
+                      value={formData.nombre || ''}
+                      onBlur={() => markInsumoTouched('nombre')}
+                      onChange={(e) => updateFormData({ nombre: e.target.value })}
+                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.nombre && insumoFormValidation.errors.nombre
+                          ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
+                          : 'bg-slate-50 border border-slate-100'
+                        }`}
+                    />
+                    {insumoTouched.nombre && insumoFormValidation.errors.nombre && (
+                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
+                        {insumoFormValidation.errors.nombre}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <input
+                      required
+                      placeholder="UNIDAD"
+                      value={formData.unidad || ''}
+                      onBlur={() => markInsumoTouched('unidad')}
+                      onChange={(e) => updateFormData({ unidad: e.target.value })}
+                      list="supply-unit-options"
+                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.unidad && insumoFormValidation.errors.unidad
+                          ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
+                          : 'bg-slate-50 border border-slate-100'
+                        }`}
+                    />
+                    <datalist id="supply-unit-options">
+                      {SUPPLY_UNIT_OPTIONS.map((unidad) => (
+                        <option key={unidad} value={unidad} />
                       ))}
-                    </select>
+                    </datalist>
+                    {insumoTouched.unidad && insumoFormValidation.errors.unidad && (
+                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
+                        {insumoFormValidation.errors.unidad}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <input
+                        required
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        placeholder="STOCK"
+                        value={String(formData.stock ?? '')}
+                        onBlur={() => markInsumoTouched('stock')}
+                        onKeyDown={preventInvalidIntegerInputKeys}
+                        onChange={(e) => updateFormData({ stock: digitsOnly(e.target.value) })}
+                        className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${insumoTouched.stock && insumoFormValidation.errors.stock
+                            ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
+                            : 'bg-slate-50 border border-slate-100'
+                          }`}
+                      />
+                      {insumoTouched.stock && insumoFormValidation.errors.stock && (
+                        <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
+                          {insumoFormValidation.errors.stock}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <input
+                        required
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        placeholder="MÍNIMO"
+                        value={String(formData.min ?? '')}
+                        onBlur={() => markInsumoTouched('min')}
+                        onKeyDown={preventInvalidIntegerInputKeys}
+                        onChange={(e) => updateFormData({ min: digitsOnly(e.target.value) })}
+                        className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${insumoTouched.min && insumoFormValidation.errors.min
+                            ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
+                            : 'bg-slate-50 border border-slate-100'
+                          }`}
+                      />
+                      {insumoTouched.min && insumoFormValidation.errors.min && (
+                        <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
+                          {insumoFormValidation.errors.min}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
                     <select
                       required
-                      value={formData.atencionTipo || ''}
-                      onChange={(e) => {
-                        const value = normalizeTicketAttentionType(e.target.value);
-                        updateFormData({ atencionTipo: value || undefined });
-                      }}
-                      className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                      value={formData.categoria || ''}
+                      onBlur={() => markInsumoTouched('categoria')}
+                      onChange={(e) => updateFormData({ categoria: e.target.value.toUpperCase() })}
+                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.categoria && insumoFormValidation.errors.categoria
+                          ? 'bg-red-50/40 border border-red-200 text-red-700'
+                          : 'bg-slate-50 border border-slate-100 text-slate-700'
+                        }`}
                     >
-                      <option value="">Tipo de atención...</option>
-                      {TICKET_ATTENTION_TYPES.map((type) => (
-                        <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
+                      <option value="" disabled>Selecciona categoría...</option>
+                      {CATEGORIAS_INSUMO.map((categoria) => (
+                        <option key={categoria} value={categoria}>{categoria}</option>
                       ))}
                     </select>
-                    <textarea
-                      required
-                      placeholder="DESCRIPCIÓN DE LA FALLA"
-                     value={formData.descripcion || ''}
-                     className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase h-24 outline-none"
-                     onChange={e => updateFormData({ descripcion: e.target.value })}
-                   />
-                   <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                       Falla común por área
-                     </p>
-                     <select
-                       value={formData.fallaComun || ''}
-                       disabled={!selectedIssueArea || issueOptionsForSelectedArea.length === 0}
-                       onChange={(e) =>
-                         updateFormData({
-                           fallaComun: e.target.value,
-                           descripcion: e.target.value,
-                         })
-                       }
-                       className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
-                     >
-                       <option value="">
-                         {!selectedIssueArea
-                           ? 'Primero selecciona área afectada'
-                           : issueOptionsForSelectedArea.length === 0
-                             ? 'Sin fallas configuradas para esta área'
-                             : 'Selecciona una falla común...'}
-                       </option>
-                       {issueOptionsForSelectedArea.map((issue) => (
-                         <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>
-                       ))}
-                     </select>
-                   </div>
+                    {insumoTouched.categoria && insumoFormValidation.errors.categoria && (
+                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
+                        {insumoFormValidation.errors.categoria}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+              {isTicketModal && (
+                <>
+                  <select
+                    required
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                    value={formData.sucursal || ''}
+                    onChange={e => updateFormData({ sucursal: e.target.value.toUpperCase() })}
+                  >
+                    {activeTicketBranches.length === 0 ? (
+                      <option value="">Sin sucursales configuradas</option>
+                    ) : (
+                      activeTicketBranches.map((branch) => (
+                        <option key={branch.code} value={branch.code}>{branch.code} - {branch.name}</option>
+                      ))
+                    )}
+                  </select>
+                  <select
+                    required
+                    disabled={!formData.sucursal || ticketAssetOptions.length === 0}
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
+                    value={formData.activoTag || ''}
+                    onChange={e => updateFormData({ activoTag: e.target.value.toUpperCase() })}
+                  >
+                    <option value="">
+                      {!formData.sucursal
+                        ? 'Primero selecciona sucursal...'
+                        : ticketAssetOptions.length === 0
+                          ? 'Sin activos registrados en esta sucursal'
+                          : 'Selecciona TAG equipo...'}
+                    </option>
+                    {ticketAssetOptions.map((assetOption) => (
+                      <option key={assetOption.tag} value={assetOption.tag}>
+                        {assetOption.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 font-black uppercase">
+                    Activos en sucursal seleccionada: {ticketAssetOptions.length}
+                  </p>
+                  <select
+                    required
+                    value={formData.areaAfectada || ''}
+                    onChange={e => updateFormData({ areaAfectada: e.target.value, fallaComun: '' })}
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                  >
+                    <option value="">Área afectada...</option>
+                    {TICKET_AREA_OPTIONS.map((area) => (
+                      <option key={`afe-${area}`} value={area}>{area}</option>
+                    ))}
+                  </select>
+                  <select
+                    required
+                    value={formData.atencionTipo || ''}
+                    onChange={(e) => {
+                      const value = normalizeTicketAttentionType(e.target.value);
+                      updateFormData({ atencionTipo: value || undefined });
+                    }}
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                  >
+                    <option value="">Tipo de atención...</option>
+                    {TICKET_ATTENTION_TYPES.map((type) => (
+                      <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    required
+                    placeholder="DESCRIPCIÓN DE LA FALLA"
+                    value={formData.descripcion || ''}
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase h-24 outline-none"
+                    onChange={e => updateFormData({ descripcion: e.target.value })}
+                  />
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Falla común por área
+                    </p>
+                    <select
+                      value={formData.fallaComun || ''}
+                      disabled={!selectedIssueArea || issueOptionsForSelectedArea.length === 0}
+                      onChange={(e) =>
+                        updateFormData({
+                          fallaComun: e.target.value,
+                          descripcion: e.target.value,
+                        })
+                      }
+                      className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
+                    >
+                      <option value="">
+                        {!selectedIssueArea
+                          ? 'Primero selecciona área afectada'
+                          : issueOptionsForSelectedArea.length === 0
+                            ? 'Sin fallas configuradas para esta área'
+                            : 'Selecciona una falla común...'}
+                      </option>
+                      {issueOptionsForSelectedArea.map((issue) => (
+                        <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                   <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.prioridad || 'MEDIA'} onChange={e => updateFormData({ prioridad: e.target.value as PrioridadTicket })}>
-                         <option value="MEDIA">Media</option>
-                         <option value="ALTA">Alta</option>
-                         <option value="CRITICA">Crítica</option>
-                   </select>
-                   {canEdit ? (
-                     <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.asignadoA || ''} onChange={e => updateFormData({ asignadoA: e.target.value })}>
-                           <option value="">Asignar técnico...</option>
-                           {users
-                             .filter((u) => (u.rol === 'tecnico' || u.rol === 'admin') && u.activo !== false)
-                             .map((u) => (
-                               <option key={u.id} value={u.nombre}>{u.nombre}</option>
-                             ))}
-                     </select>
-                   ) : (
-                     <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
-                       El ticket se registrará sin asignación inicial.
-                     </div>
-                   )}
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                     <input
-                       disabled
-                       value={sessionUser?.nombre || ''}
-                       className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
-                     />
-                     <input
-                       disabled
-                       value={formatTicketBranchFromCatalog(formData.sucursal)}
-                       className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
-                     />
-                   </div>
-                   <p className="text-[10px] text-slate-400 font-black uppercase">
-                     Cargo solicitante: {formatCargoFromCatalog(sessionUser?.departamento)}
-                   </p>
-                   <p className="text-[10px] text-slate-400 font-black uppercase">
-                     SLA estimado: {SLA_POLICY[formData.prioridad || 'MEDIA']} horas
-                   </p>
-                 </>
-               )}
+                  <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.prioridad || 'MEDIA'} onChange={e => updateFormData({ prioridad: e.target.value as PrioridadTicket })}>
+                    <option value="MEDIA">Media</option>
+                    <option value="ALTA">Alta</option>
+                    <option value="CRITICA">Crítica</option>
+                  </select>
+                  {canEdit ? (
+                    <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.asignadoA || ''} onChange={e => updateFormData({ asignadoA: e.target.value })}>
+                      <option value="">Asignar técnico...</option>
+                      {users
+                        .filter((u) => (u.rol === 'tecnico' || u.rol === 'admin') && u.activo !== false)
+                        .map((u) => (
+                          <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                        ))}
+                    </select>
+                  ) : (
+                    <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
+                      El ticket se registrará sin asignación inicial.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      disabled
+                      value={sessionUser?.nombre || ''}
+                      className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
+                    />
+                    <input
+                      disabled
+                      value={formatTicketBranchFromCatalog(formData.sucursal)}
+                      className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-black uppercase">
+                    Cargo solicitante: {formatCargoFromCatalog(sessionUser?.departamento)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-black uppercase">
+                    SLA estimado: {SLA_POLICY[formData.prioridad || 'MEDIA']} horas
+                  </p>
+                </>
+              )}
               {isSupplyModal ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <button
@@ -6691,8 +6677,8 @@ export default function App() {
                 </button>
               )}
             </form>
-           </div>
-         </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL HISTORIAL INSUMO */}
@@ -6757,7 +6743,7 @@ export default function App() {
         onPrintQr={imprimirEtiquetaQrActivoSeleccionado}
         onDeleteAsset={eliminarActivo}
       />
-      
+
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
     </div>

@@ -1,11 +1,18 @@
 import React from 'react';
 import { Download } from 'lucide-react';
 import { Badge } from '../ui/Badge';
-import type { AuditModule, AuditFiltersState } from '../../types/app';
+import type {
+  AuditAlertsState,
+  AuditFiltersState,
+  AuditIntegrityState,
+  AuditModule,
+  AuditPaginationState,
+  RegistroAuditoria,
+} from '../../types/app';
 
 interface AuditViewProps {
   isAuditLoading: boolean;
-  auditRowsForGrouping: any[];
+  auditRowsForGrouping: RegistroAuditoria[];
   resetAuditFilters: () => void;
   fetchAuditHistory: () => Promise<void>;
   descargarAuditoria: (module?: AuditModule) => void;
@@ -13,18 +20,18 @@ interface AuditViewProps {
   updateAuditFilters: (filters: Partial<AuditFiltersState>) => void;
   auditModuleTotals: { tickets: number; insumos: number; activos: number; otros: number };
   auditResultTotals: { ok: number; error: number };
-  auditIntegrity: { ok: boolean; invalid: number } | null;
-  auditAlerts: { errorCount24h: number } | null;
+  auditIntegrity: AuditIntegrityState | null;
+  auditAlerts: AuditAlertsState | null;
   auditByModule: {
-    tickets: any[];
-    insumos: any[];
-    activos: any[];
-    otros: any[];
+    tickets: RegistroAuditoria[];
+    insumos: RegistroAuditoria[];
+    activos: RegistroAuditoria[];
+    otros: RegistroAuditoria[];
   };
   backendConnected: boolean;
   isRequesterOnlyUser?: boolean;
   setAuditPage: React.Dispatch<React.SetStateAction<number>>;
-  auditPagination: { page: number; totalPages?: number; total?: number };
+  auditPagination: AuditPaginationState;
   auditPageSize: number;
   setAuditPageSize: React.Dispatch<React.SetStateAction<number>>;
 }

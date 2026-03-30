@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Activo, Insumo, TicketItem, ViewType } from '../../types/app';
+import type { Activo, DashboardRange, Insumo, TicketItem, ViewType } from '../../types/app';
 import { DASHBOARD_RANGES } from '../../constants/app';
 import { Badge } from '../ui/Badge';
 import { getSupplyHealthStatus } from '../../utils/appHelpers';
@@ -22,11 +22,11 @@ interface BarChartItem {
 
 interface DashboardViewProps {
   dashboardWindow: { label: string };
-  dashboardOpenTicketsCurrent: any[];
-  dashboardCriticalTicketsCurrent: any[];
+  dashboardOpenTicketsCurrent: TicketItem[];
+  dashboardCriticalTicketsCurrent: TicketItem[];
   dashboardUnassignedCount: number;
-  dashboardRange: string;
-  setDashboardRange: (val: any) => void;
+  dashboardRange: DashboardRange;
+  setDashboardRange: (val: DashboardRange) => void;
   systemHealth: number;
   insumos: Insumo[];
   dashboardOpenTrend: Trend;

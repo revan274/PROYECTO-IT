@@ -1,13 +1,15 @@
 import React from 'react';
 import { Upload, Download, ScanLine, Trash2, Plus, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/Badge';
-import type { Activo, EstadoActivo } from '../../types/app';
-
-// Definir tipos locales que puedan faltar (opcional si ya vienen en import)
-type InventoryRiskFilter = 'TODOS' | 'SIN_IP' | 'SIN_MAC' | 'SIN_RESP' | 'DUP_RED' | 'VIDA_ALTA';
-type InventorySortField = 'tag' | 'tipo' | 'estado' | 'responsable' | 'ubicacion' | 'aniosVida';
-type InventorySortDirection = 'asc' | 'desc';
-type ModalType = 'activo' | 'insumo' | 'ticket';
+import type {
+  Activo,
+  DuplicateRiskItem,
+  EstadoActivo,
+  InventoryRiskFilter,
+  InventorySortDirection,
+  InventorySortField,
+  ModalType,
+} from '../../types/app';
 
 interface InventoryViewProps {
   inventoryImportInputRef: React.RefObject<HTMLInputElement>;
@@ -36,7 +38,7 @@ interface InventoryViewProps {
   setInventoryEquipmentFilter: React.Dispatch<React.SetStateAction<string>>;
   equipoOptions: string[];
   inventoryStatusFilter: string | EstadoActivo;
-  setInventoryStatusFilter: React.Dispatch<React.SetStateAction<any>>;
+  setInventoryStatusFilter: React.Dispatch<React.SetStateAction<'TODOS' | EstadoActivo>>;
   inventoryRiskFilter: InventoryRiskFilter;
   setInventoryRiskFilter: React.Dispatch<React.SetStateAction<InventoryRiskFilter>>;
   inventorySortField: InventorySortField;
@@ -46,8 +48,8 @@ interface InventoryViewProps {
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
   applyInventoryFocus: (focus: InventoryRiskFilter | 'FALLA') => void;
   activosEnFalla: number;
-  duplicateIpEntries: any[];
-  duplicateMacEntries: any[];
+  duplicateIpEntries: DuplicateRiskItem[];
+  duplicateMacEntries: DuplicateRiskItem[];
   updateInventorySort: (field: InventorySortField) => void;
   getInventorySortIndicator: (field: InventorySortField) => React.ReactNode;
   sortedFilteredActivos: Activo[];
