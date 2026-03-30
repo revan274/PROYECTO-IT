@@ -99,7 +99,7 @@ Revisa `.env.example`. Variables principales:
 ## Notas
 - Todas las rutas de datos requieren `Authorization: Bearer <token>`.
 - Los permisos se validan por rol en sesion autenticada.
-- `passwordRemota` de activos solo se entrega a rol `admin`.
+- Las credenciales remotas de activos ya no se almacenan ni se exponen desde la aplicacion.
 - En produccion debes definir `QR_SIGNING_SECRET`; el backend rechaza valores inseguros por defecto.
 
 ## Despliegue en Render (1 servicio)

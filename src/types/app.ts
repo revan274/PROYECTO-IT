@@ -96,7 +96,6 @@ export interface Activo {
   departamento?: string;
   edo?: string;
   anydesk?: string;
-  passwordRemota?: string;
   aniosVida?: string;
   comentarios?: string;
 }
@@ -337,7 +336,6 @@ export interface FormDataState {
   departamento?: string;
   edo?: string;
   anydesk?: string;
-  passwordRemota?: string;
   aniosVida?: string;
   comentarios?: string;
   nombre?: string;

@@ -740,7 +740,8 @@ function normalizeAsset(item) {
   copy.departamento = text(copy.departamento).toUpperCase();
   copy.edo = text(copy.edo).toUpperCase();
   copy.anydesk = text(copy.anydesk);
-  copy.passwordRemota = text(copy.passwordRemota || copy.pass);
+  delete copy.passwordRemota;
+  delete copy.pass;
   copy.aniosVida = text(copy.aniosVida);
   copy.comentarios = text(copy.comentarios);
   return copy;
@@ -851,6 +852,15 @@ export async function readDb() {
   const raw = await fs.readFile(DB_FILE, 'utf8');
   const parsed = JSON.parse(raw);
   const normalized = normalizeDbShape(parsed);
+  const assetsRequireSecretMigration = Array.isArray(parsed?.activos)
+    && parsed.activos.some((asset) => (
+      asset
+      && typeof asset === 'object'
+      && (
+        Object.prototype.hasOwnProperty.call(asset, 'passwordRemota')
+        || Object.prototype.hasOwnProperty.call(asset, 'pass')
+      )
+    ));
   const usersRequireMigration = Array.isArray(parsed?.users)
     && parsed.users.some((user) => typeof user?.password === 'string' || !String(user?.passwordHash || '').trim());
   const auditRequiresMigration = Array.isArray(parsed?.auditoria)
@@ -859,15 +869,17 @@ export async function readDb() {
     || !Array.isArray(parsed.catalogos?.sucursales)
     || !Array.isArray(parsed.catalogos?.cargos)
     || !Array.isArray(parsed.catalogos?.roles);
-  if (usersRequireMigration || auditRequiresMigration || catalogsRequireMigration) {
-    await writeDb(normalized);
+  if (assetsRequireSecretMigration || usersRequireMigration || auditRequiresMigration || catalogsRequireMigration) {
+    await writeDb(normalized, { backup: !assetsRequireSecretMigration });
   }
   return normalized;
 }
 
-async function writeDb(db) {
+async function writeDb(db, options = {}) {
   await ensureDbFile();
-  await backupCurrentDbSnapshot();
+  if (options.backup !== false) {
+    await backupCurrentDbSnapshot();
+  }
   await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
 }
 

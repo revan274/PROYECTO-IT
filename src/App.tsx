@@ -933,7 +933,6 @@ export default function App() {
       responsable: selectedAsset.responsable || '',
       departamento: selectedAsset.departamento || '',
       anydesk: selectedAsset.anydesk || '',
-      passwordRemota: selectedAsset.passwordRemota || '',
       aniosVida: selectedAsset.aniosVida || '',
       comentarios: selectedAsset.comentarios || '',
     });
@@ -1928,7 +1927,6 @@ export default function App() {
           'departamento',
           'edo',
           'anydesk',
-          'passwordRemota',
           'aniosVida',
           'comentarios',
         ];
@@ -2445,7 +2443,6 @@ export default function App() {
           responsable: formData.responsable || '',
           departamento: formData.departamento || '',
           anydesk: formData.anydesk || '',
-          passwordRemota: formData.passwordRemota || '',
           aniosVida: formData.aniosVida || '',
           comentarios: formData.comentarios || '',
         };
@@ -2485,7 +2482,6 @@ export default function App() {
             departamento: (activoPayload.departamento || '').trim().toUpperCase(),
             edo: ((activoPayload.estado as EstadoActivo) || 'Operativo').toUpperCase(),
             anydesk: (activoPayload.anydesk || '').trim(),
-            passwordRemota: (activoPayload.passwordRemota || '').trim(),
             aniosVida: (activoPayload.aniosVida || '').trim(),
             comentarios: (activoPayload.comentarios || '').trim(),
           };
@@ -6219,22 +6215,6 @@ export default function App() {
                           onChange={(e) => updateFormData({ anydesk: e.target.value })}
                         />
                       </div>
-                      <div className="grid grid-cols-1 gap-4">
-                        {sessionUser?.rol === 'admin' ? (
-                          <input
-                            placeholder="PASSWORD REMOTA"
-                            value={formData.passwordRemota || ''}
-                            className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
-                            onChange={(e) => updateFormData({ passwordRemota: e.target.value })}
-                          />
-                        ) : (
-                          <input
-                            disabled
-                            value="SOLO ADMIN: PASSWORD REMOTA"
-                            className="p-4 bg-slate-100 border border-slate-100 rounded-2xl text-sm font-black uppercase text-slate-400 outline-none"
-                          />
-                        )}
-                      </div>
                     </section>
 
                     <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
@@ -6627,7 +6607,6 @@ export default function App() {
       {/* MODAL DETALLE ACTIVO */}
       <AssetDetailModal
         asset={selectedAsset}
-        sessionUser={sessionUser}
         canEdit={canEdit}
         selectedAssetQrLoading={selectedAssetQrLoading}
         selectedAssetQrMode={selectedAssetQrMode}

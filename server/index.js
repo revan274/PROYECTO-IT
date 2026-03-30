@@ -884,8 +884,8 @@ function summarizeAssetRisks(activos) {
 }
 
 function stripSensitiveAssetFields(asset, role) {
-  if (role === 'admin') return asset;
-  const { passwordRemota, ...safe } = asset;
+  void role;
+  const { passwordRemota, pass, ...safe } = asset;
   return safe;
 }
 
@@ -925,7 +925,6 @@ const ASSET_FIELDS = [
   'departamento',
   'edo',
   'anydesk',
-  'passwordRemota',
   'aniosVida',
   'comentarios',
 ];
@@ -1044,7 +1043,6 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
     departamento: asNonEmptyString(payload?.departamento).toUpperCase(),
     edo: asNonEmptyString(payload?.edo).toUpperCase(),
     anydesk: asNonEmptyString(payload?.anydesk),
-    passwordRemota: asNonEmptyString(payload?.passwordRemota || payload?.pass),
     aniosVida: asNonEmptyString(payload?.aniosVida),
     comentarios: asNonEmptyString(payload?.comentarios),
   };
@@ -1075,7 +1073,8 @@ function finalizeAsset(asset) {
   copy.departamento = asNonEmptyString(copy.departamento).toUpperCase();
   copy.edo = asNonEmptyString(copy.edo).toUpperCase();
   copy.anydesk = asNonEmptyString(copy.anydesk);
-  copy.passwordRemota = asNonEmptyString(copy.passwordRemota);
+  delete copy.passwordRemota;
+  delete copy.pass;
   copy.aniosVida = asNonEmptyString(copy.aniosVida);
   copy.comentarios = asNonEmptyString(copy.comentarios);
   return copy;

@@ -467,7 +467,6 @@ export function parseInventoryRow(row: SpreadsheetRow, rowNumber: number): Omit<
   const responsable = pick('RESP', 'RESPONSABLE');
   const estadoRaw = pick('EDO', 'ESTADO');
   const anydesk = pick('ANYDESK');
-  const passwordRemota = pick('PASS', 'PASSWORD');
   const aniosVida = pick('AÑOS DE VIDA', 'ANOS DE VIDA', 'AÑOS', 'ANOS');
   const comentarios = pick('COMENTARIOS');
   const tagSource = idInterno || pick('TAG') || [equipo, numero].filter(Boolean).join('-') || `INV-${rowNumber}`;
@@ -509,7 +508,6 @@ export function parseInventoryRow(row: SpreadsheetRow, rowNumber: number): Omit<
     departamento: departamento.toUpperCase(),
     edo: estadoRaw.toUpperCase(),
     anydesk,
-    passwordRemota,
     aniosVida: aniosVida.toUpperCase(),
     comentarios,
   };

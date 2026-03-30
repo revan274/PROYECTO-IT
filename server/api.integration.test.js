@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -121,6 +121,7 @@ function buildFixtureDb() {
         estado: 'Operativo',
         serial: 'POS-001-SN',
         fechaCompra: '2025-01-10',
+        passwordRemota: 'Secreto.Legacy.123',
       },
       {
         id: 2,
@@ -274,13 +275,14 @@ async function stopTestServer(child) {
 }
 
 let tempDir = '';
+let dbFilePath = '';
 let serverRuntime = null;
 
 before(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'mesa-it-integration-'));
-  const dbFile = path.join(tempDir, 'db.json');
-  await writeFile(dbFile, JSON.stringify(buildFixtureDb(), null, 2), 'utf8');
-  serverRuntime = await startTestServer(dbFile);
+  dbFilePath = path.join(tempDir, 'db.json');
+  await writeFile(dbFilePath, JSON.stringify(buildFixtureDb(), null, 2), 'utf8');
+  serverRuntime = await startTestServer(dbFilePath);
 });
 
 after(async () => {
@@ -377,4 +379,22 @@ test('GET /api/tickets pagina y ordena tickets para administradores', async () =
   assert.equal(Array.isArray(data.items[0].attachments), true);
   assert.equal(typeof data.items[0].slaVencido, 'boolean');
   assert.equal(typeof data.items[0].slaRestanteMin, 'number');
+});
+
+test('GET /api/bootstrap sanea credenciales remotas legacy en API y runtime DB', async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const { response, data } = await requestJson('/api/bootstrap', {
+    token: session.token,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(Array.isArray(data.activos), true);
+  assert.equal(data.activos.length >= 1, true);
+  assert.equal(Object.hasOwn(data.activos[0], 'passwordRemota'), false);
+  assert.equal(Object.hasOwn(data.activos[0], 'pass'), false);
+
+  const persisted = JSON.parse(await readFile(dbFilePath, 'utf8'));
+  assert.equal(Array.isArray(persisted.activos), true);
+  assert.equal(Object.hasOwn(persisted.activos[0], 'passwordRemota'), false);
+  assert.equal(Object.hasOwn(persisted.activos[0], 'pass'), false);
 });

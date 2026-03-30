@@ -20,7 +20,6 @@ interface AssetDetail {
   ipAddress?: string;
   macAddress?: string;
   anydesk?: string;
-  passwordRemota?: string;
   cpu?: string;
   ram?: string;
   ramTipo?: string;
@@ -40,13 +39,8 @@ interface LazyQrCanvasLikeProps {
   fgColor: string;
 }
 
-interface SessionUserLike {
-  rol?: string;
-}
-
 interface AssetDetailModalProps {
   asset: AssetDetail | null;
-  sessionUser: SessionUserLike | null;
   canEdit: boolean;
   selectedAssetQrLoading: boolean;
   selectedAssetQrMode: 'signed' | 'local' | 'legacy';
@@ -64,7 +58,6 @@ interface AssetDetailModalProps {
 
 export function AssetDetailModal({
   asset,
-  sessionUser,
   canEdit,
   selectedAssetQrLoading,
   selectedAssetQrMode,
@@ -151,12 +144,6 @@ export function AssetDetailModal({
                 <p className="font-black text-slate-500 uppercase">Anydesk</p>
                 <p className="font-black">{asset.anydesk || 'N/D'}</p>
               </div>
-              {sessionUser?.rol === 'admin' && (
-                <div className="text-sm">
-                  <p className="font-black text-amber-600 uppercase">Password Remota</p>
-                  <p className="font-black text-amber-700">{asset.passwordRemota || 'N/D'}</p>
-                </div>
-              )}
             </div>
 
             <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 space-y-3">
