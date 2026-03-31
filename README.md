@@ -62,6 +62,7 @@ Revisa `.env.example`. Variables principales:
 ## Datos locales
 - El repo conserva un seed sanitizado en `server/data/db.seed.json`.
 - La base runtime local no se versiona y por defecto vive en `server/data/runtime/db.json`.
+- Si el proceso detecta un disco montado en `/var/data`, usa `/var/data/runtime/db.json` como runtime por defecto.
 - Si el runtime DB no existe, el backend lo inicializa automaticamente desde el seed.
 - En produccion, si `DB_FILE` no existe, el backend falla por seguridad salvo que habilites `ALLOW_PRODUCTION_SEED=true` de forma temporal.
 - `server/data/backups/` y `server/data/runtime/` se consideran datos locales.
@@ -111,6 +112,8 @@ Este repo incluye `render.yaml` para desplegar frontend + API en el mismo domini
 4. Configura variables sensibles en Render:
    - `CORS_ORIGINS`: URL publica del servicio (ej: `https://mesa-it.onrender.com`)
    - `QR_SIGNING_SECRET`: secreto largo y unico
+   - El blueprint monta un disco en `/var/data` y permite bootstrap inicial del DB con `ALLOW_PRODUCTION_SEED=true`.
+   - Despues del primer arranque exitoso puedes cambiar `ALLOW_PRODUCTION_SEED=false` si quieres fail-closed estricto.
 5. Deploy.
 
 El backend sirve automaticamente `dist/` cuando existe build, y la API queda en `/api`.

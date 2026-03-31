@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,8 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
+const RENDER_DISK_DIR = '/var/data';
 const DEFAULT_SEED_FILE = path.join(DEFAULT_DATA_DIR, 'db.seed.json');
-const DEFAULT_RUNTIME_DIR = path.join(DEFAULT_DATA_DIR, 'runtime');
+const DEFAULT_RUNTIME_DIR = path.join(existsSync(RENDER_DISK_DIR) ? RENDER_DISK_DIR : DEFAULT_DATA_DIR, 'runtime');
 const DB_FILE = process.env.DB_FILE
   ? path.resolve(process.cwd(), process.env.DB_FILE)
   : path.join(DEFAULT_RUNTIME_DIR, 'db.json');
