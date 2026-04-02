@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ThemeMode, ToastState, UserSession } from '../types/app';
+import type { StoredSession, ThemeMode, ToastState, UserSession } from '../types/app';
 import {
   applyThemeToDocument,
   readStoredSession,
@@ -10,6 +10,7 @@ import {
 
 interface AppStore {
   sessionUser: UserSession | null;
+  setStoredSession: (session: StoredSession | null) => void;
   setSessionUser: (user: UserSession | null) => void;
   logout: () => void;
   theme: ThemeMode;
@@ -24,6 +25,10 @@ interface AppStore {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   sessionUser: readStoredSession()?.user || null,
+  setStoredSession: (session) => {
+    writeStoredSession(session);
+    set({ sessionUser: session?.user || null });
+  },
   setSessionUser: (user) => {
     if (!user) {
       writeStoredSession(null);
@@ -42,8 +47,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ sessionUser: user });
   },
   logout: () => {
-    writeStoredSession(null);
-    set({ sessionUser: null });
+    get().setStoredSession(null);
   },
   theme: readStoredTheme(),
   setTheme: (theme) => {

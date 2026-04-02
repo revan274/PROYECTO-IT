@@ -1060,3 +1060,7 @@ export function pushAudit(db, payload) {
 export function getDataDirPath() {
   return DATA_DIR;
 }
+
+export function getStorageBackend() {
+  return USE_POSTGRES ? 'postgres' : 'file';
+}

@@ -345,6 +345,15 @@ test('POST /api/auth/login emite token y sanea el usuario', async () => {
   assert.equal(typeof data.loggedAt, 'string');
 });
 
+test('GET /api/health expone backend de almacenamiento activo', async () => {
+  const { response, data } = await requestJson('/api/health');
+
+  assert.equal(response.status, 200);
+  assert.equal(data.status, 'ok');
+  assert.equal(typeof data.timestamp, 'string');
+  assert.equal(data.storageBackend, 'file');
+});
+
 test('GET /api/bootstrap limita el payload para solicitantes', async () => {
   const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
   const { response, data } = await requestJson('/api/bootstrap', {

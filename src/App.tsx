@@ -109,8 +109,6 @@ import {
   normalizeReportFilterSnapshot,
   readStoredReportFilterPresets,
   writeStoredReportFilterPresets,
-  writeStoredSession,
-  writeStoredTheme,
 } from './utils/app';
 import {
   auditModuleLabel,
@@ -154,7 +152,6 @@ import {
   isTicketSlaExpired,
   isTicketClosed,
   normalizeTicketAttentionType,
-  ticketAuditActionLabel,
 } from './utils/tickets';
 
 
@@ -305,22 +302,6 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      if (!result) {
-        reject(new Error('No se pudo leer el archivo.'));
-        return;
-      }
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function formatRetryDelay(seconds: number): string {
   const totalSeconds = Math.max(1, Math.trunc(seconds));
   if (totalSeconds < 60) {
@@ -370,7 +351,15 @@ function isRouteNotFoundApiError(error: unknown): boolean {
 // --- APP PRINCIPAL ---
 
 export default function App() {
-  const { sessionUser, setSessionUser, theme, toggleTheme, sidebarOpen, setSidebarOpen } = useAppStore();
+  const {
+    sessionUser,
+    setStoredSession,
+    logout,
+    theme,
+    toggleTheme,
+    sidebarOpen,
+    setSidebarOpen,
+  } = useAppStore();
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
   const [view, setView] = useState('dashboard'); // temporal
@@ -576,7 +565,6 @@ export default function App() {
 
   useEffect(() => {
     applyThemeToDocument(theme);
-    writeStoredTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -785,8 +773,7 @@ export default function App() {
     setReportTechnicianFilter(snapshot.technician);
   }, []);
   const clearSession = useCallback(() => {
-    writeStoredSession(null);
-    setSessionUser(null);
+    logout();
     setLoginForm({ username: '', password: '' });
     setView('dashboard');
     setActivos([]);
@@ -836,7 +823,7 @@ export default function App() {
     setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
     setIsQrScannerActive(false);
     setIsResolvingQr(false);
-  }, [applyReportFilterSnapshot, setSessionUser]);
+  }, [applyReportFilterSnapshot, logout]);
 
   const ensureBackendConnected = useCallback((action: string) => {
     if (backendConnected) return true;
@@ -866,12 +853,11 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(loginForm),
       });
-      writeStoredSession({
+      setStoredSession({
         user: auth.user,
         token: auth.token,
         loggedAt: auth.loggedAt,
       });
-      setSessionUser(auth.user);
       showToast(`Bienvenido ${auth.user.nombre}`, 'success');
     } catch (error) {
       const message = getApiErrorMessage(error);
@@ -2090,28 +2076,6 @@ export default function App() {
       return;
     }
     if (!ensureBackendConnected('Actualizar stock')) return;
-    if (!backendConnected) {
-      setInsumos((prev) =>
-        prev.map((item) => {
-          if (item.id === id) {
-            const nuevoStock = Math.max(0, item.stock + cantidad);
-            const accion = cantidad > 0 ? 'Entrada' : 'Salida';
-            if (nuevoStock !== item.stock) {
-              registrarLog(accion, item.nombre, Math.abs(cantidad), 'insumos', {
-                entidad: 'insumo',
-                entidadId: item.id,
-              });
-              if (nuevoStock < item.min && item.stock >= item.min) {
-                showToast(`Alerta: ${item.nombre} bajo de stock`, 'warning');
-              }
-            }
-            return { ...item, stock: nuevoStock };
-          }
-          return item;
-        }),
-      );
-      return;
-    }
 
     try {
       await apiRequest(`/insumos/${id}/stock`, {
@@ -2136,25 +2100,11 @@ export default function App() {
 
     const target = insumos.filter((item) => getSupplyHealthStatus(item) !== 'OK');
     if (target.length === 0) {
-      showToast('No hay insumos críticos para reponer', 'warning');
+      showToast('No hay insumos criticos para reponer', 'warning');
       return;
     }
 
     if (!ensureBackendConnected('Reponer insumos')) return;
-    if (!backendConnected) {
-      setInsumos((prev) =>
-        prev.map((item) => {
-          if (getSupplyHealthStatus(item) === 'OK') return item;
-          registrarLog('Entrada', item.nombre, cantidad, 'insumos', {
-            entidad: 'insumo',
-            entidadId: item.id,
-          });
-          return { ...item, stock: item.stock + cantidad };
-        }),
-      );
-      showToast(`Reposición aplicada a ${target.length} insumos críticos`, 'success');
-      return;
-    }
 
     try {
       await Promise.all(
@@ -2170,9 +2120,9 @@ export default function App() {
         ),
       );
       await refreshData(true);
-      showToast(`Reposición aplicada a ${target.length} insumos críticos`, 'success');
+      showToast(`Reposicion aplicada a ${target.length} insumos criticos`, 'success');
     } catch {
-      showToast('No se pudo ejecutar la reposición masiva', 'error');
+      showToast('No se pudo ejecutar la reposicion masiva', 'error');
     }
   };
 
@@ -2188,30 +2138,6 @@ export default function App() {
     if (!Number.isFinite(parsedValue) || parsedValue < 0) return false;
     const nuevaCantidad = Math.trunc(parsedValue);
     if (!ensureBackendConnected('Establecer stock manual')) return false;
-
-    if (!backendConnected) {
-      setInsumos((prev) =>
-        prev.map((item) => {
-          if (item.id === id) {
-            if (nuevaCantidad === item.stock) return item;
-            const diferencia = nuevaCantidad - item.stock;
-            const accion = diferencia > 0 ? 'Ajuste Entrada' : 'Ajuste Salida';
-            registrarLog(accion, item.nombre, Math.abs(diferencia), 'insumos', {
-              entidad: 'insumo',
-              entidadId: item.id,
-            });
-
-            if (nuevaCantidad < item.min && item.stock >= item.min) {
-              showToast(`Alerta: ${item.nombre} bajo de stock`, 'warning');
-            }
-
-            return { ...item, stock: nuevaCantidad };
-          }
-          return item;
-        }),
-      );
-      return true;
-    }
 
     try {
       await apiRequest(`/insumos/${id}/stock`, {
@@ -2280,19 +2206,9 @@ export default function App() {
     const itemToDelete = insumos.find((i) => i.id === id);
     if (!itemToDelete) return;
 
-    const confirmacion = window.confirm(`¿Estás seguro de eliminar "${itemToDelete.nombre}"?`);
+    const confirmacion = window.confirm(`Estas seguro de eliminar "${itemToDelete.nombre}"?`);
     if (!confirmacion) return;
     if (!ensureBackendConnected('Eliminar insumos')) return;
-
-    if (!backendConnected) {
-      setInsumos((prev) => prev.filter((i) => i.id !== id));
-      registrarLog('Baja', itemToDelete.nombre, itemToDelete.stock, 'insumos', {
-        entidad: 'insumo',
-        entidadId: itemToDelete.id,
-      });
-      showToast('Insumo eliminado', 'error');
-      return;
-    }
 
     try {
       await apiRequest(`/insumos/${id}`, {
@@ -2322,13 +2238,6 @@ export default function App() {
     if (!confirmacion) return false;
     if (!ensureBackendConnected('Eliminar activos')) return false;
 
-    if (!backendConnected) {
-      setActivos((prev) => prev.filter((a) => a.id !== id));
-      registrarLog('Baja Activo', activoToDelete.tag, 1, 'activos');
-      showToast(`Activo ${activoToDelete.tag} dado de baja`, 'error');
-      return true;
-    }
-
     try {
       await apiRequest(`/activos/${id}`, {
         method: 'DELETE',
@@ -2356,21 +2265,11 @@ export default function App() {
       return false;
     }
 
-    const confirmacionInicial = window.confirm(`Se eliminarán ${activos.length} activos de forma permanente. ¿Continuar?`);
+    const confirmacionInicial = window.confirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`);
     if (!confirmacionInicial) return false;
-
-    const confirmacionFinal = window.confirm('Esta acción no se puede deshacer. ¿Confirmas borrar TODO el inventario de activos IT?');
+    const confirmacionFinal = window.confirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
     if (!confirmacionFinal) return false;
     if (!ensureBackendConnected('Eliminar el inventario completo')) return false;
-
-    if (!backendConnected) {
-      const removedCount = activos.length;
-      setActivos([]);
-      setSelectedAsset(null);
-      registrarLog('Borrado Masivo Activos', 'Inventario completo', removedCount, 'activos');
-      showToast(`Se eliminaron ${removedCount} activos en modo local`, 'warning');
-      return true;
-    }
 
     try {
       const result = await apiRequest<{ ok: boolean; removedCount?: number }>('/activos', {
@@ -2384,7 +2283,7 @@ export default function App() {
       setSelectedAsset(null);
       const removedCount = Number(result?.removedCount || 0);
       if (removedCount <= 0) {
-        showToast('No había activos para eliminar', 'warning');
+        showToast('No habia activos para eliminar', 'warning');
       } else {
         showToast(`Se eliminaron ${removedCount} activos`, 'success');
       }
@@ -2392,7 +2291,7 @@ export default function App() {
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         clearSession();
-        showToast('Sesión expirada. Inicia sesión nuevamente.', 'warning');
+        showToast('Sesion expirada. Inicia sesion nuevamente.', 'warning');
         return false;
       }
       showToast(getApiErrorMessage(error) || 'No se pudo eliminar el inventario de activos', 'error');
@@ -2665,37 +2564,6 @@ export default function App() {
     }
     if (!ensureBackendConnected('Resolver tickets')) return;
 
-    if (!backendConnected) {
-      const ticketToResolve = tickets.find((ticket) => ticket.id === id);
-      setTickets((prev) =>
-        prev.map((ticket) =>
-          ticket.id === id
-            ? {
-              ...ticket,
-              estado: 'Resuelto',
-              fechaCierre: ticket.fechaCierre || new Date().toISOString(),
-              historial: [
-                buildTicketHistoryEntry('Ticket Resuelto', 'Resuelto', sessionUser?.nombre || 'Admin IT', 'Resolucion en modo local'),
-                ...(ticket.historial || []),
-              ],
-            }
-            : ticket,
-        ),
-      );
-      if (ticketToResolve?.activoTag) {
-        setActivos((prev) =>
-          prev.map((asset) =>
-            normalizeForCompare(asset.tag) === normalizeForCompare(ticketToResolve.activoTag)
-              ? { ...asset, estado: 'Operativo' }
-              : asset,
-          ),
-        );
-      }
-      registrarLog('Ticket Resuelto', ticketToResolve?.activoTag || `#${id}`, 1, 'tickets');
-      showToast('Ticket cerrado', 'success');
-      return;
-    }
-
     try {
       await apiRequest(`/tickets/${id}/resolve`, {
         method: 'PATCH',
@@ -2714,7 +2582,6 @@ export default function App() {
   const eliminarTicket = async (ticketId: number) => {
     const ticketToDelete = tickets.find((ticket) => ticket.id === ticketId);
     if (!ticketToDelete) return;
-
     if (!canDeleteTicket(ticketToDelete)) {
       showToast('No autorizado para eliminar este ticket', 'warning');
       return;
@@ -2725,28 +2592,6 @@ export default function App() {
     );
     if (!confirmed) return;
     if (!ensureBackendConnected('Eliminar tickets')) return;
-
-    if (!backendConnected) {
-      const remainingTickets = tickets.filter((ticket) => ticket.id !== ticketId);
-      setTickets(remainingTickets);
-      const hadOpenState = ticketToDelete.estado === 'Abierto' || ticketToDelete.estado === 'En Proceso';
-      if (hadOpenState) {
-        const hasRelatedOpenTickets = remainingTickets.some((ticket) => (
-          normalizeForCompare(ticket.activoTag) === normalizeForCompare(ticketToDelete.activoTag)
-          && (ticket.estado === 'Abierto' || ticket.estado === 'En Proceso')
-        ));
-        if (!hasRelatedOpenTickets) {
-          setActivos((prev) => prev.map((asset) => (
-            normalizeForCompare(asset.tag) === normalizeForCompare(ticketToDelete.activoTag)
-              ? { ...asset, estado: 'Operativo' }
-              : asset
-          )));
-        }
-      }
-      registrarLog('Ticket Eliminado', ticketToDelete.activoTag || `#${ticketId}`, 1, 'tickets');
-      showToast('Ticket eliminado en modo local', 'warning');
-      return;
-    }
 
     try {
       await apiRequest(`/tickets/${ticketId}`, {
@@ -2765,65 +2610,6 @@ export default function App() {
       return;
     }
     if (!ensureBackendConnected('Actualizar tickets')) return;
-
-    if (!backendConnected) {
-      const ticketCurrent = tickets.find((ticket) => ticket.id === ticketId);
-      setTickets((prev) =>
-        prev.map((ticket) => {
-          if (ticket.id !== ticketId) return ticket;
-          const nextState = updates.estado || ticket.estado;
-          const historyAction = updates.estado
-            ? ticketAuditActionLabel(nextState)
-            : updates.atencionTipo !== undefined
-              ? 'Tipo Atencion Ticket'
-              : 'Ticket Actualizado';
-          return {
-            ...ticket,
-            estado: nextState,
-            asignadoA: updates.asignadoA !== undefined ? updates.asignadoA : ticket.asignadoA,
-            atencionTipo: updates.atencionTipo !== undefined ? updates.atencionTipo : ticket.atencionTipo,
-            fechaCierre:
-              nextState === 'Resuelto' || nextState === 'Cerrado'
-                ? ticket.fechaCierre || new Date().toISOString()
-                : ticket.fechaCierre,
-            historial: [
-              buildTicketHistoryEntry(
-                historyAction,
-                nextState,
-                sessionUser?.nombre || 'Admin IT',
-                String(updates.comentario || '').trim(),
-              ),
-              ...(ticket.historial || []),
-            ],
-          };
-        }),
-      );
-      if (updates.estado && ticketCurrent?.activoTag) {
-        const nextAssetState = updates.estado === 'Abierto' || updates.estado === 'En Proceso'
-          ? 'Falla'
-          : updates.estado === 'Resuelto' || updates.estado === 'Cerrado'
-            ? 'Operativo'
-            : null;
-        if (nextAssetState) {
-          setActivos((prev) =>
-            prev.map((asset) =>
-              normalizeForCompare(asset.tag) === normalizeForCompare(ticketCurrent.activoTag)
-                ? { ...asset, estado: nextAssetState }
-                : asset,
-            ),
-          );
-        }
-      }
-      if (updates.estado) {
-        registrarLog(`Ticket ${updates.estado}`, ticketCurrent?.activoTag || `#${ticketId}`, 1, 'tickets');
-      } else if (updates.asignadoA !== undefined) {
-        registrarLog('Asignación Ticket', ticketCurrent?.activoTag || `#${ticketId}`, 1, 'tickets');
-      } else if (updates.atencionTipo) {
-        registrarLog(`Atencion ${updates.atencionTipo}`, ticketCurrent?.activoTag || `#${ticketId}`, 1, 'tickets');
-      }
-      showToast('Ticket actualizado en modo local', 'warning');
-      return;
-    }
 
     try {
       await apiRequest(`/tickets/${ticketId}`, {
@@ -2861,33 +2647,15 @@ export default function App() {
     if (!ensureBackendConnected('Agregar comentarios')) return;
 
     try {
-      if (backendConnected) {
-        const updatedTicket = await apiRequest<TicketItem>(`/tickets/${ticketId}/comments`, {
-          method: 'POST',
-          body: JSON.stringify({
-            comentario,
-            usuario: sessionUser?.nombre || 'Sistema',
-            rol: sessionUser?.rol || 'consulta',
-          }),
-        });
-        setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)));
-      } else {
-        setTickets((prev) =>
-          prev.map((ticket) =>
-            ticket.id === ticketId
-              ? {
-                ...ticket,
-                historial: [
-                  buildTicketHistoryEntry('Comentario', ticket.estado, sessionUser?.nombre || 'Sistema', comentario),
-                  ...(ticket.historial || []),
-                ],
-              }
-              : ticket,
-          ),
-        );
-        registrarLog('Comentario Ticket', target.activoTag, 1, 'tickets');
-      }
-
+      const updatedTicket = await apiRequest<TicketItem>(`/tickets/${ticketId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          comentario,
+          usuario: sessionUser?.nombre || 'Sistema',
+          rol: sessionUser?.rol || 'consulta',
+        }),
+      });
+      setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)));
       setTicketCommentDrafts((prev) => ({
         ...prev,
         [ticketId]: '',
@@ -2926,47 +2694,18 @@ export default function App() {
 
     setTicketAttachmentLoadingId(ticketId);
     try {
-      if (backendConnected) {
-        const contentBase64 = await fileToBase64(file);
-        const response = await apiRequest<TicketAttachmentUploadResponse>(`/tickets/${ticketId}/attachments`, {
-          method: 'POST',
-          body: JSON.stringify({
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            contentBase64,
-            usuario: sessionUser?.nombre || 'Sistema',
-            rol: sessionUser?.rol || 'consulta',
-          }),
-        });
-        setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? response.ticket : ticket)));
-      } else {
-        const dataUrl = await fileToDataUrl(file);
-        const attachment: TicketAttachment = {
-          id: Date.now(),
+      const contentBase64 = await fileToBase64(file);
+      const response = await apiRequest<TicketAttachmentUploadResponse>(`/tickets/${ticketId}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
-          size: file.size,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: sessionUser?.nombre || 'Sistema',
-          localOnly: true,
-          localUrl: dataUrl,
-        };
-        setTickets((prev) =>
-          prev.map((ticket) =>
-            ticket.id === ticketId
-              ? {
-                ...ticket,
-                attachments: [attachment, ...(ticket.attachments || [])],
-                historial: [
-                  buildTicketHistoryEntry('Adjunto agregado', ticket.estado, sessionUser?.nombre || 'Sistema', file.name),
-                  ...(ticket.historial || []),
-                ],
-              }
-              : ticket,
-          ),
-        );
-        registrarLog('Adjunto Ticket', `${target.activoTag} | ${file.name}`, 1, 'tickets');
-      }
+          contentBase64,
+          usuario: sessionUser?.nombre || 'Sistema',
+          rol: sessionUser?.rol || 'consulta',
+        }),
+      });
+      setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? response.ticket : ticket)));
       showToast('Adjunto agregado', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'No se pudo adjuntar el archivo', 'error');
@@ -6627,4 +6366,7 @@ export default function App() {
     </div>
   );
 }
+
+
+
 

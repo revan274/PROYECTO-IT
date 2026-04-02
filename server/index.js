@@ -17,6 +17,7 @@ import {
 import {
   createUserPasswordHash,
   getDataDirPath,
+  getStorageBackend,
   now,
   nextId,
   pushAudit,
@@ -1287,7 +1288,11 @@ function registerRoutes(app, authRuntime) {
   } = authRuntime;
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    storageBackend: getStorageBackend(),
+  });
 });
 
 
