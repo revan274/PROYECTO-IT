@@ -2,6 +2,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Pool } from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,11 @@ const DB_BACKUP_KEEP = Math.max(1, Math.trunc(Number(process.env.DB_BACKUP_KEEP 
 const DB_BACKUP_ENABLE = String(process.env.DB_BACKUP_ENABLE || 'true').toLowerCase() !== 'false';
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 const ALLOW_PRODUCTION_SEED = String(process.env.ALLOW_PRODUCTION_SEED || 'false').trim().toLowerCase() === 'true';
+const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
+const USE_POSTGRES = DATABASE_URL.length > 0;
+const PG_STATE_TABLE = 'mesa_it_state';
+const PG_POOL_MAX = Math.max(1, Math.trunc(Number(process.env.PG_POOL_MAX || 4)));
+const PG_SSL_REQUIRED = /sslmode=require/i.test(DATABASE_URL);
 
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
 const PASSWORD_KEYLEN = 64;
@@ -48,6 +54,8 @@ const DEFAULT_ROLE_CATALOG = [
   { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
 const TICKET_BRANCH_CODES = new Set(DEFAULT_TICKET_BRANCHES.map((branch) => branch.code));
+let pgPool = null;
+let pgInitPromise = null;
 
 function hashPassword(plainPassword) {
   const password = String(plainPassword || '');
@@ -790,7 +798,66 @@ function normalizeDbShape(db) {
   return normalized;
 }
 
+function getPgPool() {
+  if (!USE_POSTGRES) return null;
+  if (!pgPool) {
+    pgPool = new Pool({
+      connectionString: DATABASE_URL,
+      max: PG_POOL_MAX,
+      ssl: PG_SSL_REQUIRED ? { rejectUnauthorized: false } : undefined,
+      application_name: 'mesa-it',
+    });
+  }
+  return pgPool;
+}
+
+async function loadBootstrapDb() {
+  try {
+    const raw = await fs.readFile(DB_FILE, 'utf8');
+    return normalizeDbShape(JSON.parse(raw));
+  } catch {
+    return loadSeedDb();
+  }
+}
+
+async function ensurePgState() {
+  if (!USE_POSTGRES) return;
+  if (!pgInitPromise) {
+    const pool = getPgPool();
+    pgInitPromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ${PG_STATE_TABLE} (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          data JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      const existing = await pool.query(`SELECT id FROM ${PG_STATE_TABLE} WHERE id = 1`);
+      if (existing.rowCount && existing.rowCount > 0) return;
+
+      if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
+        throw new Error(
+          'DATABASE_URL esta configurado pero la base de datos no tiene estado inicial. Habilita ALLOW_PRODUCTION_SEED=true temporalmente para sembrarla.',
+        );
+      }
+
+      const seedDb = await loadBootstrapDb();
+      await pool.query(
+        `INSERT INTO ${PG_STATE_TABLE} (id, data, updated_at) VALUES (1, $1::jsonb, NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [JSON.stringify(seedDb)],
+      );
+    })().catch((error) => {
+      pgInitPromise = null;
+      throw error;
+    });
+  }
+  await pgInitPromise;
+}
+
 async function ensureDbFile() {
+  if (USE_POSTGRES) return;
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.mkdir(BACKUP_DIR, { recursive: true });
   try {
@@ -816,6 +883,7 @@ async function loadSeedDb() {
 }
 
 async function pruneBackups() {
+  if (USE_POSTGRES) return;
   if (!DB_BACKUP_ENABLE) return;
   try {
     const files = await fs.readdir(BACKUP_DIR);
@@ -834,6 +902,7 @@ async function pruneBackups() {
 }
 
 async function backupCurrentDbSnapshot() {
+  if (USE_POSTGRES) return;
   if (!DB_BACKUP_ENABLE) return;
   try {
     const current = await fs.readFile(DB_FILE, 'utf8');
@@ -849,9 +918,17 @@ async function backupCurrentDbSnapshot() {
 }
 
 export async function readDb() {
-  await ensureDbFile();
-  const raw = await fs.readFile(DB_FILE, 'utf8');
-  const parsed = JSON.parse(raw);
+  let parsed;
+  if (USE_POSTGRES) {
+    await ensurePgState();
+    const pool = getPgPool();
+    const result = await pool.query(`SELECT data FROM ${PG_STATE_TABLE} WHERE id = 1`);
+    parsed = result.rows[0]?.data || {};
+  } else {
+    await ensureDbFile();
+    const raw = await fs.readFile(DB_FILE, 'utf8');
+    parsed = JSON.parse(raw);
+  }
   const normalized = normalizeDbShape(parsed);
   const assetsRequireSecretMigration = Array.isArray(parsed?.activos)
     && parsed.activos.some((asset) => (
@@ -877,6 +954,16 @@ export async function readDb() {
 }
 
 async function writeDb(db, options = {}) {
+  if (USE_POSTGRES) {
+    await ensurePgState();
+    const pool = getPgPool();
+    await pool.query(
+      `INSERT INTO ${PG_STATE_TABLE} (id, data, updated_at) VALUES (1, $1::jsonb, NOW())
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      [JSON.stringify(db)],
+    );
+    return;
+  }
   await ensureDbFile();
   if (options.backup !== false) {
     await backupCurrentDbSnapshot();

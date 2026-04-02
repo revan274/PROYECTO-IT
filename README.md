@@ -49,6 +49,7 @@ Revisa `.env.example`. Variables principales:
 - `AUTH_LOGIN_GC_MS`
 - `AUTH_DISALLOW_DEMO_PASSWORDS`
 - `ALLOW_PRODUCTION_SEED`
+- `DATABASE_URL`
 - `TICKET_ATTACHMENT_MAX_BYTES`
 - `TICKET_ATTACHMENT_MAX_COUNT`
 - `VITE_TICKET_ATTACHMENT_MAX_BYTES`
@@ -61,11 +62,14 @@ Revisa `.env.example`. Variables principales:
 
 ## Datos locales
 - El repo conserva un seed sanitizado en `server/data/db.seed.json`.
+- Si defines `DATABASE_URL`, el backend usa Postgres/Neon como almacenamiento principal del estado (`users`, `activos`, `insumos`, `tickets`, `auditoria`, `catalogos`).
+- En el primer arranque con `DATABASE_URL`, si la base esta vacia, el backend la inicializa desde `DB_FILE` si existe o desde `server/data/db.seed.json`.
 - La base runtime local no se versiona y por defecto vive en `server/data/runtime/db.json`.
 - Si el proceso detecta un disco montado en `/var/data`, usa `/var/data/runtime/db.json` como runtime por defecto.
 - Si el runtime DB no existe, el backend lo inicializa automaticamente desde el seed.
 - En produccion, si `DB_FILE` no existe, el backend falla por seguridad salvo que habilites `ALLOW_PRODUCTION_SEED=true` de forma temporal.
 - `server/data/backups/` y `server/data/runtime/` se consideran datos locales.
+- Los adjuntos de tickets y respaldos siguen siendo archivos locales; Neon no cubre esos binarios.
 
 ## API (resumen)
 - `GET /api/health`
