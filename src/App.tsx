@@ -146,7 +146,6 @@ import {
 import {
   buildTicketDescription,
   buildTicketHistoryEntry,
-  calculateSlaDeadline,
   formatTicketAttentionType,
   getSlaStatus,
   isTicketSlaExpired,
@@ -1464,32 +1463,6 @@ export default function App() {
         setIsResolvingQr(false);
       }
 
-    let parsedLegacy: unknown = null;
-    try {
-      parsedLegacy = JSON.parse(raw);
-    } catch {
-      parsedLegacy = null;
-    }
-
-    const legacyAsset = toActivoFromQrLookup(
-      parsedLegacy && typeof parsedLegacy === 'object' ? (parsedLegacy as Record<string, unknown>) : {},
-    );
-    if (!legacyAsset) {
-      showToast('QR no reconocido. Solo se aceptan QR firmados (mtiqr1).', 'warning');
-      return false;
-    }
-
-    const localMatch = activos.find((asset) => (
-      Number(asset.id) === Number(legacyAsset.id)
-      || normalizeForCompare(asset.tag || '') === normalizeForCompare(legacyAsset.tag || '')
-      || normalizeForCompare(asset.serial || '') === normalizeForCompare(legacyAsset.serial || '')
-    ));
-    const nextAsset = localMatch || legacyAsset;
-    setView('inventory');
-    setSearchTerm(nextAsset.tag);
-    setSelectedAsset(nextAsset);
-    showToast('Activo resuelto por QR', 'success');
-    return true;
   }, [activos, backendConnected, showToast]);
 
   const resolveQrFromManualInput = useCallback(async () => {
@@ -2235,58 +2208,17 @@ export default function App() {
           comentarios: formData.comentarios || '',
         };
 
-        if (backendConnected) {
-          const method = isEditingAsset ? 'PATCH' : 'POST';
-          const path = isEditingAsset ? `/activos/${editingAssetId}` : '/activos';
-          await apiRequest(path, {
-            method,
-            body: JSON.stringify({
-              ...activoPayload,
-              usuario: sessionUser?.nombre || 'Admin IT',
-              rol: sessionUser?.rol || 'admin',
-            }),
-          });
-          await refreshData(true);
-        } else {
-          const normalizedLocalAsset: Omit<Activo, 'id'> = {
-            tag: (activoPayload.tag || '').trim().toUpperCase(),
-            tipo: (activoPayload.tipo || '').trim().toUpperCase(),
-            marca: (activoPayload.marca || '').trim(),
-            modelo: (activoPayload.modelo || '').trim(),
-            ubicacion: (activoPayload.ubicacion || '').trim(),
-            serial: (activoPayload.serial || '').trim().toUpperCase(),
-            estado: (activoPayload.estado as EstadoActivo) || 'Operativo',
-            fechaCompra: activoPayload.fechaCompra || new Date().toISOString().split('T')[0],
-            idInterno: (activoPayload.idInterno || '').trim().toUpperCase(),
-            equipo: ((activoPayload.equipo || activoPayload.tipo) || '').trim().toUpperCase(),
-            cpu: (activoPayload.cpu || '').trim().toUpperCase(),
-            ram: (activoPayload.ram || '').trim().toUpperCase(),
-            ramTipo: (activoPayload.ramTipo || '').trim().toUpperCase(),
-            disco: (activoPayload.disco || '').trim().toUpperCase(),
-            tipoDisco: (activoPayload.tipoDisco || '').trim().toUpperCase(),
-            macAddress: normalizeMacAddress((activoPayload.macAddress || '').trim()),
-            ipAddress: normalizeIpAddress((activoPayload.ipAddress || '').trim()),
-            responsable: (activoPayload.responsable || '').trim(),
-            departamento: (activoPayload.departamento || '').trim().toUpperCase(),
-            edo: ((activoPayload.estado as EstadoActivo) || 'Operativo').toUpperCase(),
-            anydesk: (activoPayload.anydesk || '').trim(),
-            aniosVida: (activoPayload.aniosVida || '').trim(),
-            comentarios: (activoPayload.comentarios || '').trim(),
-          };
-
-          if (isEditingAsset && editingAssetId !== null) {
-            setActivos((prev) =>
-              prev.map((item) =>
-                item.id === editingAssetId
-                  ? { ...item, ...normalizedLocalAsset }
-                  : item,
-              ),
-            );
-          } else {
-            const id = Date.now();
-            setActivos((prev) => [...prev, { id, ...normalizedLocalAsset }]);
-          }
-        }
+        const method = isEditingAsset ? 'PATCH' : 'POST';
+        const path = isEditingAsset ? `/activos/${editingAssetId}` : '/activos';
+        await apiRequest(path, {
+          method,
+          body: JSON.stringify({
+            ...activoPayload,
+            usuario: sessionUser?.nombre || 'Admin IT',
+            rol: sessionUser?.rol || 'admin',
+          }),
+        });
+        await refreshData(true);
         showToast(editingAssetId !== null ? 'Activo actualizado' : 'Activo registrado', 'success');
       } else if (modalType === 'insumo') {
         setInsumoTouched({
@@ -2307,53 +2239,19 @@ export default function App() {
         const min = insumoFormValidation.min as number;
         const isEditingInsumo = editingInsumoId !== null;
 
-        if (backendConnected) {
-          await apiRequest(isEditingInsumo ? `/insumos/${editingInsumoId}` : '/insumos', {
-            method: isEditingInsumo ? 'PATCH' : 'POST',
-            body: JSON.stringify({
-              nombre,
-              unidad,
-              stock,
-              min,
-              categoria,
-              usuario: sessionUser?.nombre || 'Admin IT',
-              rol: sessionUser?.rol || 'admin',
-            }),
-          });
-          await refreshData(true);
-        } else {
-          if (isEditingInsumo && editingInsumoId !== null) {
-            setInsumos((prev) =>
-              prev.map((item) =>
-                item.id === editingInsumoId
-                  ? { ...item, nombre, unidad, stock, min, categoria }
-                  : item,
-              ),
-            );
-            registrarLog('Edicion Insumo', nombre, stock, 'insumos', {
-              entidad: 'insumo',
-              entidadId: editingInsumoId,
-            });
-          } else {
-            const id = Date.now();
-            setInsumos((prev) => [
-              ...prev,
-              {
-                id,
-                nombre,
-                unidad,
-                stock,
-                min,
-                categoria,
-                activo: true,
-              },
-            ]);
-            registrarLog('Registro Nuevo', nombre, stock, 'insumos', {
-              entidad: 'insumo',
-              entidadId: id,
-            });
-          }
-        }
+        await apiRequest(isEditingInsumo ? `/insumos/${editingInsumoId}` : '/insumos', {
+          method: isEditingInsumo ? 'PATCH' : 'POST',
+          body: JSON.stringify({
+            nombre,
+            unidad,
+            stock,
+            min,
+            categoria,
+            usuario: sessionUser?.nombre || 'Admin IT',
+            rol: sessionUser?.rol || 'admin',
+          }),
+        });
+        await refreshData(true);
         showToast(editingInsumoId !== null ? 'Insumo actualizado' : 'Insumo añadido', 'success');
       } else if (modalType === 'ticket') {
         const activoTag = String(formData.activoTag || '').trim().toUpperCase();
@@ -2382,59 +2280,21 @@ export default function App() {
         }
         const descripcionFinal = buildTicketDescription(areaAfectada, descripcionBase);
 
-        if (backendConnected) {
-          await apiRequest('/tickets', {
-            method: 'POST',
-            body: JSON.stringify({
-              activoTag,
-              descripcion: descripcionFinal,
-              sucursal,
-              prioridad,
-              atencionTipo,
-              asignadoA: canEdit ? (formData.asignadoA || '') : '',
-              usuario: sessionUser?.nombre || 'Admin IT',
-              rol: sessionUser?.rol || 'admin',
-              departamento: sessionUser?.departamento || '',
-            }),
-          });
-          await refreshData(true);
-        } else {
-          const id = Date.now();
-          const fechaLimite = calculateSlaDeadline(prioridad);
-          const ticketTag = activoTag || `#${id}`;
-          const createdAtIso = new Date().toISOString();
-          setTickets((prev) => [
-            ...prev,
-            {
-              id,
-              activoTag,
-              descripcion: descripcionFinal,
-              sucursal,
-              prioridad,
-              estado: 'Abierto',
-              atencionTipo,
-              fecha: createdAtIso,
-              fechaCreacion: createdAtIso,
-              fechaLimite,
-              asignadoA: canEdit ? (formData.asignadoA || '') : '',
-              solicitadoPor: sessionUser?.nombre || 'Usuario',
-              solicitadoPorId: sessionUser?.id || null,
-              solicitadoPorUsername: (sessionUser?.username || '').trim().toLowerCase(),
-              departamento: (sessionUser?.departamento || '').trim().toUpperCase(),
-              slaVencido: false,
-              slaRestanteMin: Math.ceil((new Date(fechaLimite).getTime() - Date.now()) / 60000),
-              historial: [
-                buildTicketHistoryEntry('Ticket Creado', 'Abierto', sessionUser?.nombre || 'Admin IT', 'Registro inicial'),
-              ],
-            },
-          ]);
-          registrarLog('Nuevo Ticket', ticketTag, 1, 'tickets');
-          if (prioridad === 'CRITICA') {
-            setActivos((prev) =>
-              prev.map((a) => (a.tag === activoTag ? { ...a, estado: 'Falla' } : a)),
-            );
-          }
-        }
+        await apiRequest('/tickets', {
+          method: 'POST',
+          body: JSON.stringify({
+            activoTag,
+            descripcion: descripcionFinal,
+            sucursal,
+            prioridad,
+            atencionTipo,
+            asignadoA: canEdit ? (formData.asignadoA || '') : '',
+            usuario: sessionUser?.nombre || 'Admin IT',
+            rol: sessionUser?.rol || 'admin',
+            departamento: sessionUser?.departamento || '',
+          }),
+        });
+        await refreshData(true);
         showToast('Ticket creado', 'success');
       }
 
