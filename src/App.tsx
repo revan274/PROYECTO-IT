@@ -157,10 +157,7 @@ import {
 
 import {
   buildAssetQrCanvasId,
-  buildAssetQrPayload,
-
   extractSignedQrToken,
-  parseLocalQrAsset,
   toActivoFromQrLookup,
 } from './utils/qrTokens';
 
@@ -408,12 +405,12 @@ export default function App() {
   const [selectedAsset, setSelectedAsset] = useState<Activo | null>(null);
   const [selectedSupplyHistoryItem, setSelectedSupplyHistoryItem] = useState<Insumo | null>(null);
   const [showQrScanner, setShowQrScanner] = useState(false);
-  const [qrScannerStatus, setQrScannerStatus] = useState('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
+  const [qrScannerStatus, setQrScannerStatus] = useState('Escanea un QR firmado (mtiqr1).');
   const [isQrScannerActive, setIsQrScannerActive] = useState(false);
   const [isResolvingQr, setIsResolvingQr] = useState(false);
   const [qrManualInput, setQrManualInput] = useState('');
   const [selectedAssetQrValue, setSelectedAssetQrValue] = useState('');
-  const [selectedAssetQrMode, setSelectedAssetQrMode] = useState<'signed' | 'legacy'>('legacy');
+  const [selectedAssetQrMode, setSelectedAssetQrMode] = useState<'signed' | 'unavailable'>('unavailable');
   const [selectedAssetQrIssuedAt, setSelectedAssetQrIssuedAt] = useState('');
   const [selectedAssetQrLoading, setSelectedAssetQrLoading] = useState(false);
   const [editingAssetId, setEditingAssetId] = useState<number | null>(null);
@@ -549,11 +546,7 @@ export default function App() {
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     setToast({ message, type });
   }, []);
-  const selectedAssetFallbackQrPayload = useMemo(
-    () => (selectedAsset ? buildAssetQrPayload(selectedAsset) : ''),
-    [selectedAsset],
-  );
-  const effectiveSelectedAssetQrValue = selectedAssetQrValue || selectedAssetFallbackQrPayload;
+  const effectiveSelectedAssetQrValue = selectedAssetQrValue;
   const isQrCameraSupported = useMemo(
     () =>
       typeof window !== 'undefined'
@@ -585,24 +578,23 @@ export default function App() {
   useEffect(() => {
     if (!selectedAsset) {
       setSelectedAssetQrValue('');
-      setSelectedAssetQrMode('legacy');
+      setSelectedAssetQrMode('unavailable');
       setSelectedAssetQrIssuedAt('');
       setSelectedAssetQrLoading(false);
       return;
     }
 
-    const fallbackPayload = buildAssetQrPayload(selectedAsset);
     if (!backendConnected) {
-      setSelectedAssetQrValue(fallbackPayload);
-      setSelectedAssetQrMode('legacy');
+      setSelectedAssetQrValue('');
+      setSelectedAssetQrMode('unavailable');
       setSelectedAssetQrIssuedAt('');
       setSelectedAssetQrLoading(false);
       return;
     }
 
     let cancelled = false;
-    setSelectedAssetQrValue(fallbackPayload);
-    setSelectedAssetQrMode('legacy');
+    setSelectedAssetQrValue('');
+    setSelectedAssetQrMode('unavailable');
     setSelectedAssetQrIssuedAt('');
     setSelectedAssetQrLoading(true);
 
@@ -619,8 +611,8 @@ export default function App() {
         setSelectedAssetQrIssuedAt(String(response?.issuedAt || ''));
       } catch {
         if (cancelled) return;
-        setSelectedAssetQrValue(fallbackPayload);
-        setSelectedAssetQrMode('legacy');
+        setSelectedAssetQrValue('');
+        setSelectedAssetQrMode('unavailable');
         setSelectedAssetQrIssuedAt('');
       } finally {
         if (!cancelled) setSelectedAssetQrLoading(false);
@@ -820,7 +812,7 @@ export default function App() {
     setShowModal(null);
     setShowQrScanner(false);
     setQrManualInput('');
-    setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
+    setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
     setIsQrScannerActive(false);
     setIsResolvingQr(false);
   }, [applyReportFilterSnapshot, logout]);
@@ -948,6 +940,10 @@ export default function App() {
 
   const descargarQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
+    if (selectedAssetQrMode !== 'signed' || !effectiveSelectedAssetQrValue) {
+      showToast('El QR firmado no esta disponible para descargar.', 'warning');
+      return;
+    }
     const qrCanvas = document.getElementById(buildAssetQrCanvasId(selectedAsset.id));
     if (!(qrCanvas instanceof HTMLCanvasElement)) {
       showToast('No se pudo generar el QR del activo', 'warning');
@@ -959,10 +955,14 @@ export default function App() {
     link.download = `qr_${fileToken}.png`;
     link.click();
     showToast('QR descargado', 'success');
-  }, [selectedAsset, showToast]);
+  }, [effectiveSelectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
   const imprimirEtiquetaQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
+    if (selectedAssetQrMode !== 'signed' || !effectiveSelectedAssetQrValue) {
+      showToast('El QR firmado no esta disponible para imprimir.', 'warning');
+      return;
+    }
     const qrCanvas = document.getElementById(buildAssetQrCanvasId(selectedAsset.id));
     if (!(qrCanvas instanceof HTMLCanvasElement)) {
       showToast('No se pudo preparar la etiqueta QR', 'warning');
@@ -1243,7 +1243,7 @@ export default function App() {
 
     printWindow.onload = triggerPrint;
     window.setTimeout(triggerPrint, 450);
-  }, [activeTicketBranchCodes, selectedAsset, showToast]);
+  }, [activeTicketBranchCodes, effectiveSelectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
   const refreshData = useCallback(async (silent = false) => {
     if (!sessionUser) return;
@@ -1431,8 +1431,12 @@ export default function App() {
     }
 
     const signedToken = extractSignedQrToken(raw);
-    if (signedToken) {
-      if (!backendConnected) {
+    if (!signedToken) {
+      showToast('QR no reconocido. Solo se aceptan QR firmados (mtiqr1).', 'warning');
+      return false;
+    }
+
+    if (!backendConnected) {
         showToast('El QR firmado requiere backend online para validación', 'warning');
         return false;
       }
@@ -1459,22 +1463,6 @@ export default function App() {
       } finally {
         setIsResolvingQr(false);
       }
-    }
-
-    const compactLocalAsset = parseLocalQrAsset(raw);
-    if (compactLocalAsset) {
-      const localMatch = activos.find((asset) => (
-        Number(asset.id) === Number(compactLocalAsset.id)
-        || normalizeForCompare(asset.tag || '') === normalizeForCompare(compactLocalAsset.tag || '')
-        || normalizeForCompare(asset.serial || '') === normalizeForCompare(compactLocalAsset.serial || '')
-      ));
-      const nextAsset = localMatch || compactLocalAsset;
-      setView('inventory');
-      setSearchTerm(nextAsset.tag);
-      setSelectedAsset(nextAsset);
-      showToast('Activo resuelto con QR local', 'success');
-      return true;
-    }
 
     let parsedLegacy: unknown = null;
     try {
@@ -1487,7 +1475,7 @@ export default function App() {
       parsedLegacy && typeof parsedLegacy === 'object' ? (parsedLegacy as Record<string, unknown>) : {},
     );
     if (!legacyAsset) {
-      showToast('QR no reconocido. Usa mtiqr1, mtiqr0 o JSON legacy válido.', 'warning');
+      showToast('QR no reconocido. Solo se aceptan QR firmados (mtiqr1).', 'warning');
       return false;
     }
 
@@ -1500,7 +1488,7 @@ export default function App() {
     setView('inventory');
     setSearchTerm(nextAsset.tag);
     setSelectedAsset(nextAsset);
-    showToast('Activo resuelto con QR local', 'success');
+    showToast('Activo resuelto por QR', 'success');
     return true;
   }, [activos, backendConnected, showToast]);
 
@@ -1512,7 +1500,13 @@ export default function App() {
   useEffect(() => {
     if (!showQrScanner) {
       stopQrCameraScan();
-      setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
+      setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
+      return;
+    }
+
+    if (!backendConnected) {
+      stopQrCameraScan();
+      setQrScannerStatus('La validacion QR requiere backend online.');
       return;
     }
 
@@ -1586,7 +1580,7 @@ export default function App() {
               if (ok) {
                 setShowQrScanner(false);
               } else {
-                setQrScannerStatus('No se pudo resolver. Puedes intentar de forma manual.');
+                setQrScannerStatus('No se pudo resolver. Solo se aceptan QR firmados (mtiqr1).');
               }
             } catch {
               // Ignora errores intermitentes del detector/cámara.
@@ -1604,7 +1598,7 @@ export default function App() {
       cancelled = true;
       stopQrCameraScan();
     };
-  }, [isQrCameraSupported, isResolvingQr, resolveQrPayload, showQrScanner, stopQrCameraScan]);
+  }, [backendConnected, isQrCameraSupported, isResolvingQr, resolveQrPayload, showQrScanner, stopQrCameraScan]);
 
   const resetNewUserForm = () => {
     const fallbackRoleRaw = roleCatalogOptions[0]?.value;
@@ -1833,137 +1827,32 @@ export default function App() {
         return;
       }
 
-      if (backendConnected) {
-        const payloadItems = parsedRows.map(({ rowNumber, item }) => ({ ...item, rowNumber }));
-        const preview = await apiRequest<ImportAssetsResponse>('/activos/import', {
-          method: 'POST',
-          body: JSON.stringify({
-            items: payloadItems,
-            dryRun: true,
-            upsert: true,
-            fileName: file.name,
-            usuario: sessionUser?.nombre || 'Admin IT',
-            rol: sessionUser?.rol || 'admin',
-          }),
-        });
-        setImportDraft({
+      const payloadItems = parsedRows.map(({ rowNumber, item }) => ({ ...item, rowNumber }));
+      const preview = await apiRequest<ImportAssetsResponse>('/activos/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: payloadItems,
+          dryRun: true,
+          upsert: true,
           fileName: file.name,
-          payloadItems,
-          preview,
-          localInvalidDetails,
-        });
-        const summary = [
-          `Vista previa lista`,
-          `nuevos: ${preview.created}`,
-          `actualizados: ${preview.updated}`,
-          `omitidos: ${preview.skipped}`,
-          `inválidos: ${preview.invalid + invalidRows}`,
-        ];
-        showToast(summary.join(' | '), preview.created + preview.updated > 0 ? 'success' : 'warning');
-      } else {
-        const current = [...activos];
-        const getKey = (value?: string) => normalizeForCompare(value || '');
-        const findIndexByIdentity = (item: Omit<Activo, 'id'>): number => {
-          const idInternoKey = getKey(item.idInterno);
-          if (idInternoKey) {
-            const idx = current.findIndex((asset) => getKey(asset.idInterno) === idInternoKey);
-            if (idx >= 0) return idx;
-          }
-
-          const serialKey = getKey(item.serial);
-          if (serialKey) {
-            const idx = current.findIndex((asset) => getKey(asset.serial) === serialKey);
-            if (idx >= 0) return idx;
-          }
-
-          const macKey = getKey(item.macAddress);
-          if (macKey) {
-            const idx = current.findIndex((asset) => getKey(asset.macAddress) === macKey);
-            if (idx >= 0) return idx;
-          }
-
-          const tagKey = getKey(item.tag);
-          if (tagKey) {
-            const idx = current.findIndex((asset) => getKey(asset.tag) === tagKey);
-            if (idx >= 0) return idx;
-          }
-
-          return -1;
-        };
-
-        const importFields: Array<keyof Omit<Activo, 'id'>> = [
-          'tag',
-          'tipo',
-          'marca',
-          'modelo',
-          'ubicacion',
-          'estado',
-          'serial',
-          'fechaCompra',
-          'idInterno',
-          'equipo',
-          'cpu',
-          'ram',
-          'ramTipo',
-          'disco',
-          'tipoDisco',
-          'macAddress',
-          'ipAddress',
-          'responsable',
-          'departamento',
-          'edo',
-          'anydesk',
-          'aniosVida',
-          'comentarios',
-        ];
-
-        let created = 0;
-        let updated = 0;
-        let skipped = 0;
-        let idSeed = Date.now();
-
-        parsedRows.forEach(({ item }) => {
-          const idx = findIndexByIdentity(item);
-          if (idx < 0) {
-            current.push({ id: idSeed, ...item });
-            idSeed += 1;
-            created += 1;
-            return;
-          }
-
-          const existing = current[idx];
-          const merged: Activo = { ...existing };
-          let changed = false;
-          importFields.forEach((field) => {
-            const incoming = item[field];
-            if (incoming === undefined || incoming === null) return;
-            if (typeof incoming === 'string' && incoming.trim() === '') return;
-            if (merged[field] !== incoming) {
-              (merged as unknown as Record<string, unknown>)[field] = incoming;
-              changed = true;
-            }
-          });
-
-          if (changed) {
-            current[idx] = merged;
-            updated += 1;
-          } else {
-            skipped += 1;
-          }
-        });
-
-        setActivos(current);
-        if (created + updated > 0) {
-          registrarLog('Importación Inventario', file.name, created + updated, 'activos');
-        }
-        const parts = [
-          `Creados: ${created}`,
-          `actualizados: ${updated}`,
-          `omitidos: ${skipped}`,
-          `inválidos: ${invalidRows}`,
-        ];
-        showToast(parts.join(' | '), invalidRows > 0 ? 'warning' : 'success');
-      }
+          usuario: sessionUser?.nombre || 'Admin IT',
+          rol: sessionUser?.rol || 'admin',
+        }),
+      });
+      setImportDraft({
+        fileName: file.name,
+        payloadItems,
+        preview,
+        localInvalidDetails,
+      });
+      const summary = [
+        `Vista previa lista`,
+        `nuevos: ${preview.created}`,
+        `actualizados: ${preview.updated}`,
+        `omitidos: ${preview.skipped}`,
+        `invalidos: ${preview.invalid + invalidRows}`,
+      ];
+      showToast(summary.join(' | '), preview.created + preview.updated > 0 ? 'success' : 'warning');
     } catch (error) {
       const message = getApiErrorMessage(error) || 'No se pudo leer/importar el archivo';
       showToast(message, 'error');

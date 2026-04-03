@@ -35,7 +35,7 @@ export function QrScannerModal({
       <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Segura QR</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolucion Segura QR</p>
             <h3 className="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
               <ScanLine size={18} /> Escanear Activo
             </h3>
@@ -75,11 +75,11 @@ export function QrScannerModal({
           </div>
 
           <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Manual</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolucion Manual</p>
             <textarea
               value={manualInput}
               onChange={(e) => onManualInputChange(e.target.value)}
-              placeholder="Pega aquí mtiqr1..., mtiqr0... o JSON legacy del QR"
+              placeholder="Pega aqui el token mtiqr1 del QR firmado"
               className="w-full h-56 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-mono text-slate-700 outline-none"
             />
             <div className="flex flex-wrap gap-2">
@@ -100,7 +100,7 @@ export function QrScannerModal({
               </button>
             </div>
             <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-              Compatible con QR firmado (mtiqr1), QR local compacto (mtiqr0) y JSON legacy.
+              Solo compatible con QR firmado (mtiqr1).
             </p>
           </div>
         </div>

@@ -100,7 +100,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     <button
                       onClick={() => {
                         setQrManualInput('');
-                        setQrScannerStatus('Escanea un QR firmado (mtiqr1) o local (mtiqr0).');
+                        setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
                         setShowQrScanner(true);
                       }}
                       className="w-full xl:w-auto min-w-0 bg-white border border-blue-200 text-blue-700 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-blue-50"

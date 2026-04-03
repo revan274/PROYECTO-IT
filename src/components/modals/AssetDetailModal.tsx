@@ -43,7 +43,7 @@ interface AssetDetailModalProps {
   asset: AssetDetail | null;
   canEdit: boolean;
   selectedAssetQrLoading: boolean;
-  selectedAssetQrMode: 'signed' | 'local' | 'legacy';
+  selectedAssetQrMode: 'signed' | 'unavailable';
   selectedAssetQrIssuedAt: string | null;
   effectiveSelectedAssetQrValue: string;
   LazyQRCodeCanvas: ComponentType<LazyQrCanvasLikeProps>;
@@ -73,6 +73,7 @@ export function AssetDetailModal({
   onDeleteAsset,
 }: AssetDetailModalProps) {
   if (!asset) return null;
+  const hasSignedQr = selectedAssetQrMode === 'signed' && Boolean(effectiveSelectedAssetQrValue);
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
@@ -181,17 +182,23 @@ export function AssetDetailModal({
           <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5">
             <div className="flex flex-col lg:flex-row gap-6">
               <div className="w-fit rounded-2xl bg-white border border-slate-200 p-3 shadow-sm mx-auto lg:mx-0">
-                <Suspense fallback={<div className="w-[220px] h-[220px] grid place-items-center text-[10px] font-black uppercase tracking-wider text-slate-400">Generando QR...</div>}>
-                  <LazyQRCodeCanvas
-                    id={buildAssetQrCanvasId(asset.id)}
-                    value={effectiveSelectedAssetQrValue}
-                    size={220}
-                    includeMargin
-                    level="L"
-                    bgColor="#ffffff"
-                    fgColor="#0f172a"
-                  />
-                </Suspense>
+                {hasSignedQr ? (
+                  <Suspense fallback={<div className="w-[220px] h-[220px] grid place-items-center text-[10px] font-black uppercase tracking-wider text-slate-400">Generando QR...</div>}>
+                    <LazyQRCodeCanvas
+                      id={buildAssetQrCanvasId(asset.id)}
+                      value={effectiveSelectedAssetQrValue}
+                      size={220}
+                      includeMargin
+                      level="L"
+                      bgColor="#ffffff"
+                      fgColor="#0f172a"
+                    />
+                  </Suspense>
+                ) : (
+                  <div className="w-[220px] h-[220px] grid place-items-center text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    {selectedAssetQrLoading ? 'Firmando QR...' : 'QR firmado no disponible'}
+                  </div>
+                )}
               </div>
               <div className="flex-1 space-y-3">
                 <div>
@@ -202,22 +209,22 @@ export function AssetDetailModal({
                   <span className={`mt-2 inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                     selectedAssetQrLoading
                       ? 'bg-slate-100 text-slate-500 border-slate-200'
-                      : selectedAssetQrMode === 'signed'
+                      : hasSignedQr
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
                     {selectedAssetQrLoading
                       ? 'Firmando QR...'
-                      : selectedAssetQrMode === 'signed'
+                      : hasSignedQr
                         ? 'QR Firmado (HMAC)'
-                        : 'QR Local (sin firma)'}
+                        : 'QR no disponible'}
                   </span>
                   <p className="text-xs font-semibold text-slate-500 mt-1">
-                    {selectedAssetQrMode === 'signed'
+                    {hasSignedQr
                       ? 'El QR contiene un token firmado por backend. No expone detalles sensibles en claro.'
-                      : 'Modo fallback local: token compacto sin firma (mtiqr0). Usa backend online para firma segura.'}
+                      : 'Se requiere backend online para generar y validar el QR firmado de este activo.'}
                   </p>
-                  {selectedAssetQrMode === 'signed' && selectedAssetQrIssuedAt && (
+                  {hasSignedQr && selectedAssetQrIssuedAt && (
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                       Firmado: {formatDateTime(selectedAssetQrIssuedAt)}
                     </p>
@@ -226,7 +233,7 @@ export function AssetDetailModal({
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={selectedAssetQrLoading}
+                    disabled={selectedAssetQrLoading || !hasSignedQr}
                     onClick={onDownloadQr}
                     className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-100 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -234,7 +241,7 @@ export function AssetDetailModal({
                   </button>
                   <button
                     type="button"
-                    disabled={selectedAssetQrLoading}
+                    disabled={selectedAssetQrLoading || !hasSignedQr}
                     onClick={onPrintQr}
                     className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-xs font-black uppercase text-blue-700 hover:bg-blue-100 flex items-center gap-2 disabled:opacity-50"
                   >

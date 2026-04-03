@@ -358,4 +358,42 @@ describe('App UI flow', () => {
     expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
     expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
   });
+
+  test('rechaza QR locales y solo acepta tokens firmados', async () => {
+    installFetchMock([
+      {
+        method: 'POST',
+        path: '/api/auth/login',
+        response: {
+          user: ADMIN_USER,
+          token: 'token-admin-qr-ui',
+          loggedAt: '2026-04-03T10:00:00.000Z',
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/bootstrap',
+        response: buildAdminBootstrap(),
+      },
+    ]);
+
+    render(<App />);
+
+    fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
+
+    await screen.findByText('Backend Online');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Inventario$/i }));
+
+    await screen.findByText('Activos IT');
+
+    fireEvent.click(screen.getByRole('button', { name: /Escanear QR/i }));
+
+    fireEvent.change(screen.getByPlaceholderText(/mtiqr1 del QR firmado/i), {
+      target: { value: 'mtiqr0.1.POS-001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Resolver QR/i }));
+
+    await screen.findByText(/Solo se aceptan QR firmados/i);
+  });
 });
