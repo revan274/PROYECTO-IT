@@ -396,4 +396,49 @@ describe('App UI flow', () => {
 
     await screen.findByText(/Solo se aceptan QR firmados/i);
   });
+
+  test('permite filtrar usuarios por rol y busqueda', async () => {
+    installFetchMock([
+      {
+        method: 'POST',
+        path: '/api/auth/login',
+        response: {
+          user: ADMIN_USER,
+          token: 'token-admin-users-ui',
+          loggedAt: '2026-04-03T10:30:00.000Z',
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/bootstrap',
+        response: buildAdminBootstrap(),
+      },
+    ]);
+
+    render(<App />);
+
+    fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
+
+    await screen.findByText('Backend Online');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Usuarios$/i }));
+
+    await screen.findByText('Usuarios Registrados');
+    await screen.findByText(/Mostrando 3 de 3/i);
+
+    fireEvent.change(screen.getByDisplayValue('Todos los roles'), {
+      target: { value: 'solicitante' },
+    });
+
+    await screen.findByText(/Mostrando 1 de 3/i);
+    expect(screen.getByText(REQUESTER_USER.nombre)).toBeTruthy();
+    expect(screen.queryByText(ADMIN_USER.username)).toBeNull();
+
+    fireEvent.change(screen.getByPlaceholderText(/Nombre, usuario o cargo/i), {
+      target: { value: 'integration' },
+    });
+
+    await screen.findByText(/Mostrando 1 de 3/i);
+    expect(screen.getByText(REQUESTER_USER.username)).toBeTruthy();
+  });
 });

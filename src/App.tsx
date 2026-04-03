@@ -461,6 +461,10 @@ export default function App() {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'TODOS' | UserRole>('TODOS');
+  const [userStatusFilter, setUserStatusFilter] = useState<'TODOS' | 'ACTIVOS' | 'INACTIVOS'>('TODOS');
+  const [userDepartmentFilter, setUserDepartmentFilter] = useState('TODOS');
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [backendConnected, setBackendConnected] = useState(false);
@@ -468,6 +472,7 @@ export default function App() {
   const [liveNow, setLiveNow] = useState(() => Date.now());
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const debouncedSupplySearchTerm = useDebouncedValue(supplySearchTerm);
+  const debouncedUserSearchTerm = useDebouncedValue(userSearchTerm);
   const headerSearchTokens = useMemo(
     () => tokenizeSearchQuery(debouncedSearchTerm),
     [debouncedSearchTerm],
@@ -475,6 +480,10 @@ export default function App() {
   const supplySearchTokens = useMemo(
     () => tokenizeSearchQuery(debouncedSupplySearchTerm),
     [debouncedSupplySearchTerm],
+  );
+  const userSearchTokens = useMemo(
+    () => tokenizeSearchQuery(debouncedUserSearchTerm),
+    [debouncedUserSearchTerm],
   );
   const markInsumoTouched = useCallback((field: InsumoField) => {
     setInsumoTouched((prev) => {
@@ -2723,21 +2732,63 @@ export default function App() {
       ).sort((a, b) => a.localeCompare(b)),
     [activos],
   );
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) => {
+        if (userRoleFilter !== 'TODOS' && user.rol !== userRoleFilter) {
+          return false;
+        }
+        if (userStatusFilter === 'ACTIVOS' && user.activo === false) {
+          return false;
+        }
+        if (userStatusFilter === 'INACTIVOS' && user.activo !== false) {
+          return false;
+        }
+        if (
+          userDepartmentFilter !== 'TODOS'
+          && normalizeForCompare(user.departamento || '') !== normalizeForCompare(userDepartmentFilter)
+        ) {
+          return false;
+        }
+
+        if (userSearchTokens.length === 0) return true;
+        const searchable = normalizeForCompare([
+          user.nombre,
+          user.username,
+          user.departamento,
+          userCargoLabelByValue[String(user.departamento || '').trim().toUpperCase()] || '',
+          roleLabelByValue[user.rol] || USER_ROLE_LABEL[user.rol],
+          rolePermissionsByValue[user.rol] || USER_ROLE_PERMISSIONS[user.rol],
+          user.activo !== false ? 'activo' : 'inactivo',
+        ].join(' '));
+        return includesAllSearchTokens(searchable, userSearchTokens);
+      }),
+    [
+      roleLabelByValue,
+      rolePermissionsByValue,
+      userCargoLabelByValue,
+      userDepartmentFilter,
+      userRoleFilter,
+      userSearchTokens,
+      userStatusFilter,
+      users,
+    ],
+  );
   const sortedUsers = useMemo(
     () =>
-      [...users].sort((left, right) => {
+      [...filteredUsers].sort((left, right) => {
         const deptCompare = normalizeForCompare(left.departamento || '').localeCompare(normalizeForCompare(right.departamento || ''));
         if (deptCompare !== 0) return deptCompare;
         return normalizeForCompare(left.nombre).localeCompare(normalizeForCompare(right.nombre));
       }),
-    [users],
+    [filteredUsers],
   );
   const activeUsersCount = useMemo(
     () => users.filter((user) => user.activo !== false).length,
     [users],
   );
-  const requesterUsersCount = useMemo(
-    () => users.filter((user) => user.rol === 'solicitante').length,
+  const ticketEligibleUsersCount = useMemo(
+    () => users.filter((user) => user.activo !== false && user.rol !== 'consulta').length,
     [users],
   );
 
@@ -5457,7 +5508,7 @@ export default function App() {
                   canManageUsers={canManageUsers}
                   users={users}
                   activeUsersCount={activeUsersCount}
-                  requesterUsersCount={requesterUsersCount}
+                  ticketEligibleUsersCount={ticketEligibleUsersCount}
                   handleCreateUser={handleCreateUser}
                   editingUserId={editingUserId}
                   newUserForm={newUserForm}
@@ -5467,6 +5518,14 @@ export default function App() {
                   isCreatingUser={isCreatingUser}
                   resetNewUserForm={resetNewUserForm}
                   sortedUsers={sortedUsers}
+                  userSearchTerm={userSearchTerm}
+                  setUserSearchTerm={setUserSearchTerm}
+                  userRoleFilter={userRoleFilter}
+                  setUserRoleFilter={setUserRoleFilter}
+                  userStatusFilter={userStatusFilter}
+                  setUserStatusFilter={setUserStatusFilter}
+                  userDepartmentFilter={userDepartmentFilter}
+                  setUserDepartmentFilter={setUserDepartmentFilter}
                   formatCargoFromCatalog={formatCargoFromCatalog}
                   roleLabelByValue={roleLabelByValue}
                   rolePermissionsByValue={rolePermissionsByValue}

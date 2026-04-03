@@ -6,7 +6,7 @@ interface UsersViewProps {
   canManageUsers: boolean;
   users: UserItem[];
   activeUsersCount: number;
-  requesterUsersCount: number;
+  ticketEligibleUsersCount: number;
   handleCreateUser: (e: React.FormEvent) => void;
   editingUserId: number | null;
   newUserForm: {
@@ -28,6 +28,14 @@ interface UsersViewProps {
   isCreatingUser: boolean;
   resetNewUserForm: () => void;
   sortedUsers: UserItem[];
+  userSearchTerm: string;
+  setUserSearchTerm: React.Dispatch<React.SetStateAction<string>>;
+  userRoleFilter: 'TODOS' | UserRole;
+  setUserRoleFilter: React.Dispatch<React.SetStateAction<'TODOS' | UserRole>>;
+  userStatusFilter: 'TODOS' | 'ACTIVOS' | 'INACTIVOS';
+  setUserStatusFilter: React.Dispatch<React.SetStateAction<'TODOS' | 'ACTIVOS' | 'INACTIVOS'>>;
+  userDepartmentFilter: string;
+  setUserDepartmentFilter: React.Dispatch<React.SetStateAction<string>>;
   formatCargoFromCatalog: (cargo?: string) => string;
   roleLabelByValue: Record<string, string>;
   rolePermissionsByValue: Record<string, string>;
@@ -42,7 +50,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
   canManageUsers,
   users,
   activeUsersCount,
-  requesterUsersCount,
+  ticketEligibleUsersCount,
   handleCreateUser,
   editingUserId,
   newUserForm,
@@ -52,6 +60,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
   isCreatingUser,
   resetNewUserForm,
   sortedUsers,
+  userSearchTerm,
+  setUserSearchTerm,
+  userRoleFilter,
+  setUserRoleFilter,
+  userStatusFilter,
+  setUserStatusFilter,
+  userDepartmentFilter,
+  setUserDepartmentFilter,
   formatCargoFromCatalog,
   roleLabelByValue,
   rolePermissionsByValue,
@@ -89,8 +105,8 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 <p className="text-3xl font-black text-green-700">{activeUsersCount}</p>
               </div>
               <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Solicitantes</p>
-                <p className="text-3xl font-black text-orange-700">{requesterUsersCount}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Generan Tickets</p>
+                <p className="text-3xl font-black text-orange-700">{ticketEligibleUsersCount}</p>
               </div>
             </div>
           </div>
@@ -163,7 +179,73 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
             <div className="xl:col-span-3 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
               <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30">
-                <h4 className="font-black text-slate-800 uppercase tracking-tight">Usuarios Registrados</h4>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <h4 className="font-black text-slate-800 uppercase tracking-tight">Usuarios Registrados</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
+                        Mostrando {sortedUsers.length} de {users.length}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Buscar
+                      </label>
+                      <input
+                        value={userSearchTerm}
+                        placeholder="Nombre, usuario o cargo"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-700 outline-none"
+                        onChange={(e) => setUserSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Rol
+                      </label>
+                      <select
+                        value={userRoleFilter}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
+                        onChange={(e) => setUserRoleFilter(e.target.value as 'TODOS' | UserRole)}
+                      >
+                        <option value="TODOS">Todos los roles</option>
+                        {roleCatalogOptions.map((role) => (
+                          <option key={role.value} value={role.value}>{role.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Estado
+                      </label>
+                      <select
+                        value={userStatusFilter}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
+                        onChange={(e) => setUserStatusFilter(e.target.value as 'TODOS' | 'ACTIVOS' | 'INACTIVOS')}
+                      >
+                        <option value="TODOS">Todos</option>
+                        <option value="ACTIVOS">Activos</option>
+                        <option value="INACTIVOS">Inactivos</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Cargo
+                      </label>
+                      <select
+                        value={userDepartmentFilter}
+                        className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
+                        onChange={(e) => setUserDepartmentFilter(e.target.value)}
+                      >
+                        <option value="TODOS">Todos los cargos</option>
+                        {userCargoOptions.map((cargo) => (
+                          <option key={cargo.value} value={cargo.value}>{cargo.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[720px]">
@@ -224,7 +306,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     {sortedUsers.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-8 py-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                          Sin usuarios registrados.
+                          No hay usuarios para los filtros actuales.
                         </td>
                       </tr>
                     )}
