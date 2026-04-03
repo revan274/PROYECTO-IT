@@ -1001,8 +1001,8 @@ export default function App() {
     const internalCodeSourceRaw = String(selectedAsset.idInterno || '').trim() || idAssetRaw;
     const internalCodeDigits = (internalCodeSourceRaw.match(/\d+/g) || []).join('');
     const internalCodeRaw = (internalCodeDigits || String(selectedAsset.id || '0')).slice(-2).padStart(2, '0');
-    const headerLabelRaw = 'Activo fijo';
-    const footerNoteRaw = 'Propiedad corporativa - No remover';
+    const headerLabelRaw = 'Activo IT';
+    const footerNoteRaw = 'No remover';
 
     const tag = escapeHtml(tagRaw);
     const ubicacion = escapeHtml(ubicacionFullRaw);
@@ -1035,9 +1035,9 @@ export default function App() {
     .label {
       width: 55mm;
       height: 35mm;
-      padding: 1.35mm 1.45mm 1.2mm;
-      border: 0.3mm solid #111827;
-      border-radius: 1.2mm;
+      padding: 1.15mm 1.2mm 1.05mm;
+      border: 0.25mm solid #111827;
+      border-radius: 0.9mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -1046,22 +1046,61 @@ export default function App() {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1mm;
+      gap: 0.7mm;
+      margin-bottom: 0.55mm;
     }
-    .header {
+    .eyebrow {
       margin: 0;
-      font-size: 3.25pt;
+      display: inline-flex;
+      align-items: center;
+      min-height: 4.2mm;
+      padding: 0 1.2mm;
+      border-radius: 999px;
+      background: #111827;
+      color: #ffffff;
+      font-size: 2.85pt;
       font-weight: 900;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: #4b5563;
       white-space: nowrap;
     }
+    .main {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 18.5mm minmax(0, 1fr);
+      gap: 1.15mm;
+      align-items: stretch;
+    }
+    .qr-shell {
+      height: 100%;
+      min-height: 0;
+      border: 0.28mm solid #111827;
+      border-radius: 0.85mm;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.55mm;
+    }
+    .qr {
+      width: 17.1mm;
+      height: 17.1mm;
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .details {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45mm;
+    }
     .tag {
-      margin: 0.45mm 0 0;
-      font-size: 10.6pt;
+      margin: 0;
+      font-size: 12.4pt;
       font-weight: 900;
-      line-height: 0.94;
+      line-height: 0.9;
       letter-spacing: 0.01em;
       text-transform: uppercase;
       word-break: break-word;
@@ -1069,183 +1108,120 @@ export default function App() {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      min-height: 8.9mm;
-      max-height: 9.6mm;
+      min-height: 10.2mm;
+      max-height: 11.2mm;
+      color: #0f172a;
     }
-    .content {
-      flex: 1;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 15.2mm;
-      gap: 1mm;
-      align-items: start;
-      margin-top: 0.55mm;
-    }
-    .info {
+    .detail-line {
       min-width: 0;
       display: flex;
-      flex-direction: column;
-      gap: 0.45mm;
-    }
-    .divider {
-      height: 0.18mm;
-      background: #111827;
-      margin: 0;
-    }
-    .meta {
-      margin: 0;
-      font-size: 4.45pt;
-      line-height: 1.05;
-      font-weight: 800;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: #374151;
-    }
-    .rows {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4mm;
-      min-width: 0;
-    }
-    .row {
-      min-width: 0;
-      display: grid;
-      grid-template-columns: 4.5mm minmax(0, 1fr);
+      align-items: baseline;
       gap: 0.55mm;
-      align-items: center;
-      padding-bottom: 0.3mm;
-      border-bottom: 0.16mm solid #dbe2ea;
+      padding-bottom: 0.25mm;
+      border-bottom: 0.14mm solid #dbe2ea;
     }
-    .k {
+    .detail-k {
       display: block;
       margin: 0;
-      font-size: 3.1pt;
-      font-weight: 800;
-      letter-spacing: 0.04em;
+      flex-shrink: 0;
+      font-size: 2.9pt;
+      font-weight: 900;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #6b7280;
+      color: #64748b;
     }
-    .v {
+    .detail-v {
       display: block;
+      min-width: 0;
       margin: 0;
-      font-size: 4.95pt;
-      line-height: 1.03;
+      font-size: 4.85pt;
+      line-height: 1.02;
       font-weight: 900;
       text-transform: uppercase;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: #0f172a;
     }
-    .qr-panel {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.45mm;
-    }
-    .badge-wrap {
-      display: flex;
-      justify-content: flex-end;
-    }
-    .qr-frame {
-      border: 0.25mm solid #111827;
-      border-radius: 0.9mm;
-      padding: 0.4mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #ffffff;
-    }
-    .qr {
-      width: 13.4mm;
-      height: 13.4mm;
-      object-fit: contain;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+    .equipment {
+      margin: 0;
+      font-size: 3.45pt;
+      line-height: 1.07;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: #475569;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 3.9mm;
     }
     .footer {
       margin-top: auto;
       padding-top: 0.45mm;
-      border-top: 0.18mm solid #111827;
+      border-top: 0.16mm solid #cbd5e1;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.55mm;
+      gap: 0.65mm;
     }
     .footer-note {
       flex: 1;
       min-width: 0;
       margin: 0;
-      font-size: 3pt;
-      line-height: 1.02;
+      font-size: 3.05pt;
+      line-height: 1.05;
       font-weight: 900;
       text-transform: uppercase;
-      color: #111827;
+      color: #475569;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .code {
+    .id-chip {
       flex-shrink: 0;
       display: inline-flex;
       align-items: center;
-      gap: 0.55mm;
-      font-size: 3.35pt;
-      font-weight: 900;
-      text-transform: uppercase;
-      color: #111827;
-    }
-    .code-badge {
-      width: 6.4mm;
-      height: 4.3mm;
-      display: inline-flex;
-      align-items: center;
       justify-content: center;
+      min-width: 9.2mm;
+      height: 4.2mm;
+      padding: 0 1.15mm;
+      border-radius: 999px;
       background: #111827;
       color: #ffffff;
-      font-size: 5.2pt;
+      font-size: 3.3pt;
       font-weight: 900;
-      line-height: 1;
-      border-radius: 0.45mm;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
   </style>
 </head>
 <body>
   <div class="label">
     <div class="topline">
-      <p class="header">${headerLabel}</p>
-      <div class="badge-wrap">
-        <span class="code-badge">${internalCode}</span>
-      </div>
+      <p class="eyebrow">${headerLabel}</p>
+      <span class="id-chip">#${internalCode}</span>
     </div>
-    <p class="tag">${tag}</p>
-    <div class="content">
-      <div class="info">
-        <div class="divider"></div>
-        <p class="meta">S/N: ${serial}</p>
-        <div class="rows">
-          <div class="row">
-            <span class="k">EQP:</span>
-            <span class="v">${equipo}</span>
-          </div>
-          <div class="row">
-            <span class="k">LOC:</span>
-            <span class="v">${ubicacion}</span>
-          </div>
-        </div>
+    <div class="main">
+      <div class="qr-shell">
+        <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
       </div>
-      <div class="qr-panel">
-        <div class="qr-frame">
-          <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
+      <div class="details">
+        <p class="tag">${tag}</p>
+        <div class="detail-line">
+          <span class="detail-k">SN</span>
+          <span class="detail-v">${serial}</span>
         </div>
+        <div class="detail-line">
+          <span class="detail-k">LOC</span>
+          <span class="detail-v">${ubicacion}</span>
+        </div>
+        <p class="equipment">${equipo}</p>
       </div>
     </div>
     <div class="footer">
       <p class="footer-note">${footerNote}</p>
-      <span class="code">ID ${idAsset}</span>
+      <span class="id-chip">ID ${idAsset}</span>
     </div>
   </div>
 </body>
