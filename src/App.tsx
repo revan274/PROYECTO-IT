@@ -1035,28 +1035,49 @@ export default function App() {
     .label {
       width: 55mm;
       height: 35mm;
-      padding: 1.65mm 1.65mm 1.35mm;
+      padding: 1.35mm 1.45mm 1.2mm;
       border: 0.3mm solid #111827;
       border-radius: 1.2mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
+    .topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1mm;
+    }
     .header {
       margin: 0;
-      font-size: 3.9pt;
+      font-size: 3.25pt;
       font-weight: 900;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: #4b5563;
       white-space: nowrap;
+    }
+    .tag {
+      margin: 0.45mm 0 0;
+      font-size: 10.6pt;
+      font-weight: 900;
+      line-height: 0.94;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 8.9mm;
+      max-height: 9.6mm;
     }
     .content {
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 10.8mm;
-      gap: 0.85mm;
+      grid-template-columns: minmax(0, 1fr) 15.2mm;
+      gap: 1mm;
       align-items: start;
       margin-top: 0.55mm;
     }
@@ -1064,31 +1085,17 @@ export default function App() {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.55mm;
-    }
-    .tag {
-      margin: 0;
-      font-size: 8.7pt;
-      font-weight: 900;
-      line-height: 1;
-      letter-spacing: 0;
-      text-transform: uppercase;
-      word-break: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      max-height: 9.4mm;
+      gap: 0.45mm;
     }
     .divider {
-      height: 0.22mm;
+      height: 0.18mm;
       background: #111827;
       margin: 0;
     }
     .meta {
       margin: 0;
-      font-size: 3.9pt;
-      line-height: 1.02;
+      font-size: 4.45pt;
+      line-height: 1.05;
       font-weight: 800;
       text-transform: uppercase;
       white-space: nowrap;
@@ -1099,32 +1106,32 @@ export default function App() {
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 0.35mm;
+      gap: 0.4mm;
       min-width: 0;
     }
     .row {
       min-width: 0;
       display: grid;
-      grid-template-columns: 5.4mm minmax(0, 1fr);
+      grid-template-columns: 4.5mm minmax(0, 1fr);
       gap: 0.55mm;
       align-items: center;
-      padding-bottom: 0.18mm;
-      border-bottom: 0.14mm solid #dbe2ea;
+      padding-bottom: 0.3mm;
+      border-bottom: 0.16mm solid #dbe2ea;
     }
     .k {
       display: block;
       margin: 0;
-      font-size: 3.05pt;
+      font-size: 3.1pt;
       font-weight: 800;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       color: #6b7280;
     }
     .v {
       display: block;
       margin: 0;
-      font-size: 4.3pt;
-      line-height: 1;
+      font-size: 4.95pt;
+      line-height: 1.03;
       font-weight: 900;
       text-transform: uppercase;
       white-space: nowrap;
@@ -1133,31 +1140,34 @@ export default function App() {
     }
     .qr-panel {
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.45mm;
     }
     .badge-wrap {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 0.35mm;
     }
     .qr-frame {
       border: 0.25mm solid #111827;
-      border-radius: 0.7mm;
-      padding: 0.45mm;
+      border-radius: 0.9mm;
+      padding: 0.4mm;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #ffffff;
     }
     .qr {
-      width: 8.7mm;
-      height: 8.7mm;
+      width: 13.4mm;
+      height: 13.4mm;
       object-fit: contain;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .footer {
       margin-top: auto;
-      padding-top: 0.55mm;
+      padding-top: 0.45mm;
       border-top: 0.18mm solid #111827;
       display: flex;
       align-items: center;
@@ -1168,7 +1178,7 @@ export default function App() {
       flex: 1;
       min-width: 0;
       margin: 0;
-      font-size: 3.2pt;
+      font-size: 3pt;
       line-height: 1.02;
       font-weight: 900;
       text-transform: uppercase;
@@ -1182,33 +1192,38 @@ export default function App() {
       display: inline-flex;
       align-items: center;
       gap: 0.55mm;
-      font-size: 3.2pt;
+      font-size: 3.35pt;
       font-weight: 900;
       text-transform: uppercase;
       color: #111827;
     }
     .code-badge {
-      width: 5.9mm;
-      height: 4mm;
+      width: 6.4mm;
+      height: 4.3mm;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       background: #111827;
       color: #ffffff;
-      font-size: 4.85pt;
+      font-size: 5.2pt;
       font-weight: 900;
       line-height: 1;
-      border-radius: 0.35mm;
-      letter-spacing: 0.02em;
+      border-radius: 0.45mm;
+      letter-spacing: 0.03em;
     }
   </style>
 </head>
 <body>
   <div class="label">
-    <p class="header">${headerLabel}</p>
+    <div class="topline">
+      <p class="header">${headerLabel}</p>
+      <div class="badge-wrap">
+        <span class="code-badge">${internalCode}</span>
+      </div>
+    </div>
+    <p class="tag">${tag}</p>
     <div class="content">
       <div class="info">
-        <p class="tag">${tag}</p>
         <div class="divider"></div>
         <p class="meta">S/N: ${serial}</p>
         <div class="rows">
@@ -1223,9 +1238,6 @@ export default function App() {
         </div>
       </div>
       <div class="qr-panel">
-        <div class="badge-wrap">
-          <span class="code-badge">${internalCode}</span>
-        </div>
         <div class="qr-frame">
           <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
         </div>
