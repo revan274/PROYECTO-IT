@@ -1,4 +1,5 @@
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Moon,
   Save,
@@ -89,6 +90,7 @@ import type {
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
+  ViewType,
 
   TravelReportRow,
   UserItem,
@@ -201,9 +203,31 @@ import {
 
 const LazyUsersView = lazy(() => import('./components/views/UsersView'));
 const LazyDashboardView = lazy(() => import('./components/views/DashboardView'));
+const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
 const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
 const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
 const LazyAuditView = lazy(() => import('./components/views/AuditView'));
+
+const VIEW_PATHS: Record<ViewType, string> = {
+  dashboard: '/dashboard',
+  reports: '/reports',
+  inventory: '/inventory',
+  supplies: '/supplies',
+  tickets: '/tickets',
+  history: '/history',
+  users: '/users',
+};
+
+function getViewPath(view: ViewType): string {
+  return VIEW_PATHS[view];
+}
+
+function getViewFromPathname(pathname: string): ViewType | null {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  const match = (Object.entries(VIEW_PATHS) as Array<[ViewType, string]>)
+    .find(([, path]) => path === normalized);
+  return match?.[0] || null;
+}
 
 type SpreadsheetRow = Record<string, unknown>;
 type NetworkSheetRow = unknown[];
@@ -347,6 +371,8 @@ function isRouteNotFoundApiError(error: unknown): boolean {
 // --- APP PRINCIPAL ---
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     sessionUser,
     setStoredSession,
@@ -358,9 +384,6 @@ export default function App() {
   } = useAppStore();
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
-  const [view, setView] = useState('dashboard'); // temporal
-  const isDashboardView = view === 'dashboard';
-  const isReportsView = view === 'reports';
 
   // Estado de Datos
   const [activos, setActivos] = useState<Activo[]>([]);
@@ -650,6 +673,28 @@ export default function App() {
   const canManageUsers = sessionUser?.rol === 'admin';
   const isReadOnly = !canEdit;
   const isRequesterOnlyUser = sessionUser?.rol === 'solicitante';
+  const routeView = useMemo(
+    () => getViewFromPathname(location.pathname),
+    [location.pathname],
+  );
+  const defaultView: ViewType = isRequesterOnlyUser ? 'tickets' : 'dashboard';
+  const accessibleRouteView = useMemo(() => {
+    if (routeView === null) return null;
+    if (routeView === 'users') return canManageUsers ? routeView : null;
+    if (routeView !== 'tickets' && isRequesterOnlyUser) return null;
+    return routeView;
+  }, [canManageUsers, isRequesterOnlyUser, routeView]);
+  const view: ViewType = accessibleRouteView ?? defaultView;
+  const isDashboardView = view === 'dashboard';
+  const isReportsView = view === 'reports';
+  const setView = useCallback(
+    (nextView: ViewType, options?: { replace?: boolean }) => {
+      const nextPath = getViewPath(nextView);
+      if (location.pathname === nextPath && !options?.replace) return;
+      navigate(nextPath, { replace: options?.replace ?? false });
+    },
+    [location.pathname, navigate],
+  );
   const activeTicketBranches = useMemo(
     () => catalogos.sucursales.filter((branch) => branch.activo !== false),
     [catalogos],
@@ -823,7 +868,7 @@ export default function App() {
     setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
     setIsQrScannerActive(false);
     setIsResolvingQr(false);
-  }, [applyReportFilterSnapshot, logout]);
+  }, [applyReportFilterSnapshot, logout, setView]);
 
   const ensureBackendConnected = useCallback((action: string) => {
     if (backendConnected) return true;
@@ -1469,12 +1514,6 @@ export default function App() {
   }, [view, fetchAuditHistory]);
 
   useEffect(() => {
-    if (view === 'users' && !canManageUsers) {
-      setView('dashboard');
-    }
-  }, [canManageUsers, view]);
-
-  useEffect(() => {
     if (!selectedSupplyHistoryItem) return;
     const exists = insumos.some((item) => item.id === selectedSupplyHistoryItem.id);
     if (!exists) setSelectedSupplyHistoryItem(null);
@@ -1492,12 +1531,6 @@ export default function App() {
       return { ...prev, activoTag: '' };
     });
   }, [formData.activoTag, showModal, ticketAssetOptions]);
-
-  useEffect(() => {
-    if (isRequesterOnlyUser && view !== 'tickets') {
-      setView('tickets');
-    }
-  }, [isRequesterOnlyUser, view]);
 
   useEffect(() => {
     if (!roleCatalogOptions.some((role) => role.value === newUserForm.rol)) {
@@ -1567,7 +1600,7 @@ export default function App() {
         setIsResolvingQr(false);
       }
 
-  }, [activos, backendConnected, showToast]);
+  }, [activos, backendConnected, setView, showToast]);
 
   const resolveQrFromManualInput = useCallback(async () => {
     const ok = await resolveQrPayload(qrManualInput);
@@ -4798,6 +4831,24 @@ export default function App() {
   }, [selectedIssueArea]);
 
   const systemHealth = activos.length > 0 ? Math.round((activos.filter(a => a.estado === 'Operativo').length / activos.length) * 100) : 100;
+  const defaultViewPath = getViewPath(defaultView);
+  const renderLazyView = (loadingLabel: string, content: React.ReactNode) => (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">{loadingLabel}</div>}>
+      {content}
+    </React.Suspense>
+  );
+  const renderProtectedView = (
+    content: React.ReactNode,
+    options?: { allowRequester?: boolean; requiresUserManagement?: boolean },
+  ) => {
+    if (options?.requiresUserManagement && !canManageUsers) {
+      return <Navigate to={defaultViewPath} replace />;
+    }
+    if (!options?.allowRequester && isRequesterOnlyUser) {
+      return <Navigate to={defaultViewPath} replace />;
+    }
+    return content;
+  };
 
   if (!sessionUser) {
     return (
@@ -4860,10 +4911,7 @@ export default function App() {
         sidebarOpen={sidebarOpen}
         onCloseSidebar={() => setSidebarOpen(false)}
         authorBrand={AUTHOR_BRAND}
-        onSelectView={(nextView) => {
-          setView(nextView);
-          setSidebarOpen(false);
-        }}
+        getItemHref={getViewPath}
         onLogout={() => {
           void handleLogout();
         }}
@@ -4893,833 +4941,404 @@ export default function App() {
 
 
 
-            {/* VISTA DASHBOARD */}
-            {view === 'dashboard' && (
-              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Dashboard...</div>}>
-                <LazyDashboardView
-                  dashboardWindow={dashboardWindow}
-                  dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
-                  dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
-                  dashboardUnassignedCount={dashboardUnassignedCount}
-                  dashboardRange={dashboardRange}
-                  setDashboardRange={setDashboardRange}
-                  systemHealth={systemHealth}
-                  insumos={insumos}
-                  dashboardOpenTrend={dashboardOpenTrend}
-                  activos={activos}
-                  dashboardCriticalTrend={dashboardCriticalTrend}
-                  dashboardSlaExpiredCount={dashboardSlaExpiredCount}
-                  dashboardSlaTrend={dashboardSlaTrend}
-                  setView={setView}
-                  applyTicketFocus={applyTicketFocus}
-                  dashboardRecentTickets={dashboardRecentTickets}
-                  setSearchTerm={setSearchTerm}
-                  dashboardTopOwners={dashboardTopOwners}
-                  dashboardOwnerMax={dashboardOwnerMax}
-                  dashboardInProcessCount={dashboardInProcessCount}
-                  applyInventoryFocus={applyInventoryFocus}
-                  activosSinResponsable={activosSinResponsable}
-                  activosVidaAlta={activosVidaAlta}
-                  effectiveRiskSummary={effectiveRiskSummary}
-                  dashboardStateBars={dashboardStateBars}
-                  dashboardStateMax={dashboardStateMax}
-                  dashboardBranchBars={dashboardBranchBars}
-                  dashboardBranchMax={dashboardBranchMax}
-                  dashboardSlaCompliancePct={dashboardSlaCompliancePct}
-                  dashboardSlaCompliantCount={dashboardSlaCompliantCount}
-                  dashboardSlaTotalCount={dashboardSlaTotalCount}
-                  dashboardAgingBars={dashboardAgingBars}
-                  dashboardAgingMax={dashboardAgingMax}
-                />
-              </React.Suspense>
-            )}
-
-            {/* VISTA REPORTERIA */}
-            {view === 'reports' && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                  <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Analitica Operativa</p>
-                      <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Reporteria Ejecutiva</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={openReportExecutivePresentation}
-                        className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
-                      >
-                        Abrir Presentacion
-                      </button>
-                      <button
-                        onClick={() => void exportReportExcel()}
-                        className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase text-emerald-700 hover:bg-emerald-100"
-                      >
-                        Exportar Excel
-                      </button>
-                      <button
-                        onClick={exportReportPdf}
-                        className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-xs font-black uppercase text-blue-700 hover:bg-blue-100"
-                      >
-                        Exportar PDF
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-8 border-b border-slate-50 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 gap-3">
-                      <input
-                        type="date"
-                        value={reportDateFrom}
-                        onChange={(e) => setReportDateFrom(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <input
-                        type="date"
-                        value={reportDateTo}
-                        onChange={(e) => setReportDateTo(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <select
-                        value={reportBranchFilter}
-                        onChange={(e) => setReportBranchFilter(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODAS">Sucursal: todas</option>
-                        {reportBranchOptions.map((code) => (
-                          <option key={`rep-branch-${code}`} value={code}>
-                            {formatTicketBranchFromCatalog(code)}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={reportAreaFilter}
-                        onChange={(e) => setReportAreaFilter(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODAS">Area: todas</option>
-                        {reportAreaOptions.map((area) => (
-                          <option key={`rep-area-${area}`} value={area}>{area}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={reportStateFilter}
-                        onChange={(e) => setReportStateFilter(e.target.value as ReportStateFilter)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODOS">Estado: todos</option>
-                        {TICKET_STATES.map((state) => (
-                          <option key={`rep-state-${state}`} value={state}>{state}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={reportPriorityFilter}
-                        onChange={(e) => setReportPriorityFilter(e.target.value as ReportPriorityFilter)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODAS">Prioridad: todas</option>
-                        <option value="MEDIA">Media</option>
-                        <option value="ALTA">Alta</option>
-                        <option value="CRITICA">Critica</option>
-                      </select>
-                      <select
-                        value={reportAttentionFilter}
-                        onChange={(e) => setReportAttentionFilter(e.target.value as ReportAttentionFilter)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODAS">Atencion: todas</option>
-                        {TICKET_ATTENTION_TYPES.map((type) => (
-                          <option key={`rep-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={reportTechnicianFilter}
-                        onChange={(e) => setReportTechnicianFilter(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODOS">Tecnico: todos</option>
-                        <option value="SIN_ASIGNAR">Tecnico: sin asignar</option>
-                        {reportTechnicianOptions.map((name) => (
-                          <option key={`rep-tech-${name}`} value={name}>{name}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={resetReportFilters}
-                        className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-                      >
-                        Limpiar
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-3">
-                      <div className="flex-1 flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={reportPresetName}
-                          onChange={(e) => setReportPresetName(e.target.value)}
-                          placeholder="Nombre del preset"
-                          className="flex-1 px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                        />
-                        <button
-                          onClick={saveCurrentReportFilterPreset}
-                          className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
-                        >
-                          Guardar Preset
-                        </button>
-                      </div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 self-center">
-                        Presets guardados: {reportFilterPresets.length}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {reportFilterPresets.map((preset) => (
-                        <div key={preset.id} className="flex items-center rounded-2xl border border-slate-200 overflow-hidden bg-white">
-                          <button
-                            onClick={() => applyReportFilterPreset(preset)}
-                            className="px-3 py-2 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50"
-                          >
-                            {preset.name}
-                          </button>
-                          <button
-                            onClick={() => deleteReportFilterPreset(preset)}
-                            className="px-3 py-2 text-[10px] font-black uppercase text-red-500 border-l border-slate-200 hover:bg-red-50"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      ))}
-                      {reportFilterPresets.length === 0 && (
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          No hay presets guardados para este usuario.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl overflow-hidden">
-                  <div className="p-8 border-b border-slate-50 bg-amber-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Movilidad y combustible</p>
-                      <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Formato Mensual de Viajes IT</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={openTravelMovementSheet}
-                        className="px-4 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-xs font-black uppercase text-amber-800 hover:bg-amber-200"
-                      >
-                        Abrir Formato
-                      </button>
-                      <button
-                        onClick={printTravelMovementSheet}
-                        className="px-4 py-3 rounded-2xl border border-orange-300 bg-orange-100 text-xs font-black uppercase text-orange-800 hover:bg-orange-200"
-                      >
-                        Imprimir Formato
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-8 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
-                      <input
-                        type="month"
-                        value={travelReportMonth}
-                        onChange={(e) => setTravelReportMonth(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <select
-                        value={travelReportTechnician}
-                        onChange={(e) => setTravelReportTechnician(e.target.value)}
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      >
-                        <option value="TODOS">Tecnico: todos</option>
-                        <option value="SIN_ASIGNAR">Tecnico: sin asignar</option>
-                        {travelTechnicianOptions.map((name) => (
-                          <option key={`travel-tech-${name}`} value={name}>{name}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        value={travelReportName}
-                        onChange={(e) => setTravelReportName(e.target.value)}
-                        placeholder="Nombre en formato"
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <input
-                        type="text"
-                        value={travelReportDepartment}
-                        onChange={(e) => setTravelReportDepartment(e.target.value.toUpperCase())}
-                        placeholder="Departamento"
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <input
-                        type="text"
-                        value={travelReportFuelEfficiency}
-                        onChange={(e) => setTravelReportFuelEfficiency(e.target.value)}
-                        placeholder="Rendimiento km/l"
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <input
-                        type="text"
-                        value={travelReportAuthorizer}
-                        onChange={(e) => setTravelReportAuthorizer(e.target.value.toUpperCase())}
-                        placeholder="Autoriza"
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                      <input
-                        type="text"
-                        value={travelReportFinance}
-                        onChange={(e) => setTravelReportFinance(e.target.value.toUpperCase())}
-                        placeholder="Finanzas"
-                        className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          Tabla de rutas / kms base (editable)
-                        </p>
-                        <div className="space-y-2">
-                          {travelDestinationRules.map((row) => (
-                            <div key={`travel-kms-${row.code}`} className="grid grid-cols-[42px_1fr_88px_66px] items-center gap-2">
-                              <div className="text-xs font-black uppercase text-slate-500 text-center">#{row.index}</div>
-                              <div className="text-xs font-black uppercase text-slate-700">{row.label}</div>
-                              <input
-                                value={travelKmsByBranch[row.code] ?? String(row.kms)}
-                                onChange={(e) =>
-                                  setTravelKmsByBranch((prev) => ({
-                                    ...prev,
-                                    [row.code]: e.target.value,
-                                  }))
-                                }
-                                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-700 text-center"
-                              />
-                              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 text-right">
-                                Viajes: {travelTripsByCode.get(row.code) || 0}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-100 bg-amber-50/50 p-5 space-y-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Resumen del formato</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Mes</p>
-                            <p className="text-sm font-black uppercase text-slate-800">{travelMonthLabel}</p>
-                          </div>
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Reporta</p>
-                            <p className="text-sm font-black uppercase text-slate-800">{effectiveTravelReporterName}</p>
-                          </div>
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total viajes</p>
-                            <p className="text-2xl font-black text-slate-800">{travelTotalTrips}</p>
-                          </div>
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total kms</p>
-                            <p className="text-2xl font-black text-slate-800">{formatTravelNumber(travelTotalKms)}</p>
-                          </div>
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Rendimiento</p>
-                            <p className="text-sm font-black uppercase text-slate-800">{travelFuelEfficiencyValue} km/l</p>
-                          </div>
-                          <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Litros</p>
-                            <p className="text-2xl font-black text-slate-800">{travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D'}</p>
-                          </div>
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          El formato toma tickets del mes seleccionado y respeta filtros de sucursal, area, estado y prioridad.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tickets</p>
-                    <p className="text-3xl font-black text-slate-800">{reportTickets.length}</p>
-                    {reportComparisonWindow && (
-                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
-                    )}
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
-                    <p className="text-3xl font-black text-blue-600">{reportOpenCount}</p>
-                    {reportComparisonWindow && (
-                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
-                    )}
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cerrados</p>
-                    <p className="text-3xl font-black text-green-600">{reportClosedCount}</p>
-                  </div>
-                  <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Cumplimiento SLA</p>
-                    <p className="text-3xl font-black text-green-700">{reportSlaCompliancePct}%</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-green-600">
-                      {reportSlaCompliantCount}/{reportSlaTotalCount} en tiempo
-                    </p>
-                    {reportComparisonWindow && (
-                      <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>{reportSlaComplianceTrend.label}</p>
-                    )}
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Vencido</p>
-                    <p className="text-3xl font-black text-red-600">{reportSlaExpiredCount}</p>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div>
-                      <h4 className="text-base font-black uppercase text-slate-800">
-                        Tendencia {reportTrendMode === 'SEMANAL' ? 'Semanal' : 'Diaria'}: Creados vs Cerrados
-                      </h4>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Creado por fecha de alta y cerrado por fecha de cierre
-                      </p>
-                    </div>
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      Creados: {reportCreatedInPeriodCount} | Cerrados: {reportClosedInPeriodCount}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {reportLifecycleTrend.map((item) => (
-                      <div key={`report-trend-${item.key}`} className="space-y-2">
-                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
-                          <span>{item.label}</span>
-                          <span>Cre: {item.created} | Cer: {item.closed}</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div className="rounded-xl border border-blue-100 bg-blue-50 p-2">
-                            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-blue-700">
-                              <span>Creados</span>
-                              <span>{item.created}</span>
-                            </div>
-                            <div className="mt-1 h-2 rounded-full bg-blue-100 overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500"
-                                style={{ width: `${Math.round((item.created / reportLifecycleTrendMax) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-2">
-                            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                              <span>Cerrados</span>
-                              <span>{item.closed}</span>
-                            </div>
-                            <div className="mt-1 h-2 rounded-full bg-emerald-100 overflow-hidden">
-                              <div
-                                className="h-full bg-emerald-500"
-                                style={{ width: `${Math.round((item.closed / reportLifecycleTrendMax) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {reportLifecycleTrend.length === 0 && (
-                      <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Sin datos para tendencia en este periodo.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-base font-black uppercase text-slate-800">Tickets por Estado</h4>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
-                    </div>
-                    {reportStateBars.map((item) => (
-                      <button
-                        key={`report-state-${item.label}`}
-                        onClick={() => applyReportDrillDown({ estado: item.label as TicketEstado })}
-                        className="w-full text-left space-y-1"
-                      >
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                          <span>{item.label}</span>
-                          <span>{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div
-                            className="h-full bg-[#F58220]"
-                            style={{ width: `${Math.round((item.count / reportStateMax) * 100)}%` }}
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-base font-black uppercase text-slate-800">Tickets por Sucursal</h4>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
-                    </div>
-                    {reportBranchBars.map((item) => (
-                      <button
-                        key={`report-branch-${item.code}`}
-                        onClick={() => applyReportDrillDown({ sucursalCode: item.code })}
-                        className="w-full text-left space-y-1"
-                      >
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                          <span>{item.label}</span>
-                          <span>{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500"
-                            style={{ width: `${Math.round((item.count / reportBranchMax) * 100)}%` }}
-                          />
-                        </div>
-                      </button>
-                    ))}
-                    {reportBranchBars.length === 0 && (
-                      <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Sin datos de sucursal para este periodo.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-                    <h4 className="text-base font-black uppercase text-slate-800">Top Areas</h4>
-                    {reportAreaBars.slice(0, 8).map((item) => (
-                      <button
-                        key={`report-area-${item.label}`}
-                        onClick={() => applyReportDrillDown({ area: item.label })}
-                        className="w-full text-left space-y-1"
-                      >
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                          <span>{item.label}</span>
-                          <span>{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-emerald-500" style={{ width: `${Math.round((item.count / reportAreaMax) * 100)}%` }} />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-                    <h4 className="text-base font-black uppercase text-slate-800">Carga por Tecnico</h4>
-                    {reportTechBars.slice(0, 8).map((item) => (
-                      <button
-                        key={`report-tech-${item.label}`}
-                        onClick={() => item.label !== 'SIN ASIGNAR' && applyReportDrillDown({ asignadoA: item.label })}
-                        className="w-full text-left space-y-1 disabled:cursor-not-allowed"
-                        disabled={item.label === 'SIN ASIGNAR'}
-                      >
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                          <span>{item.label}</span>
-                          <span>{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-amber-500" style={{ width: `${Math.round((item.count / reportTechMax) * 100)}%` }} />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-                    <h4 className="text-base font-black uppercase text-slate-800">Auditoria por Modulo</h4>
-                    {reportAuditModuleBars.map((item) => (
-                      <div key={`report-audit-${item.module}`} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
-                          <span>{item.label}</span>
-                          <span>{item.count}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full bg-slate-700" style={{ width: `${Math.round((item.count / reportAuditMax) * 100)}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                    <div className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Logs filtrados: {reportAuditRows.length} | Total auditoria: {normalizedAuditRows.length}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base font-black uppercase text-slate-800">Top Causas Recurrentes</h4>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Area + Falla</span>
-                  </div>
-                  {reportIncidentCauseBars.map((item) => (
-                    <button
-                      key={`report-cause-${item.key}`}
-                      onClick={() => applyReportIncidentCauseDrillDown(item.area, item.cause)}
-                      className="w-full text-left space-y-1"
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.area}</p>
-                      <div className="flex items-center justify-between gap-3 text-xs font-black text-slate-700">
-                        <span>{item.cause}</span>
-                        <span>{item.count}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full bg-fuchsia-500"
-                          style={{ width: `${Math.round((item.count / reportIncidentCauseMax) * 100)}%` }}
-                        />
-                      </div>
-                    </button>
-                  ))}
-                  {reportIncidentCauseBars.length === 0 && (
-                    <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Sin incidencias recurrentes para este periodo.
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inventario</p>
-                    <p className="text-sm font-black text-slate-700">Activos: {reportInventorySnapshot.totalActivos} | En falla: {reportInventorySnapshot.activosEnFalla} | Sin responsable: {reportInventorySnapshot.sinResponsable}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Insumos</p>
-                    <p className="text-sm font-black text-slate-700">Total: {reportSupplySnapshot.total} | Agotados: {reportSupplySnapshot.agotados} | Bajo minimo: {reportSupplySnapshot.bajoMinimo}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* VISTA INVENTARIO */}
-            {view === 'inventory' && (
-              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Inventario...</div>}>
-                <LazyInventoryView
-                  inventoryImportInputRef={inventoryImportInputRef}
-                  handleImportInventory={handleImportInventory}
-                  canEdit={canEdit}
-                  isImportingInventory={isImportingInventory}
-                  exportarInventarioFiltrado={exportarInventarioFiltrado}
-                  setQrManualInput={setQrManualInput}
-                  setQrScannerStatus={setQrScannerStatus}
-                  setShowQrScanner={setShowQrScanner}
-                  canManageUsers={canManageUsers}
-                  activos={activos}
-                  eliminarTodosActivos={eliminarTodosActivos}
-                  openModal={openModal}
-                  activosConIp={activosConIp}
-                  activosEvaluablesIp={activosEvaluablesIp}
-                  activosConMac={activosConMac}
-                  activosEvaluablesMac={activosEvaluablesMac}
-                  activosSinResponsable={activosSinResponsable}
-                  activosEvaluablesResponsable={activosEvaluablesResponsable}
-                  activosVidaAlta={activosVidaAlta}
-                  inventoryDepartmentFilter={inventoryDepartmentFilter}
-                  setInventoryDepartmentFilter={setInventoryDepartmentFilter}
-                  departamentoOptions={departamentoOptions}
-                  inventoryEquipmentFilter={inventoryEquipmentFilter}
-                  setInventoryEquipmentFilter={setInventoryEquipmentFilter}
-                  equipoOptions={equipoOptions}
-                  inventoryStatusFilter={inventoryStatusFilter}
-                  setInventoryStatusFilter={setInventoryStatusFilter}
-                  inventoryRiskFilter={inventoryRiskFilter}
-                  setInventoryRiskFilter={setInventoryRiskFilter}
-                  inventorySortField={inventorySortField}
-                  setInventorySortField={setInventorySortField}
-                  inventorySortDirection={inventorySortDirection}
-                  setInventorySortDirection={setInventorySortDirection}
-                  setSearchTerm={setSearchTerm}
-                  applyInventoryFocus={applyInventoryFocus}
-                  activosEnFalla={activosEnFalla}
-                  duplicateIpEntries={duplicateIpEntries}
-                  duplicateMacEntries={duplicateMacEntries}
-                  updateInventorySort={updateInventorySort}
-                  getInventorySortIndicator={getInventorySortIndicator}
-                  sortedFilteredActivos={sortedFilteredActivos}
-                  setSelectedAsset={setSelectedAsset}
-                  eliminarActivo={eliminarActivo}
-                />
-              </React.Suspense>
-            )}
-            {/* VISTA INSUMOS */}
-            {view === 'supplies' && (
-              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Insumos...</div>}>
-                <LazySuppliesView
-                  canEdit={canEdit}
-                  openModal={openModal}
-                  supplySummary={supplySummary}
-                  supplySearchTerm={supplySearchTerm}
-                  setSupplySearchTerm={setSupplySearchTerm}
-                  supplyCategoryFilter={supplyCategoryFilter}
-                  setSupplyCategoryFilter={setSupplyCategoryFilter}
-                  supplyCategoryOptions={supplyCategoryOptions}
-                  supplyStatusFilter={supplyStatusFilter}
-                  setSupplyStatusFilter={setSupplyStatusFilter}
-                  filteredSupplies={filteredSupplies}
-                  insumos={insumos}
-                  reponerCriticos={reponerCriticos}
-                  getSupplyHealthStatus={getSupplyHealthStatus}
-                  supplyAuditMovementsByInsumoId={supplyAuditMovementsByInsumoId}
-                  openInsumoEditModal={openInsumoEditModal}
-                  eliminarInsumo={eliminarInsumo}
-                  formatDateTime={formatDateTime}
-                  setSelectedSupplyHistoryItem={setSelectedSupplyHistoryItem}
-                  ajustarStock={ajustarStock}
-                  supplyStockDrafts={supplyStockDrafts}
-                  setSupplyStockDrafts={setSupplyStockDrafts}
-                  confirmarStockManual={confirmarStockManual}
-                />
-              </React.Suspense>
-            )}
-            {/* VISTA AUDITORÍA */}
-            {view === 'history' && (
-              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Historial...</div>}>
-                <LazyAuditView
-                  isAuditLoading={isAuditLoading}
-                  auditRowsForGrouping={auditRowsForGrouping}
-                  resetAuditFilters={resetAuditFilters}
-                  fetchAuditHistory={fetchAuditHistory}
-                  descargarAuditoria={descargarAuditoria}
-                  auditFilters={auditFilters}
-                  updateAuditFilters={updateAuditFilters}
-                  auditModuleTotals={auditModuleTotals}
-                  auditResultTotals={auditResultTotals}
-                  auditIntegrity={auditIntegrity}
-                  auditAlerts={auditAlerts}
-                  auditByModule={auditByModule}
-                  backendConnected={backendConnected}
-                  isRequesterOnlyUser={isRequesterOnlyUser}
-                  setAuditPage={setAuditPage}
-                  auditPagination={auditPagination}
-                  auditPageSize={auditPageSize}
-                  setAuditPageSize={setAuditPageSize}
-                />
-              </React.Suspense>
-            )}
-
-            {/* VISTA USUARIOS */}
-            {view === 'users' && (
-              <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">Cargando Usuarios...</div>}>
-                <LazyUsersView
-                  canManageUsers={canManageUsers}
-                  users={users}
-                  activeUsersCount={activeUsersCount}
-                  ticketEligibleUsersCount={ticketEligibleUsersCount}
-                  handleCreateUser={handleCreateUser}
-                  editingUserId={editingUserId}
-                  newUserForm={newUserForm}
-                  setNewUserForm={setNewUserForm}
-                  userCargoOptions={userCargoOptions}
-                  roleCatalogOptions={roleCatalogOptions}
-                  isCreatingUser={isCreatingUser}
-                  resetNewUserForm={resetNewUserForm}
-                  sortedUsers={sortedUsers}
-                  userSearchTerm={userSearchTerm}
-                  setUserSearchTerm={setUserSearchTerm}
-                  userRoleFilter={userRoleFilter}
-                  setUserRoleFilter={setUserRoleFilter}
-                  userStatusFilter={userStatusFilter}
-                  setUserStatusFilter={setUserStatusFilter}
-                  userDepartmentFilter={userDepartmentFilter}
-                  setUserDepartmentFilter={setUserDepartmentFilter}
-                  formatCargoFromCatalog={formatCargoFromCatalog}
-                  roleLabelByValue={roleLabelByValue}
-                  rolePermissionsByValue={rolePermissionsByValue}
-                  sessionUser={sessionUser}
-                  userActionLoadingId={userActionLoadingId}
-                  handleEditUser={handleEditUser}
-                  handleToggleUserActive={handleToggleUserActive}
-                  handleDeleteUser={handleDeleteUser}
-                />
-              </React.Suspense>
-            )}
-
-            {/* VISTA TICKETS */}
-            {view === 'tickets' && (
-              <TicketsView
-                canCreateTickets={canCreateTickets}
-                canCreateComments={canCreateTickets}
-                canEdit={canEdit}
-                canRequesterDelete={sessionUser?.rol === 'solicitante'}
-                openTicketsCount={openTicketsCount}
-                criticalTicketsCount={criticalTicketsCount}
-                unassignedTicketsCount={unassignedTicketsCount}
-                slaExpiredCount={slaExpiredCount}
-                ticketLifecycleFilter={ticketLifecycleFilter}
-                ticketStateFilter={ticketStateFilter}
-                ticketPriorityFilter={ticketPriorityFilter}
-                ticketAssignmentFilter={ticketAssignmentFilter}
-                ticketSlaFilter={ticketSlaFilter}
-                filteredTickets={filteredTickets}
-                technicians={users}
-                ticketStates={TICKET_STATES}
-                ticketAttentionTypes={TICKET_ATTENTION_TYPES}
-                ticketAttachmentLoadingId={ticketAttachmentLoadingId}
-                ticketCommentDrafts={ticketCommentDrafts}
-                formatTicketBranchFromCatalog={formatTicketBranchFromCatalog}
-                formatCargoFromCatalog={formatCargoFromCatalog}
-                formatDateTime={formatDateTime}
-                formatBytes={formatBytes}
-                normalizeTicketAttentionType={normalizeTicketAttentionType}
-                formatTicketAttentionType={formatTicketAttentionType}
-                getSlaStatus={getSlaStatusForCurrentTime}
-                canDeleteTicket={canDeleteTicket}
-                onOpenTicketModal={() => openModal('ticket')}
-                onApplyTicketFocus={applyTicketFocus}
-                onTicketLifecycleFilterChange={setTicketLifecycleFilter}
-                onTicketStateFilterChange={(value) => setTicketStateFilter(value as TicketEstado | 'TODOS')}
-                onTicketPriorityFilterChange={(value) => setTicketPriorityFilter(value as PrioridadTicket | 'TODAS')}
-                onTicketAssignmentFilterChange={setTicketAssignmentFilter}
-                onTicketSlaFilterChange={setTicketSlaFilter}
-                onResetFilters={() => {
-                  setTicketLifecycleFilter('TODOS');
-                  setTicketStateFilter('TODOS');
-                  setTicketPriorityFilter('TODAS');
-                  setTicketAssignmentFilter('TODOS');
-                  setTicketSlaFilter('TODOS');
-                  setSearchTerm('');
-                }}
-                onStatusChange={(ticketId, estado) => {
-                  void actualizarTicket(ticketId, { estado: estado as TicketEstado });
-                }}
-                onAttentionChange={(ticketId, atencionTipo) => {
-                  const value = normalizeTicketAttentionType(atencionTipo);
-                  if (!value) return;
-                  void actualizarTicket(ticketId, { atencionTipo: value });
-                }}
-                onAssigneeChange={(ticketId, asignadoA) => {
-                  void actualizarTicket(ticketId, { asignadoA });
-                }}
-                onViewAsset={(tag) => {
-                  setView('inventory');
-                  setSearchTerm(tag);
-                }}
-                onResolveTicket={(ticketId) => {
-                  void resolverTicket(ticketId);
-                }}
-                onDeleteTicket={(ticketId) => {
-                  void eliminarTicket(ticketId);
-                }}
-                onUploadAttachment={(ticketId, files) => {
-                  void cargarAdjuntoTicket(ticketId, files);
-                }}
-                onDownloadAttachment={(ticketId, attachment) => {
-                  void descargarAdjuntoTicket(ticketId, attachment);
-                }}
-                onDeleteAttachment={(ticketId, attachment) => {
-                  void eliminarAdjuntoTicket(ticketId, attachment);
-                }}
-                onCommentDraftChange={(ticketId, value) => {
-                  setTicketCommentDrafts((prev) => ({
-                    ...prev,
-                    [ticketId]: value,
-                  }));
-                }}
-                onSaveComment={(ticketId) => {
-                  void agregarComentarioTicket(ticketId);
-                }}
+            <Routes>
+              <Route path="/" element={<Navigate to={defaultViewPath} replace />} />
+              <Route
+                path={VIEW_PATHS.dashboard}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Dashboard...',
+                    <LazyDashboardView
+                      dashboardWindow={dashboardWindow}
+                      dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
+                      dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
+                      dashboardUnassignedCount={dashboardUnassignedCount}
+                      dashboardRange={dashboardRange}
+                      setDashboardRange={setDashboardRange}
+                      systemHealth={systemHealth}
+                      insumos={insumos}
+                      dashboardOpenTrend={dashboardOpenTrend}
+                      activos={activos}
+                      dashboardCriticalTrend={dashboardCriticalTrend}
+                      dashboardSlaExpiredCount={dashboardSlaExpiredCount}
+                      dashboardSlaTrend={dashboardSlaTrend}
+                      setView={setView}
+                      applyTicketFocus={applyTicketFocus}
+                      dashboardRecentTickets={dashboardRecentTickets}
+                      setSearchTerm={setSearchTerm}
+                      dashboardTopOwners={dashboardTopOwners}
+                      dashboardOwnerMax={dashboardOwnerMax}
+                      dashboardInProcessCount={dashboardInProcessCount}
+                      applyInventoryFocus={applyInventoryFocus}
+                      activosSinResponsable={activosSinResponsable}
+                      activosVidaAlta={activosVidaAlta}
+                      effectiveRiskSummary={effectiveRiskSummary}
+                      dashboardStateBars={dashboardStateBars}
+                      dashboardStateMax={dashboardStateMax}
+                      dashboardBranchBars={dashboardBranchBars}
+                      dashboardBranchMax={dashboardBranchMax}
+                      dashboardSlaCompliancePct={dashboardSlaCompliancePct}
+                      dashboardSlaCompliantCount={dashboardSlaCompliantCount}
+                      dashboardSlaTotalCount={dashboardSlaTotalCount}
+                      dashboardAgingBars={dashboardAgingBars}
+                      dashboardAgingMax={dashboardAgingMax}
+                    />,
+                  ),
+                )}
               />
-            )}
-
+              <Route
+                path={VIEW_PATHS.reports}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Reporteria...',
+                    <LazyReportsView
+                      openReportExecutivePresentation={openReportExecutivePresentation}
+                      exportReportExcel={() => {
+                        void exportReportExcel();
+                      }}
+                      exportReportPdf={exportReportPdf}
+                      reportDateFrom={reportDateFrom}
+                      setReportDateFrom={setReportDateFrom}
+                      reportDateTo={reportDateTo}
+                      setReportDateTo={setReportDateTo}
+                      reportBranchFilter={reportBranchFilter}
+                      setReportBranchFilter={setReportBranchFilter}
+                      reportBranchOptions={reportBranchOptions}
+                      formatTicketBranchFromCatalog={formatTicketBranchFromCatalog}
+                      reportAreaFilter={reportAreaFilter}
+                      setReportAreaFilter={setReportAreaFilter}
+                      reportAreaOptions={reportAreaOptions}
+                      reportStateFilter={reportStateFilter}
+                      setReportStateFilter={setReportStateFilter}
+                      ticketStates={TICKET_STATES}
+                      reportPriorityFilter={reportPriorityFilter}
+                      setReportPriorityFilter={setReportPriorityFilter}
+                      reportAttentionFilter={reportAttentionFilter}
+                      setReportAttentionFilter={setReportAttentionFilter}
+                      ticketAttentionTypes={TICKET_ATTENTION_TYPES}
+                      formatTicketAttentionType={formatTicketAttentionType}
+                      reportTechnicianFilter={reportTechnicianFilter}
+                      setReportTechnicianFilter={setReportTechnicianFilter}
+                      reportTechnicianOptions={reportTechnicianOptions}
+                      resetReportFilters={resetReportFilters}
+                      reportPresetName={reportPresetName}
+                      setReportPresetName={setReportPresetName}
+                      saveCurrentReportFilterPreset={() => {
+                        void saveCurrentReportFilterPreset();
+                      }}
+                      reportFilterPresets={reportFilterPresets}
+                      applyReportFilterPreset={applyReportFilterPreset}
+                      deleteReportFilterPreset={deleteReportFilterPreset}
+                      openTravelMovementSheet={openTravelMovementSheet}
+                      printTravelMovementSheet={printTravelMovementSheet}
+                      travelReportMonth={travelReportMonth}
+                      setTravelReportMonth={setTravelReportMonth}
+                      travelReportTechnician={travelReportTechnician}
+                      setTravelReportTechnician={setTravelReportTechnician}
+                      travelTechnicianOptions={travelTechnicianOptions}
+                      travelReportName={travelReportName}
+                      setTravelReportName={setTravelReportName}
+                      travelReportDepartment={travelReportDepartment}
+                      setTravelReportDepartment={setTravelReportDepartment}
+                      travelReportFuelEfficiency={travelReportFuelEfficiency}
+                      setTravelReportFuelEfficiency={setTravelReportFuelEfficiency}
+                      travelReportAuthorizer={travelReportAuthorizer}
+                      setTravelReportAuthorizer={setTravelReportAuthorizer}
+                      travelReportFinance={travelReportFinance}
+                      setTravelReportFinance={setTravelReportFinance}
+                      travelDestinationRules={travelDestinationRules}
+                      travelKmsByBranch={travelKmsByBranch}
+                      setTravelKmsByBranch={setTravelKmsByBranch}
+                      travelTripsByCode={travelTripsByCode}
+                      travelMonthLabel={travelMonthLabel}
+                      effectiveTravelReporterName={effectiveTravelReporterName}
+                      travelTotalTrips={travelTotalTrips}
+                      travelTotalKms={travelTotalKms}
+                      formatTravelNumber={formatTravelNumber}
+                      travelFuelEfficiencyValue={travelFuelEfficiencyValue}
+                      travelFuelLiters={travelFuelLiters}
+                      reportTicketsCount={reportTickets.length}
+                      hasReportComparison={!!reportComparisonWindow}
+                      reportTicketsTrend={reportTicketsTrend}
+                      reportOpenCount={reportOpenCount}
+                      reportOpenTrend={reportOpenTrend}
+                      reportClosedCount={reportClosedCount}
+                      reportSlaCompliancePct={reportSlaCompliancePct}
+                      reportSlaCompliantCount={reportSlaCompliantCount}
+                      reportSlaTotalCount={reportSlaTotalCount}
+                      reportSlaComplianceTrend={reportSlaComplianceTrend}
+                      reportSlaExpiredCount={reportSlaExpiredCount}
+                      reportTrendMode={reportTrendMode}
+                      reportCreatedInPeriodCount={reportCreatedInPeriodCount}
+                      reportClosedInPeriodCount={reportClosedInPeriodCount}
+                      reportLifecycleTrend={reportLifecycleTrend}
+                      reportLifecycleTrendMax={reportLifecycleTrendMax}
+                      reportStateBars={reportStateBars}
+                      applyReportDrillDown={applyReportDrillDown}
+                      reportStateMax={reportStateMax}
+                      reportBranchBars={reportBranchBars}
+                      reportBranchMax={reportBranchMax}
+                      reportAreaBars={reportAreaBars}
+                      reportAreaMax={reportAreaMax}
+                      reportTechBars={reportTechBars}
+                      reportTechMax={reportTechMax}
+                      reportAuditModuleBars={reportAuditModuleBars}
+                      reportAuditMax={reportAuditMax}
+                      reportAuditRowsCount={reportAuditRows.length}
+                      normalizedAuditRowsCount={normalizedAuditRows.length}
+                      reportIncidentCauseBars={reportIncidentCauseBars}
+                      applyReportIncidentCauseDrillDown={applyReportIncidentCauseDrillDown}
+                      reportIncidentCauseMax={reportIncidentCauseMax}
+                      reportInventorySnapshot={reportInventorySnapshot}
+                      reportSupplySnapshot={reportSupplySnapshot}
+                    />,
+                  ),
+                )}
+              />
+              <Route
+                path={VIEW_PATHS.inventory}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Inventario...',
+                    <LazyInventoryView
+                      inventoryImportInputRef={inventoryImportInputRef}
+                      handleImportInventory={handleImportInventory}
+                      canEdit={canEdit}
+                      isImportingInventory={isImportingInventory}
+                      exportarInventarioFiltrado={exportarInventarioFiltrado}
+                      setQrManualInput={setQrManualInput}
+                      setQrScannerStatus={setQrScannerStatus}
+                      setShowQrScanner={setShowQrScanner}
+                      canManageUsers={canManageUsers}
+                      activos={activos}
+                      eliminarTodosActivos={eliminarTodosActivos}
+                      openModal={openModal}
+                      activosConIp={activosConIp}
+                      activosEvaluablesIp={activosEvaluablesIp}
+                      activosConMac={activosConMac}
+                      activosEvaluablesMac={activosEvaluablesMac}
+                      activosSinResponsable={activosSinResponsable}
+                      activosEvaluablesResponsable={activosEvaluablesResponsable}
+                      activosVidaAlta={activosVidaAlta}
+                      inventoryDepartmentFilter={inventoryDepartmentFilter}
+                      setInventoryDepartmentFilter={setInventoryDepartmentFilter}
+                      departamentoOptions={departamentoOptions}
+                      inventoryEquipmentFilter={inventoryEquipmentFilter}
+                      setInventoryEquipmentFilter={setInventoryEquipmentFilter}
+                      equipoOptions={equipoOptions}
+                      inventoryStatusFilter={inventoryStatusFilter}
+                      setInventoryStatusFilter={setInventoryStatusFilter}
+                      inventoryRiskFilter={inventoryRiskFilter}
+                      setInventoryRiskFilter={setInventoryRiskFilter}
+                      inventorySortField={inventorySortField}
+                      setInventorySortField={setInventorySortField}
+                      inventorySortDirection={inventorySortDirection}
+                      setInventorySortDirection={setInventorySortDirection}
+                      setSearchTerm={setSearchTerm}
+                      applyInventoryFocus={applyInventoryFocus}
+                      activosEnFalla={activosEnFalla}
+                      duplicateIpEntries={duplicateIpEntries}
+                      duplicateMacEntries={duplicateMacEntries}
+                      updateInventorySort={updateInventorySort}
+                      getInventorySortIndicator={getInventorySortIndicator}
+                      sortedFilteredActivos={sortedFilteredActivos}
+                      setSelectedAsset={setSelectedAsset}
+                      eliminarActivo={eliminarActivo}
+                    />,
+                  ),
+                )}
+              />
+              <Route
+                path={VIEW_PATHS.supplies}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Insumos...',
+                    <LazySuppliesView
+                      canEdit={canEdit}
+                      openModal={openModal}
+                      supplySummary={supplySummary}
+                      supplySearchTerm={supplySearchTerm}
+                      setSupplySearchTerm={setSupplySearchTerm}
+                      supplyCategoryFilter={supplyCategoryFilter}
+                      setSupplyCategoryFilter={setSupplyCategoryFilter}
+                      supplyCategoryOptions={supplyCategoryOptions}
+                      supplyStatusFilter={supplyStatusFilter}
+                      setSupplyStatusFilter={setSupplyStatusFilter}
+                      filteredSupplies={filteredSupplies}
+                      insumos={insumos}
+                      reponerCriticos={reponerCriticos}
+                      getSupplyHealthStatus={getSupplyHealthStatus}
+                      supplyAuditMovementsByInsumoId={supplyAuditMovementsByInsumoId}
+                      openInsumoEditModal={openInsumoEditModal}
+                      eliminarInsumo={eliminarInsumo}
+                      formatDateTime={formatDateTime}
+                      setSelectedSupplyHistoryItem={setSelectedSupplyHistoryItem}
+                      ajustarStock={ajustarStock}
+                      supplyStockDrafts={supplyStockDrafts}
+                      setSupplyStockDrafts={setSupplyStockDrafts}
+                      confirmarStockManual={confirmarStockManual}
+                    />,
+                  ),
+                )}
+              />
+              <Route
+                path={VIEW_PATHS.history}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Historial...',
+                    <LazyAuditView
+                      isAuditLoading={isAuditLoading}
+                      auditRowsForGrouping={auditRowsForGrouping}
+                      resetAuditFilters={resetAuditFilters}
+                      fetchAuditHistory={fetchAuditHistory}
+                      descargarAuditoria={descargarAuditoria}
+                      auditFilters={auditFilters}
+                      updateAuditFilters={updateAuditFilters}
+                      auditModuleTotals={auditModuleTotals}
+                      auditResultTotals={auditResultTotals}
+                      auditIntegrity={auditIntegrity}
+                      auditAlerts={auditAlerts}
+                      auditByModule={auditByModule}
+                      backendConnected={backendConnected}
+                      isRequesterOnlyUser={isRequesterOnlyUser}
+                      setAuditPage={setAuditPage}
+                      auditPagination={auditPagination}
+                      auditPageSize={auditPageSize}
+                      setAuditPageSize={setAuditPageSize}
+                    />,
+                  ),
+                )}
+              />
+              <Route
+                path={VIEW_PATHS.users}
+                element={renderProtectedView(
+                  renderLazyView(
+                    'Cargando Usuarios...',
+                    <LazyUsersView
+                      canManageUsers={canManageUsers}
+                      users={users}
+                      activeUsersCount={activeUsersCount}
+                      ticketEligibleUsersCount={ticketEligibleUsersCount}
+                      handleCreateUser={handleCreateUser}
+                      editingUserId={editingUserId}
+                      newUserForm={newUserForm}
+                      setNewUserForm={setNewUserForm}
+                      userCargoOptions={userCargoOptions}
+                      roleCatalogOptions={roleCatalogOptions}
+                      isCreatingUser={isCreatingUser}
+                      resetNewUserForm={resetNewUserForm}
+                      sortedUsers={sortedUsers}
+                      userSearchTerm={userSearchTerm}
+                      setUserSearchTerm={setUserSearchTerm}
+                      userRoleFilter={userRoleFilter}
+                      setUserRoleFilter={setUserRoleFilter}
+                      userStatusFilter={userStatusFilter}
+                      setUserStatusFilter={setUserStatusFilter}
+                      userDepartmentFilter={userDepartmentFilter}
+                      setUserDepartmentFilter={setUserDepartmentFilter}
+                      formatCargoFromCatalog={formatCargoFromCatalog}
+                      roleLabelByValue={roleLabelByValue}
+                      rolePermissionsByValue={rolePermissionsByValue}
+                      sessionUser={sessionUser}
+                      userActionLoadingId={userActionLoadingId}
+                      handleEditUser={handleEditUser}
+                      handleToggleUserActive={handleToggleUserActive}
+                      handleDeleteUser={handleDeleteUser}
+                    />,
+                  ),
+                  { requiresUserManagement: true },
+                )}
+              />
+              <Route
+                path={VIEW_PATHS.tickets}
+                element={(
+                  <TicketsView
+                    canCreateTickets={canCreateTickets}
+                    canCreateComments={canCreateTickets}
+                    canEdit={canEdit}
+                    canRequesterDelete={sessionUser?.rol === 'solicitante'}
+                    openTicketsCount={openTicketsCount}
+                    criticalTicketsCount={criticalTicketsCount}
+                    unassignedTicketsCount={unassignedTicketsCount}
+                    slaExpiredCount={slaExpiredCount}
+                    ticketLifecycleFilter={ticketLifecycleFilter}
+                    ticketStateFilter={ticketStateFilter}
+                    ticketPriorityFilter={ticketPriorityFilter}
+                    ticketAssignmentFilter={ticketAssignmentFilter}
+                    ticketSlaFilter={ticketSlaFilter}
+                    filteredTickets={filteredTickets}
+                    technicians={users}
+                    ticketStates={TICKET_STATES}
+                    ticketAttentionTypes={TICKET_ATTENTION_TYPES}
+                    ticketAttachmentLoadingId={ticketAttachmentLoadingId}
+                    ticketCommentDrafts={ticketCommentDrafts}
+                    formatTicketBranchFromCatalog={formatTicketBranchFromCatalog}
+                    formatCargoFromCatalog={formatCargoFromCatalog}
+                    formatDateTime={formatDateTime}
+                    formatBytes={formatBytes}
+                    normalizeTicketAttentionType={normalizeTicketAttentionType}
+                    formatTicketAttentionType={formatTicketAttentionType}
+                    getSlaStatus={getSlaStatusForCurrentTime}
+                    canDeleteTicket={canDeleteTicket}
+                    onOpenTicketModal={() => openModal('ticket')}
+                    onApplyTicketFocus={applyTicketFocus}
+                    onTicketLifecycleFilterChange={setTicketLifecycleFilter}
+                    onTicketStateFilterChange={(value) => setTicketStateFilter(value as TicketEstado | 'TODOS')}
+                    onTicketPriorityFilterChange={(value) => setTicketPriorityFilter(value as PrioridadTicket | 'TODAS')}
+                    onTicketAssignmentFilterChange={setTicketAssignmentFilter}
+                    onTicketSlaFilterChange={setTicketSlaFilter}
+                    onResetFilters={() => {
+                      setTicketLifecycleFilter('TODOS');
+                      setTicketStateFilter('TODOS');
+                      setTicketPriorityFilter('TODAS');
+                      setTicketAssignmentFilter('TODOS');
+                      setTicketSlaFilter('TODOS');
+                      setSearchTerm('');
+                    }}
+                    onStatusChange={(ticketId, estado) => {
+                      void actualizarTicket(ticketId, { estado: estado as TicketEstado });
+                    }}
+                    onAttentionChange={(ticketId, atencionTipo) => {
+                      const value = normalizeTicketAttentionType(atencionTipo);
+                      if (!value) return;
+                      void actualizarTicket(ticketId, { atencionTipo: value });
+                    }}
+                    onAssigneeChange={(ticketId, asignadoA) => {
+                      void actualizarTicket(ticketId, { asignadoA });
+                    }}
+                    onViewAsset={(tag) => {
+                      setView('inventory');
+                      setSearchTerm(tag);
+                    }}
+                    onResolveTicket={(ticketId) => {
+                      void resolverTicket(ticketId);
+                    }}
+                    onDeleteTicket={(ticketId) => {
+                      void eliminarTicket(ticketId);
+                    }}
+                    onUploadAttachment={(ticketId, files) => {
+                      void cargarAdjuntoTicket(ticketId, files);
+                    }}
+                    onDownloadAttachment={(ticketId, attachment) => {
+                      void descargarAdjuntoTicket(ticketId, attachment);
+                    }}
+                    onDeleteAttachment={(ticketId, attachment) => {
+                      void eliminarAdjuntoTicket(ticketId, attachment);
+                    }}
+                    onCommentDraftChange={(ticketId, value) => {
+                      setTicketCommentDrafts((prev) => ({
+                        ...prev,
+                        [ticketId]: value,
+                      }));
+                    }}
+                    onSaveComment={(ticketId) => {
+                      void agregarComentarioTicket(ticketId);
+                    }}
+                  />
+                )}
+              />
+              <Route path="*" element={<Navigate to={defaultViewPath} replace />} />
+            </Routes>
           </div>
         </div>
       </main>
@@ -6269,6 +5888,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 

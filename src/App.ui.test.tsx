@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import App from './App';
@@ -239,6 +240,14 @@ function fillLoginForm(username: string, password: string) {
   fireEvent.click(screen.getByRole('button', { name: /Iniciar Sesi[oó]n/i }));
 }
 
+function renderApp() {
+  return render(
+    <MemoryRouter>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 describe('App UI flow', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -264,7 +273,7 @@ describe('App UI flow', () => {
       },
     ]);
 
-    render(<App />);
+    renderApp();
 
     expect(screen.getByRole('button', { name: /Iniciar Sesi[oó]n/i })).toBeTruthy();
 
@@ -284,7 +293,7 @@ describe('App UI flow', () => {
     const bootstrapHeaders = new Headers(bootstrapCall?.[1]?.headers);
     expect(bootstrapHeaders.get('Authorization')).toBe('Bearer token-admin-ui');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Tickets$/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
     await screen.findByText('Tickets IT');
 
@@ -311,14 +320,14 @@ describe('App UI flow', () => {
       },
     ]);
 
-    render(<App />);
+    renderApp();
 
     fillLoginForm(REQUESTER_USER.username, 'Solicitante.Ui.123');
 
     await screen.findByText('Tickets IT');
 
-    expect(screen.queryByRole('button', { name: /^Dashboard$/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Usuarios$/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Dashboard$/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Usuarios$/i })).toBeNull();
     expect(screen.queryByText('Estado del Sistema')).toBeNull();
     expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexion al servidor/i)).toBeTruthy();
     expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
@@ -345,14 +354,14 @@ describe('App UI flow', () => {
       },
     ]);
 
-    render(<App />);
+    renderApp();
 
     fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
 
     await screen.findByText('Backend Offline');
     await screen.findByText(/Backend de pruebas fuera de linea/i);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Tickets$/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
     await screen.findByText('Tickets IT');
     expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
@@ -377,13 +386,13 @@ describe('App UI flow', () => {
       },
     ]);
 
-    render(<App />);
+    renderApp();
 
     fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
 
     await screen.findByText('Backend Online');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Inventario$/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Inventario$/i }));
 
     await screen.findByText('Activos IT');
 
@@ -415,13 +424,13 @@ describe('App UI flow', () => {
       },
     ]);
 
-    render(<App />);
+    renderApp();
 
     fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
 
     await screen.findByText('Backend Online');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Usuarios$/i }));
+    fireEvent.click(screen.getByRole('link', { name: /^Usuarios$/i }));
 
     await screen.findByText('Usuarios Registrados');
     await screen.findByText(/Mostrando 3 de 3/i);
