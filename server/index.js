@@ -83,6 +83,7 @@ const TICKET_ATTACHMENT_MAX_BYTES = Math.max(64 * 1024, Math.trunc(Number(proces
 const TICKET_ATTACHMENT_MAX_COUNT = Math.max(1, Math.trunc(Number(process.env.TICKET_ATTACHMENT_MAX_COUNT || 10)));
 const PAGINATION_DEFAULT_PAGE_SIZE = Math.max(10, Math.trunc(Number(process.env.PAGINATION_DEFAULT_SIZE || 25)));
 const PAGINATION_MAX_PAGE_SIZE = Math.max(PAGINATION_DEFAULT_PAGE_SIZE, Math.trunc(Number(process.env.PAGINATION_MAX_SIZE || 100)));
+const BOOTSTRAP_AUDIT_LIMIT = Math.max(0, Math.trunc(Number(process.env.BOOTSTRAP_AUDIT_LIMIT || 25)));
 const DATA_DIR_PATH = getDataDirPath ? getDataDirPath() : path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR_PATH, 'uploads');
 const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
@@ -196,6 +197,24 @@ function normalizeTicketAttentionType(value) {
   return '';
 }
 
+function normalizeTravelAdjustmentMonth(value) {
+  const raw = asNonEmptyString(value);
+  if (!/^\d{4}-\d{2}$/.test(raw)) return '';
+  return raw;
+}
+
+function normalizeTravelScopeKey(value) {
+  return asNonEmptyString(value).slice(0, 120);
+}
+
+function normalizeTravelScopeLabel(value) {
+  return asNonEmptyString(value).slice(0, 120);
+}
+
+function normalizeTravelDestinationCode(value) {
+  return asNonEmptyString(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+}
+
 function isSupplyActive(item) {
   return item?.activo !== false;
 }
@@ -304,6 +323,20 @@ function parseBearerToken(headerValue) {
 
 function createAuthToken() {
   return `mti_${randomUUID()}`;
+}
+
+function serializeTravelAdjustment(item) {
+  if (!item || typeof item !== 'object') return null;
+  return {
+    id: Number(item.id),
+    month: normalizeTravelAdjustmentMonth(item.month),
+    technicianScopeKey: normalizeTravelScopeKey(item.technicianScopeKey),
+    technicianScopeLabel: normalizeTravelScopeLabel(item.technicianScopeLabel),
+    destinationCode: normalizeTravelDestinationCode(item.destinationCode),
+    trips: Math.max(0, Math.trunc(Number(item.trips) || 0)),
+    updatedAt: asNonEmptyString(item.updatedAt) || new Date().toISOString(),
+    updatedBy: asNonEmptyString(item.updatedBy) || 'Sistema',
+  };
 }
 
 function getRequestActor(req) {
@@ -508,6 +541,11 @@ function paginateList(rows, page, pageSize) {
   };
 }
 
+function getBootstrapAuditRows(rows) {
+  if (!Array.isArray(rows) || BOOTSTRAP_AUDIT_LIMIT <= 0) return [];
+  return rows.slice(0, BOOTSTRAP_AUDIT_LIMIT);
+}
+
 function normalizeAuditModuleFilter(value) {
   const module = asNonEmptyString(value).toLowerCase();
   if (!AUDIT_MODULES.has(module)) return '';
@@ -518,6 +556,14 @@ function normalizeAuditResultFilter(value) {
   const result = asNonEmptyString(value).toLowerCase();
   if (!AUDIT_RESULTS.has(result)) return '';
   return result;
+}
+
+function normalizeAuditEntityIdFilter(value) {
+  const raw = value === null || typeof value === 'undefined' ? '' : String(value).trim();
+  if (!raw) return '';
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return String(Math.trunc(numeric));
+  return raw.slice(0, 80);
 }
 
 function parseAuditDateBoundary(value, endOfDay = false) {
@@ -769,6 +815,21 @@ function createAuthRuntime() {
       if (!user) {
         authSessions.delete(token);
         return res.status(401).json({ error: 'Usuario no autorizado.' });
+      }
+      if (!roleIsEnabledByCatalog(db, user.rol)) {
+        authSessions.delete(token);
+        await writeSecurityAudit(req, {
+          accion: 'Sesion Rechazada',
+          item: session.username || user.username || 'N/A',
+          cantidad: 1,
+          resultado: 'error',
+          motivo: 'Rol deshabilitado',
+          userId: user.id,
+          username: user.username,
+          rol: user.rol,
+          departamento: user.departamento,
+        });
+        return res.status(403).json({ error: 'Tu rol esta deshabilitado en catalogo.' });
       }
 
       req.authToken = token;
@@ -1535,13 +1596,111 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
       activos: requesterOnly ? [] : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
       tickets: visibleTickets.map(serializeTicket),
-      auditoria: requesterOnly ? [] : db.auditoria,
+      auditoria: requesterOnly ? [] : getBootstrapAuditRows(db.auditoria),
       users: requesterOnly ? [] : users,
       catalogos: getCatalogsFromDb(db),
       riskSummary: requesterOnly ? undefined : riskSummary,
       ticketStates: TICKET_STATES,
       slaPolicyHours: SLA_HOURS,
+      travelAdjustments: requesterOnly ? [] : (Array.isArray(db.travelAdjustments) ? db.travelAdjustments.map(serializeTravelAdjustment).filter(Boolean) : []),
       meta: { generatedAt: new Date().toISOString() },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/travel-adjustments', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensureCanEdit(req, res)) return;
+
+    const month = normalizeTravelAdjustmentMonth(req.body?.month);
+    const technicianScopeKey = normalizeTravelScopeKey(req.body?.technicianScopeKey);
+    const technicianScopeLabel = normalizeTravelScopeLabel(req.body?.technicianScopeLabel || technicianScopeKey);
+    const destinationCode = normalizeTravelDestinationCode(req.body?.destinationCode);
+    const rawTrips = req.body?.trips;
+    const deleteOverride = rawTrips === null || rawTrips === '' || typeof rawTrips === 'undefined';
+    const trips = deleteOverride ? null : toInt(rawTrips);
+
+    if (!month || !technicianScopeKey || !destinationCode) {
+      return res.status(400).json({ error: 'month, technicianScopeKey y destinationCode son obligatorios.' });
+    }
+    if (!deleteOverride && (trips === null || trips < 0)) {
+      return res.status(400).json({ error: 'trips debe ser un entero mayor o igual a cero.' });
+    }
+
+    const actor = getRequestActor(req);
+    const adjustment = await updateDb((db) => {
+      if (!Array.isArray(db.travelAdjustments)) db.travelAdjustments = [];
+
+      const existingIndex = db.travelAdjustments.findIndex((item) => (
+        normalizeTravelAdjustmentMonth(item?.month) === month
+        && normalizeTravelScopeKey(item?.technicianScopeKey) === technicianScopeKey
+        && normalizeTravelDestinationCode(item?.destinationCode) === destinationCode
+      ));
+      const before = existingIndex >= 0 ? serializeTravelAdjustment(db.travelAdjustments[existingIndex]) : null;
+
+      if (deleteOverride) {
+        if (existingIndex < 0) return null;
+        const [removed] = db.travelAdjustments.splice(existingIndex, 1);
+        pushAuditWithContext(db, req, {
+          modulo: 'otros',
+          accion: 'Viajes Reales Restablecidos',
+          item: `${month} ${destinationCode}`,
+          cantidad: before?.trips || 0,
+          entidad: 'travel-adjustments',
+          entidadId: removed?.id || null,
+          motivo: technicianScopeLabel,
+          before,
+          after: null,
+          meta: {
+            month,
+            destinationCode,
+            technicianScopeKey,
+            technicianScopeLabel,
+          },
+        });
+        return null;
+      }
+
+      const nextAdjustment = {
+        id: existingIndex >= 0 ? db.travelAdjustments[existingIndex].id : nextId(db),
+        month,
+        technicianScopeKey,
+        technicianScopeLabel: technicianScopeLabel || technicianScopeKey,
+        destinationCode,
+        trips,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actor.username || actor.usuario || 'Sistema',
+      };
+
+      if (existingIndex >= 0) db.travelAdjustments[existingIndex] = nextAdjustment;
+      else db.travelAdjustments.push(nextAdjustment);
+
+      pushAuditWithContext(db, req, {
+        modulo: 'otros',
+        accion: 'Viajes Reales Actualizados',
+        item: `${month} ${destinationCode}`,
+        cantidad: trips,
+        entidad: 'travel-adjustments',
+        entidadId: nextAdjustment.id,
+        motivo: technicianScopeLabel,
+        before,
+        after: serializeTravelAdjustment(nextAdjustment),
+        meta: {
+          month,
+          destinationCode,
+          technicianScopeKey,
+          technicianScopeLabel,
+          trips,
+        },
+      });
+
+      return nextAdjustment;
+    });
+
+    res.json({
+      adjustment: adjustment ? serializeTravelAdjustment(adjustment) : null,
     });
   } catch (error) {
     next(error);
@@ -1667,10 +1826,13 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
     const resultFilter = normalizeAuditResultFilter(req.query.result);
     const userFilter = normalizeTextKey(req.query.user || '');
     const entityFilter = normalizeTextKey(req.query.entity || '');
+    const entityIdFilter = normalizeAuditEntityIdFilter(req.query.entityId);
     const actionFilter = normalizeTextKey(req.query.action || '');
     const search = normalizeTextKey(req.query.q || req.query.search || '');
     const fromTs = parseAuditDateBoundary(req.query.from || req.query.dateFrom, false);
     const toTs = parseAuditDateBoundary(req.query.to || req.query.dateTo, true);
+    const returnAll = req.query.all === '1';
+    const includeDiagnostics = req.query.includeDiagnostics !== '0';
     const { page, pageSize } = parsePagination(req.query);
 
     let rows = Array.isArray(db.auditoria) ? db.auditoria.slice() : [];
@@ -1688,6 +1850,9 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
       });
     }
     if (entityFilter) rows = rows.filter((entry) => normalizeTextKey(entry?.entidad || '').includes(entityFilter));
+    if (entityIdFilter) {
+      rows = rows.filter((entry) => normalizeAuditEntityIdFilter(entry?.entidadId) === entityIdFilter);
+    }
     if (actionFilter) rows = rows.filter((entry) => normalizeTextKey(entry?.accion || '').includes(actionFilter));
     if (search) rows = rows.filter((entry) => auditMatchesSearch(entry, search));
     if (fromTs !== null) rows = rows.filter((entry) => {
@@ -1705,9 +1870,34 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
       return rightTs - leftTs;
     });
 
-    const paged = paginateList(rows, page, pageSize);
-    const integrity = summarizeAuditIntegrity(db.auditoria);
-    const alerts = summarizeAuditAlerts(rows);
+    const paged = returnAll
+      ? {
+          items: rows,
+          pagination: {
+            page: 1,
+            pageSize: Math.max(rows.length, 1),
+            total: rows.length,
+            totalPages: 1,
+          },
+        }
+      : paginateList(rows, page, pageSize);
+    const integrity = includeDiagnostics ? summarizeAuditIntegrity(db.auditoria) : undefined;
+    const alerts = includeDiagnostics ? summarizeAuditAlerts(rows) : undefined;
+    const summary = includeDiagnostics
+      ? {
+          total: rows.length,
+          byModule: {
+            tickets: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'tickets').length,
+            insumos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'insumos').length,
+            activos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'activos').length,
+            otros: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'otros').length,
+          },
+          byResult: {
+            ok: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'ok').length,
+            error: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'error').length,
+          },
+        }
+      : undefined;
 
     res.json({
       items: paged.items,
@@ -1717,24 +1907,13 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
         result: resultFilter || '',
         user: asNonEmptyString(req.query.user),
         entity: asNonEmptyString(req.query.entity),
+        entityId: asNonEmptyString(req.query.entityId),
         action: asNonEmptyString(req.query.action),
         q: asNonEmptyString(req.query.q || req.query.search),
         from: asNonEmptyString(req.query.from || req.query.dateFrom),
         to: asNonEmptyString(req.query.to || req.query.dateTo),
       },
-      summary: {
-        total: rows.length,
-        byModule: {
-          tickets: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'tickets').length,
-          insumos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'insumos').length,
-          activos: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'activos').length,
-          otros: rows.filter((entry) => normalizeAuditModuleFilter(entry?.modulo) === 'otros').length,
-        },
-        byResult: {
-          ok: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'ok').length,
-          error: rows.filter((entry) => normalizeAuditResultFilter(entry?.resultado) === 'error').length,
-        },
-      },
+      summary,
       integrity,
       alerts,
       generatedAt: new Date().toISOString(),

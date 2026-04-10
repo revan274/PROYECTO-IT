@@ -63,7 +63,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'users', icon: Users, label: 'Usuarios' },
 ];
 
-export const CATEGORIAS_INSUMO = ['REDES', 'CONSUMIBLES', 'HARDWARE'] as const;
+export const CATEGORIAS_INSUMO = ['REDES', 'CONSUMIBLES', 'HARDWARE', 'PERIFERICOS'] as const;
 export const SUPPLY_UNIT_OPTIONS = ['Piezas', 'Rollos', 'Metros', 'Cajas', 'Litros'] as const;
 export const TICKET_STATES: TicketEstado[] = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
 export const TICKET_ATTENTION_TYPES: TicketAttentionType[] = ['PRESENCIAL', 'REMOTO'];

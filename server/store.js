@@ -169,6 +169,7 @@ const DEFAULT_DB = {
     { id: 13, nombre: 'Conectores RJ45', unidad: 'Piezas', stock: 100, min: 30, categoria: 'REDES', activo: true },
     { id: 14, nombre: 'Teclado USB', unidad: 'Piezas', stock: 5, min: 5, categoria: 'HARDWARE', activo: true },
   ],
+  travelAdjustments: [],
   tickets: [
     {
       id: 101,
@@ -211,6 +212,7 @@ function maxExistingId(db) {
     ...(Array.isArray(db.users) ? db.users : []),
     ...(Array.isArray(db.activos) ? db.activos : []),
     ...(Array.isArray(db.insumos) ? db.insumos : []),
+    ...(Array.isArray(db.travelAdjustments) ? db.travelAdjustments : []),
     ...(Array.isArray(db.tickets) ? db.tickets : []),
     ...(Array.isArray(db.auditoria) ? db.auditoria : []),
   ];
@@ -371,6 +373,47 @@ function normalizeSupply(item) {
 
 function text(value) {
   return String(value || '').trim();
+}
+
+function normalizeTravelAdjustmentMonth(value) {
+  const raw = text(value);
+  if (!/^\d{4}-\d{2}$/.test(raw)) return '';
+  return raw;
+}
+
+function normalizeTravelScopeKey(value) {
+  return text(value).slice(0, 120);
+}
+
+function normalizeTravelScopeLabel(value) {
+  return text(value).slice(0, 120);
+}
+
+function normalizeTravelDestinationCode(value) {
+  return text(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+}
+
+function normalizeTravelAdjustment(item) {
+  if (!item || typeof item !== 'object') return null;
+  const id = Math.max(0, Math.trunc(Number(item.id) || 0));
+  const month = normalizeTravelAdjustmentMonth(item.month);
+  const technicianScopeKey = normalizeTravelScopeKey(item.technicianScopeKey || item.scopeKey);
+  const technicianScopeLabel = normalizeTravelScopeLabel(item.technicianScopeLabel || item.scopeLabel || item.technician);
+  const destinationCode = normalizeTravelDestinationCode(item.destinationCode || item.destination);
+  const trips = Math.max(0, Math.trunc(Number(item.trips) || 0));
+  const updatedAt = text(item.updatedAt || item.timestamp) || new Date().toISOString();
+  const updatedBy = text(item.updatedBy || item.usuario || item.username) || 'Sistema';
+  if (!id || !month || !technicianScopeKey || !destinationCode) return null;
+  return {
+    id,
+    month,
+    technicianScopeKey,
+    technicianScopeLabel,
+    destinationCode,
+    trips,
+    updatedAt,
+    updatedBy,
+  };
 }
 
 function normalizeUserRole(value) {
@@ -782,6 +825,9 @@ function normalizeDbShape(db) {
     : DEFAULT_USERS;
   normalized.activos = Array.isArray(db.activos) ? db.activos.map(normalizeAsset) : [];
   normalized.insumos = Array.isArray(db.insumos) ? db.insumos.map(normalizeSupply) : [];
+  normalized.travelAdjustments = Array.isArray(db.travelAdjustments)
+    ? db.travelAdjustments.map(normalizeTravelAdjustment).filter(Boolean)
+    : [];
   normalized.tickets = Array.isArray(db.tickets)
     ? db.tickets.map((ticket) => normalizeTicket(ticket, validBranchCodes))
     : [];

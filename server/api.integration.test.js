@@ -145,6 +145,7 @@ function buildFixtureDb() {
         activo: true,
       },
     ],
+    travelAdjustments: [],
     tickets: [
       createTicket({
         id: 701,
@@ -412,6 +413,44 @@ test('GET /api/bootstrap sanea credenciales remotas legacy en API y runtime DB',
   assert.equal(Object.hasOwn(persisted.activos[0], 'pass'), false);
 });
 
+test('PUT /api/travel-adjustments persiste viajes reales y bootstrap los devuelve', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const saved = await requestJson('/api/travel-adjustments', {
+    method: 'PUT',
+    token: session.token,
+    body: {
+      month: '2026-03',
+      technicianScopeKey: `user:${TECH_USER.id}`,
+      technicianScopeLabel: TECH_USER.nombre,
+      destinationCode: 'TJ01',
+      trips: 3,
+    },
+  });
+
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.data));
+  assert.equal(saved.data.adjustment.month, '2026-03');
+  assert.equal(saved.data.adjustment.technicianScopeKey, `user:${TECH_USER.id}`);
+  assert.equal(saved.data.adjustment.destinationCode, 'TJ01');
+  assert.equal(saved.data.adjustment.trips, 3);
+
+  const bootstrap = await requestJson('/api/bootstrap', {
+    token: session.token,
+  });
+
+  assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.data));
+  assert.equal(Array.isArray(bootstrap.data.travelAdjustments), true);
+  assert.equal(bootstrap.data.travelAdjustments.length, 1);
+  assert.equal(bootstrap.data.travelAdjustments[0].trips, 3);
+
+  const persisted = await readPersistedDb();
+  assert.equal(Array.isArray(persisted.travelAdjustments), true);
+  assert.equal(persisted.travelAdjustments.length, 1);
+  assert.equal(persisted.travelAdjustments[0].trips, 3);
+  assert.equal(persisted.travelAdjustments[0].technicianScopeKey, `user:${TECH_USER.id}`);
+  assert.equal(persisted.auditoria.some((entry) => entry.accion === 'Viajes Reales Actualizados'), true);
+});
+
 test('POST/PATCH /api/users crea y actualiza usuarios sanitizados', { concurrency: false }, async () => {
   const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
   const username = 'usuario.integration';
@@ -602,4 +641,193 @@ test('POST/PATCH stock/DELETE /api/insumos persiste cambios de inventario', { co
   assert.equal(storedSupply.stock, 9);
   assert.equal(storedSupply.activo, false);
   assert.equal(storedSupply.categoria, 'PERIFERICOS');
+});
+
+test('resolver un ticket mantiene el activo en falla si existe otro ticket abierto relacionado', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'BAS-010',
+      descripcion: 'Seguimiento adicional para la bascula',
+      sucursal: 'TJ01',
+      prioridad: 'ALTA',
+      atencionTipo: 'REMOTO',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.activoTag, 'BAS-010');
+  assert.equal(created.data.estado, 'Abierto');
+
+  const resolved = await requestJson('/api/tickets/702/resolve', {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      comentario: 'Atendido en sitio',
+    },
+  });
+
+  assert.equal(resolved.response.status, 200, JSON.stringify(resolved.data));
+  assert.equal(resolved.data.estado, 'Resuelto');
+
+  const inventory = await requestJson('/api/activos?search=BAS-010', {
+    token: session.token,
+  });
+
+  assert.equal(inventory.response.status, 200, JSON.stringify(inventory.data));
+  const asset = inventory.data.find((item) => item.tag === 'BAS-010');
+  assert.ok(asset);
+  assert.equal(asset.estado, 'Falla');
+
+  const persisted = await readPersistedDb();
+  const storedAsset = persisted.activos.find((item) => item.tag === 'BAS-010');
+  assert.ok(storedAsset);
+  assert.equal(storedAsset.estado, 'Falla');
+});
+
+test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const firstClose = await requestJson('/api/tickets/701', {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      estado: 'Resuelto',
+    },
+  });
+
+  assert.equal(firstClose.response.status, 200, JSON.stringify(firstClose.data));
+  assert.equal(firstClose.data.estado, 'Resuelto');
+  assert.equal(typeof firstClose.data.fechaCierre, 'string');
+  const firstClosedAt = firstClose.data.fechaCierre;
+
+  await delay(20);
+
+  const reopened = await requestJson('/api/tickets/701', {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      estado: 'Abierto',
+    },
+  });
+
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.data));
+  assert.equal(reopened.data.estado, 'Abierto');
+  assert.equal(reopened.data.fechaCierre, undefined);
+
+  await delay(20);
+
+  const secondClose = await requestJson('/api/tickets/701', {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      estado: 'Cerrado',
+    },
+  });
+
+  assert.equal(secondClose.response.status, 200, JSON.stringify(secondClose.data));
+  assert.equal(secondClose.data.estado, 'Cerrado');
+  assert.equal(typeof secondClose.data.fechaCierre, 'string');
+  assert.notEqual(secondClose.data.fechaCierre, firstClosedAt);
+  assert.equal(new Date(secondClose.data.fechaCierre).getTime() > new Date(firstClosedAt).getTime(), true);
+});
+
+test('un rol deshabilitado pierde acceso aunque ya tuviera una sesion activa', { concurrency: false }, async () => {
+  const adminSession = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const techSession = await login(TECH_USER.username, TECH_PASSWORD);
+
+  const updatedCatalog = await requestJson('/api/catalogos', {
+    method: 'PATCH',
+    token: adminSession.token,
+    body: {
+      roles: [
+        { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
+        { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: false },
+        { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
+      ],
+    },
+  });
+
+  assert.equal(updatedCatalog.response.status, 200, JSON.stringify(updatedCatalog.data));
+
+  const forbidden = await requestJson('/api/insumos', {
+    method: 'POST',
+    token: techSession.token,
+    body: {
+      nombre: 'Cable bloqueado por rol',
+      unidad: 'Piezas',
+      stock: 1,
+      min: 0,
+      categoria: 'REDES',
+    },
+  });
+
+  assert.equal(forbidden.response.status, 403, JSON.stringify(forbidden.data));
+  assert.equal(forbidden.data.error, 'Tu rol esta deshabilitado en catalogo.');
+});
+
+test('GET /api/auditoria soporta all=1 y entityId para consultas bajo demanda', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const created = await requestJson('/api/insumos', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre: 'Switch Auditoria Integracion',
+      unidad: 'Piezas',
+      stock: 5,
+      min: 1,
+      categoria: 'REDES',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+
+  await requestJson(`/api/insumos/${created.data.id}/stock`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      delta: 2,
+    },
+  });
+
+  const audit = await requestJson(`/api/auditoria?module=insumos&entity=insumo&entityId=${created.data.id}&all=1&includeDiagnostics=0`, {
+    token: session.token,
+  });
+
+  assert.equal(audit.response.status, 200, JSON.stringify(audit.data));
+  assert.equal(Array.isArray(audit.data.items), true);
+  assert.equal(audit.data.items.length >= 2, true);
+  assert.equal(audit.data.pagination.total, audit.data.items.length);
+  assert.equal(audit.data.filters.entityId, String(created.data.id));
+  assert.equal(audit.data.summary, undefined);
+  assert.equal(audit.data.integrity, undefined);
+  assert.equal(audit.data.alerts, undefined);
+  assert.equal(audit.data.items.every((item) => Number(item.entidadId) === Number(created.data.id)), true);
+});
+
+test('GET /api/bootstrap limita la auditoria incluida para reducir payload inicial', { concurrency: false }, async () => {
+  const persisted = await readPersistedDb();
+  persisted.auditoria = Array.from({ length: 40 }, (_, index) => ({
+    id: 3000 + index,
+    accion: `Evento ${index + 1}`,
+    item: `Item ${index + 1}`,
+    cantidad: 1,
+    fecha: `2026-04-${String((index % 9) + 1).padStart(2, '0')} 10:00`,
+    usuario: 'Admin Integracion',
+    modulo: 'otros',
+  }));
+  await writeFile(dbFilePath, JSON.stringify(persisted, null, 2), 'utf8');
+
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const bootstrap = await requestJson('/api/bootstrap', {
+    token: session.token,
+  });
+
+  assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.data));
+  assert.equal(Array.isArray(bootstrap.data.auditoria), true);
+  assert.equal(bootstrap.data.auditoria.length, 25);
 });

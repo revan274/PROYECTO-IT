@@ -73,6 +73,17 @@ export interface TravelReportRow {
   motivo: string;
 }
 
+export interface TravelTripAdjustment {
+  id: number;
+  month: string;
+  technicianScopeKey: string;
+  technicianScopeLabel: string;
+  destinationCode: string;
+  trips: number;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 export interface Activo {
   id: number;
   tag: string;
@@ -412,12 +423,17 @@ export interface BootstrapResponse {
   riskSummary?: AssetRiskSummary;
   ticketStates?: TicketEstado[];
   slaPolicyHours?: Record<PrioridadTicket, number>;
+  travelAdjustments?: TravelTripAdjustment[];
 }
 
 export interface LoginResponse {
   user: UserSession;
   token: string;
   loggedAt: string;
+}
+
+export interface TravelTripAdjustmentResponse {
+  adjustment: TravelTripAdjustment | null;
 }
 
 export interface TicketAttachmentUploadResponse {

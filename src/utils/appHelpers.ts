@@ -10,7 +10,10 @@ import type {
   ReportStateFilter,
   SupplyStatusFilter,
   TicketItem,
+  TravelDestinationRule,
   TravelMonthRange,
+  TravelReportRow,
+  UserItem,
   UserSession,
 } from '../types/app';
 import { DASHBOARD_RANGES } from '../constants/app';
@@ -104,6 +107,178 @@ export function formatTravelNumber(value: number): string {
 
 export function parseTicketTravelCreatedAt(ticket: TicketItem): number | null {
   return parseDateToTimestamp(ticket.fechaCreacion || ticket.fecha);
+}
+
+export function resolveTravelTechnicianScope(
+  selectedValue: string,
+  users: readonly UserItem[],
+): { key: string; label: string } {
+  const raw = String(selectedValue || '').trim();
+  if (!raw || raw === 'TODOS') {
+    return { key: 'scope:all', label: 'TODOS' };
+  }
+  if (raw === 'SIN_ASIGNAR') {
+    return { key: 'scope:unassigned', label: 'SIN ASIGNAR' };
+  }
+
+  const normalized = normalizeForCompare(raw);
+  const matchedUser = users.find((user) => {
+    const nameKey = normalizeForCompare(user.nombre || '');
+    const usernameKey = normalizeForCompare(user.username || '');
+    return normalized && (nameKey === normalized || usernameKey === normalized);
+  });
+
+  if (matchedUser?.id) {
+    return {
+      key: `user:${matchedUser.id}`,
+      label: String(matchedUser.nombre || raw).trim() || raw,
+    };
+  }
+
+  return {
+    key: `name:${normalized || 'unknown'}`,
+    label: raw,
+  };
+}
+
+function buildTravelManualRow(
+  destinationCode: string,
+  destinationRuleByCode: ReadonlyMap<string, TravelDestinationRule>,
+  reporterName: string,
+  createdAt: number,
+  ticketId: number,
+  motivo: string,
+): TravelReportRow {
+  const destinationRule = destinationRuleByCode.get(destinationCode);
+  return {
+    ticketId,
+    createdAt,
+    nombre: reporterName,
+    destinationCode,
+    destinationLabel: destinationRule?.label || destinationCode,
+    routeIndex: destinationRule?.index || 0,
+    kms: destinationRule?.kms || 0,
+    fecha: 'MANUAL',
+    motivo,
+  };
+}
+
+function aggregateTravelRows(rows: readonly TravelReportRow[], reporterName: string): TravelReportRow {
+  const first = rows[0];
+  const motives = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.motivo || '').trim())
+        .filter(Boolean),
+    ),
+  );
+  const dates = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.fecha || '').trim())
+        .filter(Boolean),
+    ),
+  );
+
+  return {
+    ...first,
+    nombre: reporterName || first.nombre,
+    fecha: dates.length <= 1 ? (dates[0] || first.fecha) : 'VARIOS',
+    motivo: motives.join(' / ') || first.motivo,
+  };
+}
+
+export function buildTravelReportRowsFromActualTrips(
+  ticketRows: readonly TravelReportRow[],
+  actualTripsByCode: ReadonlyMap<string, number>,
+  destinationRuleByCode: ReadonlyMap<string, TravelDestinationRule>,
+  reporterName: string,
+  monthRange: TravelMonthRange | null,
+): TravelReportRow[] {
+  const grouped = new Map<string, TravelReportRow[]>();
+
+  ticketRows
+    .slice()
+    .sort((a, b) => {
+      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+      return a.ticketId - b.ticketId;
+    })
+    .forEach((row) => {
+      const current = grouped.get(row.destinationCode);
+      if (current) current.push(row);
+      else grouped.set(row.destinationCode, [row]);
+    });
+
+  const destinationCodes = new Set<string>([
+    ...grouped.keys(),
+    ...actualTripsByCode.keys(),
+  ]);
+  const output: TravelReportRow[] = [];
+  let manualSequence = 0;
+  const manualBaseTime = monthRange?.endMs ?? Date.now();
+  const manualBaseTicketId = 900000;
+
+  Array.from(destinationCodes)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((destinationCode) => {
+      const sourceRows = grouped.get(destinationCode) || [];
+      const inferredTrips = sourceRows.length;
+      const targetTrips = Math.max(
+        0,
+        Math.trunc(Number(actualTripsByCode.get(destinationCode) ?? inferredTrips) || 0),
+      );
+      if (targetTrips <= 0) return;
+
+      if (sourceRows.length === 0) {
+        for (let index = 0; index < targetTrips; index += 1) {
+          manualSequence += 1;
+          output.push(buildTravelManualRow(
+            destinationCode,
+            destinationRuleByCode,
+            reporterName,
+            manualBaseTime + manualSequence,
+            manualBaseTicketId + manualSequence,
+            'Viaje real registrado manualmente',
+          ));
+        }
+        return;
+      }
+
+      if (targetTrips >= sourceRows.length) {
+        output.push(...sourceRows.map((row) => ({ ...row, nombre: reporterName || row.nombre })));
+        for (let index = sourceRows.length; index < targetTrips; index += 1) {
+          manualSequence += 1;
+          output.push(buildTravelManualRow(
+            destinationCode,
+            destinationRuleByCode,
+            reporterName,
+            manualBaseTime + manualSequence,
+            manualBaseTicketId + manualSequence,
+            'Viaje adicional registrado manualmente',
+          ));
+        }
+        return;
+      }
+
+      const buckets = Array.from({ length: targetTrips }, () => [] as TravelReportRow[]);
+      sourceRows.forEach((row, index) => {
+        const bucketIndex = Math.min(
+          targetTrips - 1,
+          Math.floor((index * targetTrips) / sourceRows.length),
+        );
+        buckets[bucketIndex].push(row);
+      });
+      buckets
+        .filter((bucket) => bucket.length > 0)
+        .forEach((bucket) => {
+          output.push(aggregateTravelRows(bucket, reporterName));
+        });
+    });
+
+  return output.sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+    return a.ticketId - b.ticketId;
+  });
 }
 
 export function resolveTicketTravelDestinationCode(ticket: TicketItem, validBranchCodes: ReadonlySet<string>): string {

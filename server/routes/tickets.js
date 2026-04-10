@@ -38,6 +38,21 @@ export function createTicketsRouter({
   paginateList,
 }) {
   const router = express.Router();
+  const ACTIVE_ASSET_TICKET_STATES = new Set(['Abierto', 'En Proceso']);
+
+  function syncAssetOperationalState(db, activoTag) {
+    const tagKey = normalizeTextKey(activoTag);
+    if (!tagKey) return;
+
+    const activo = db.activos.find((item) => normalizeTextKey(item?.tag) === tagKey);
+    if (!activo) return;
+
+    const hasRelatedOpenTickets = db.tickets.some((item) => (
+      normalizeTextKey(item?.activoTag) === tagKey
+      && ACTIVE_ASSET_TICKET_STATES.has(item.estado)
+    ));
+    activo.estado = hasRelatedOpenTickets ? 'Falla' : 'Operativo';
+  }
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
@@ -172,18 +187,17 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (hasAtencionTipoUpdate) ticket.atencionTipo = atencionTipo;
       const attentionChanged = hasAtencionTipoUpdate && atencionTipo !== previousAttentionType;
 
-      if (CLOSED_STATES.has(ticket.estado) && !ticket.fechaCierre) {
-        ticket.fechaCierre = new Date().toISOString();
+      const stateChanged = !!estado && estado !== previousState;
+      if (CLOSED_STATES.has(ticket.estado)) {
+        if (stateChanged && !CLOSED_STATES.has(previousState)) {
+          ticket.fechaCierre = new Date().toISOString();
+        }
+      } else if (ticket.fechaCierre) {
+        delete ticket.fechaCierre;
       }
 
-      if (ticket.estado === 'Abierto' || ticket.estado === 'En Proceso') {
-        const activo = db.activos.find((a) => a.tag.toUpperCase() === ticket.activoTag.toUpperCase());
-        if (activo) activo.estado = 'Falla';
-      }
-
-      if (ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado') {
-        const activo = db.activos.find((a) => a.tag.toUpperCase() === ticket.activoTag.toUpperCase());
-        if (activo) activo.estado = 'Operativo';
+      if (stateChanged) {
+        syncAssetOperationalState(db, ticket.activoTag);
       }
 
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
@@ -262,8 +276,11 @@ router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
       const ticket = db.tickets.find((t) => t.id === id);
       if (!ticket) return null;
 
+      const previousState = ticket.estado;
       ticket.estado = 'Resuelto';
-      ticket.fechaCierre = ticket.fechaCierre || new Date().toISOString();
+      if (!CLOSED_STATES.has(previousState)) {
+        ticket.fechaCierre = new Date().toISOString();
+      }
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
       ticket.historial.unshift({
         fecha: now(),
@@ -273,8 +290,7 @@ router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
         comentario,
       });
 
-      const activo = db.activos.find((a) => a.tag.toUpperCase() === ticket.activoTag.toUpperCase());
-      if (activo) activo.estado = 'Operativo';
+      syncAssetOperationalState(db, ticket.activoTag);
       pushAuditWithContext(db, req, {
         accion: 'Ticket Resuelto',
         item: ticket.activoTag,
@@ -319,16 +335,8 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
           .filter(Boolean)
         : [];
 
-      const hadOpenTicketState = deleted.estado === 'Abierto' || deleted.estado === 'En Proceso';
-      if (hadOpenTicketState) {
-        const hasRelatedOpenTickets = db.tickets.some((item) => (
-          normalizeTextKey(item?.activoTag) === normalizeTextKey(deleted.activoTag)
-          && (item.estado === 'Abierto' || item.estado === 'En Proceso')
-        ));
-        if (!hasRelatedOpenTickets) {
-          const activo = db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(deleted.activoTag));
-          if (activo) activo.estado = 'Operativo';
-        }
+      if (ACTIVE_ASSET_TICKET_STATES.has(deleted.estado)) {
+        syncAssetOperationalState(db, deleted.activoTag);
       }
 
       pushAuditWithContext(db, req, {

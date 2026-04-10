@@ -90,6 +90,8 @@ import type {
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
+  TravelTripAdjustment,
+  TravelTripAdjustmentResponse,
   ViewType,
 
   TravelReportRow,
@@ -169,10 +171,12 @@ import {
   formatMonthInputLabel,
   formatTravelDate,
   compactBranchLabel,
+  buildTravelReportRowsFromActualTrips,
   parseNonNegativeNumber,
   roundToTwoDecimals,
   formatTravelNumber,
   parseTicketTravelCreatedAt,
+  resolveTravelTechnicianScope,
   resolveTicketTravelDestinationCode,
   getTicketAreaLabel,
   extractTicketIssueDescription,
@@ -368,6 +372,73 @@ function isRouteNotFoundApiError(error: unknown): boolean {
   return message.includes('ruta no encontrada');
 }
 
+function isSessionRejectedApiError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 401) return true;
+  if (error.status !== 403) return false;
+  const message = normalizeForCompare(getApiErrorMessage(error));
+  return message.includes('rol esta deshabilitado en catalogo');
+}
+
+function buildSupplyAuditMovementsByInsumoId(
+  rows: readonly RegistroAuditoria[],
+  insumos: readonly Insumo[],
+): Record<number, SupplyAuditMovement[]> {
+  const insumoById = new Map(insumos.map((item) => [item.id, item]));
+  const insumoIdByName = new Map(
+    insumos.map((item) => [normalizeForCompare(item.nombre), item.id]),
+  );
+  const grouped: Record<number, SupplyAuditMovement[]> = {};
+
+  rows.forEach((log) => {
+    if (resolveAuditModule(log) !== 'insumos') return;
+
+    const action = normalizeForCompare(log.accion || '');
+    const isSupplyMovement =
+      action.includes('entrada')
+      || action.includes('salida')
+      || action.includes('ajuste')
+      || action.includes('registro nuevo')
+      || action.includes('edicion insumo')
+      || action.includes('baja logica')
+      || action.includes('baja');
+    if (!isSupplyMovement) return;
+
+    let insumoId: number | null = null;
+    const entityId = Number(log.entidadId);
+    if (Number.isFinite(entityId) && insumoById.has(Math.trunc(entityId))) {
+      insumoId = Math.trunc(entityId);
+    } else {
+      const fallbackId = insumoIdByName.get(normalizeForCompare(log.item || ''));
+      if (typeof fallbackId === 'number') insumoId = fallbackId;
+    }
+    if (insumoId === null) return;
+
+    const movement: SupplyAuditMovement = {
+      logId: Math.trunc(Number(log.id) || 0),
+      insumoId,
+      accion: String(log.accion || 'Movimiento'),
+      cantidad: Math.max(0, Math.trunc(Number(log.cantidad) || 0)),
+      usuario: String(log.usuario || log.username || 'Sistema').trim() || 'Sistema',
+      fecha: String(log.timestamp || log.fecha || '').trim(),
+      timestampMs: getAuditRowTimestampMs(log) || 0,
+      resultado: String(log.resultado || 'ok').toLowerCase() === 'error' ? 'error' : 'ok',
+    };
+
+    if (!grouped[insumoId]) grouped[insumoId] = [];
+    grouped[insumoId].push(movement);
+  });
+
+  Object.values(grouped).forEach((movements) => {
+    movements.sort((left, right) => {
+      if (left.timestampMs !== right.timestampMs) return right.timestampMs - left.timestampMs;
+      return right.logId - left.logId;
+    });
+  });
+
+  return grouped;
+}
+
 // --- APP PRINCIPAL ---
 
 export default function App() {
@@ -393,6 +464,7 @@ export default function App() {
   const [catalogos, setCatalogos] = useState<CatalogState>(DEFAULT_CATALOGS);
   const [auditoria, setAuditoria] = useState<RegistroAuditoria[]>([]);
   const [auditRemoteRows, setAuditRemoteRows] = useState<RegistroAuditoria[] | null>(null);
+  const [reportAuditRowsRemote, setReportAuditRowsRemote] = useState<RegistroAuditoria[] | null>(null);
   const [auditFilters, setAuditFilters] = useState<AuditFiltersState>(() => buildDefaultAuditFilters());
   const [auditPage, setAuditPage] = useState(1);
   const [auditPageSize, setAuditPageSize] = useState(25);
@@ -423,9 +495,13 @@ export default function App() {
   const [travelReportAuthorizer, setTravelReportAuthorizer] = useState(TRAVEL_DEFAULT_AUTHORIZER);
   const [travelReportFinance, setTravelReportFinance] = useState(TRAVEL_DEFAULT_FINANCE);
   const [travelKmsByBranch, setTravelKmsByBranch] = useState<Record<string, string>>(() => buildDefaultTravelKmsByBranch());
+  const [travelAdjustments, setTravelAdjustments] = useState<TravelTripAdjustment[]>([]);
+  const [travelTripDrafts, setTravelTripDrafts] = useState<Record<string, string>>({});
+  const [travelSavingCode, setTravelSavingCode] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<ModalType>(null);
   const [selectedAsset, setSelectedAsset] = useState<Activo | null>(null);
   const [selectedSupplyHistoryItem, setSelectedSupplyHistoryItem] = useState<Insumo | null>(null);
+  const [selectedSupplyHistoryRemoteMovements, setSelectedSupplyHistoryRemoteMovements] = useState<SupplyAuditMovement[] | null>(null);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrScannerStatus, setQrScannerStatus] = useState('Escanea un QR firmado (mtiqr1).');
   const [isQrScannerActive, setIsQrScannerActive] = useState(false);
@@ -826,6 +902,7 @@ export default function App() {
     setTickets([]);
     setAuditoria([]);
     setAuditRemoteRows(null);
+    setReportAuditRowsRemote(null);
     setAuditFilters(buildDefaultAuditFilters());
     setAuditPage(1);
     setAuditPageSize(25);
@@ -854,8 +931,12 @@ export default function App() {
     setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
     setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
     setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
+    setTravelAdjustments([]);
+    setTravelTripDrafts({});
+    setTravelSavingCode(null);
     setSelectedAsset(null);
     setSelectedSupplyHistoryItem(null);
+    setSelectedSupplyHistoryRemoteMovements(null);
     setEditingAssetId(null);
     setEditingInsumoId(null);
     setFormData({});
@@ -1402,13 +1483,14 @@ export default function App() {
       setActivos(data.activos);
       setInsumos(data.insumos);
       setTickets(data.tickets);
-      setAuditoria(data.auditoria);
+      setAuditoria(Array.isArray(data.auditoria) ? data.auditoria : []);
       setAuditSummary(null);
       setAuditIntegrity(null);
       setAuditAlerts(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
       setUsers(data.users || []);
       setCatalogos(normalizeCatalogState(data.catalogos));
+      setTravelAdjustments(data.travelAdjustments || []);
       if (data.riskSummary) {
         setAssetRiskSummary(data.riskSummary);
       } else {
@@ -1418,17 +1500,20 @@ export default function App() {
       setLastSync(new Date().toLocaleTimeString());
       fetchAuditHistoryRef.current({ force: true });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isSessionRejectedApiError(error)) {
         clearSession();
-        if (!silent) showToast('Sesión expirada. Inicia sesión nuevamente.', 'warning');
+        if (!silent) showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
         return;
       }
       setBackendConnected(false);
       setAuditRemoteRows(null);
+      setReportAuditRowsRemote(null);
       setAuditSummary(null);
       setAuditIntegrity(null);
       setAuditAlerts(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
+      setTravelAdjustments([]);
+      setSelectedSupplyHistoryRemoteMovements(null);
       showToast(getApiErrorMessage(error) || 'No se pudo sincronizar con el backend', 'warning');
     } finally {
       if (!silent) setIsSyncing(false);
@@ -1439,6 +1524,22 @@ export default function App() {
     if (!sessionUser) return;
     void refreshData(true);
   }, [refreshData, sessionUser]);
+
+  const fetchAllAuditRows = useCallback(async (filters: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      const normalized = String(value).trim();
+      if (!normalized) return;
+      params.set(key, normalized);
+    });
+    params.set('all', '1');
+    params.set('includeDiagnostics', '0');
+
+    const query = params.toString();
+    const data = await apiRequest<AuditHistoryResponse>(`/auditoria${query ? `?${query}` : ''}`);
+    return Array.isArray(data.items) ? data.items : [];
+  }, []);
 
   const fetchAuditHistory = useCallback(async (options?: { force?: boolean }) => {
     const force = options?.force ?? false;
@@ -1469,9 +1570,9 @@ export default function App() {
       setAuditIntegrity(data.integrity || null);
       setAuditAlerts(data.alerts || null);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (isSessionRejectedApiError(error)) {
         clearSession();
-        showToast('Sesión expirada. Inicia sesión nuevamente.', 'warning');
+        showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
         return;
       }
       if (!isRouteNotFoundApiError(error)) {
@@ -1514,10 +1615,108 @@ export default function App() {
   }, [view, fetchAuditHistory]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (view !== 'reports' || !sessionUser || !backendConnected || isRequesterOnlyUser) {
+      setReportAuditRowsRemote(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void (async () => {
+      try {
+        const rows = await fetchAllAuditRows({
+          from: reportDateFrom,
+          to: reportDateTo,
+        });
+        if (cancelled) return;
+        setReportAuditRowsRemote(rows);
+      } catch (error) {
+        if (cancelled) return;
+        if (isSessionRejectedApiError(error)) {
+          clearSession();
+          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+          return;
+        }
+        if (!isRouteNotFoundApiError(error)) {
+          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría para reportes', 'warning');
+        }
+        setReportAuditRowsRemote(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    backendConnected,
+    clearSession,
+    fetchAllAuditRows,
+    isRequesterOnlyUser,
+    reportDateFrom,
+    reportDateTo,
+    sessionUser,
+    showToast,
+    view,
+  ]);
+
+  useEffect(() => {
     if (!selectedSupplyHistoryItem) return;
     const exists = insumos.some((item) => item.id === selectedSupplyHistoryItem.id);
     if (!exists) setSelectedSupplyHistoryItem(null);
   }, [insumos, selectedSupplyHistoryItem]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedSupplyHistoryItem) {
+      setSelectedSupplyHistoryRemoteMovements(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!sessionUser || !backendConnected || isRequesterOnlyUser) {
+      setSelectedSupplyHistoryRemoteMovements(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void (async () => {
+      try {
+        const rows = await fetchAllAuditRows({
+          module: 'insumos',
+          entity: 'insumo',
+          entityId: selectedSupplyHistoryItem.id,
+        });
+        if (cancelled) return;
+        const grouped = buildSupplyAuditMovementsByInsumoId(rows, insumos);
+        setSelectedSupplyHistoryRemoteMovements(grouped[selectedSupplyHistoryItem.id] || []);
+      } catch (error) {
+        if (cancelled) return;
+        if (isSessionRejectedApiError(error)) {
+          clearSession();
+          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+          return;
+        }
+        setSelectedSupplyHistoryRemoteMovements(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    backendConnected,
+    clearSession,
+    fetchAllAuditRows,
+    insumos,
+    isRequesterOnlyUser,
+    selectedSupplyHistoryItem,
+    sessionUser,
+    showToast,
+  ]);
 
   useEffect(() => {
     if (showModal !== 'ticket') return;
@@ -3100,65 +3299,15 @@ export default function App() {
       }),
     [effectiveAuditRows],
   );
-  const supplyAuditMovementsByInsumoId = useMemo(() => {
-    const insumoById = new Map(insumos.map((item) => [item.id, item]));
-    const insumoIdByName = new Map(
-      insumos.map((item) => [normalizeForCompare(item.nombre), item.id]),
-    );
-    const grouped: Record<number, SupplyAuditMovement[]> = {};
-
-    normalizedAuditRows.forEach((log) => {
-      if (resolveAuditModule(log) !== 'insumos') return;
-
-      const action = normalizeForCompare(log.accion || '');
-      const isSupplyMovement =
-        action.includes('entrada')
-        || action.includes('salida')
-        || action.includes('ajuste')
-        || action.includes('registro nuevo')
-        || action.includes('edicion insumo')
-        || action.includes('baja logica')
-        || action.includes('baja');
-      if (!isSupplyMovement) return;
-
-      let insumoId: number | null = null;
-      const entityId = Number(log.entidadId);
-      if (Number.isFinite(entityId) && insumoById.has(Math.trunc(entityId))) {
-        insumoId = Math.trunc(entityId);
-      } else {
-        const fallbackId = insumoIdByName.get(normalizeForCompare(log.item || ''));
-        if (typeof fallbackId === 'number') insumoId = fallbackId;
-      }
-      if (insumoId === null) return;
-
-      const movement: SupplyAuditMovement = {
-        logId: Math.trunc(Number(log.id) || 0),
-        insumoId,
-        accion: String(log.accion || 'Movimiento'),
-        cantidad: Math.max(0, Math.trunc(Number(log.cantidad) || 0)),
-        usuario: String(log.usuario || log.username || 'Sistema').trim() || 'Sistema',
-        fecha: String(log.timestamp || log.fecha || '').trim(),
-        timestampMs: getAuditRowTimestampMs(log) || 0,
-        resultado: String(log.resultado || 'ok').toLowerCase() === 'error' ? 'error' : 'ok',
-      };
-
-      if (!grouped[insumoId]) grouped[insumoId] = [];
-      grouped[insumoId].push(movement);
-    });
-
-    Object.values(grouped).forEach((rows) => {
-      rows.sort((left, right) => {
-        if (left.timestampMs !== right.timestampMs) return right.timestampMs - left.timestampMs;
-        return right.logId - left.logId;
-      });
-    });
-
-    return grouped;
-  }, [insumos, normalizedAuditRows]);
+  const supplyAuditMovementsByInsumoId = useMemo(
+    () => buildSupplyAuditMovementsByInsumoId(normalizedAuditRows, insumos),
+    [insumos, normalizedAuditRows],
+  );
   const selectedSupplyMovements = useMemo(() => {
     if (!selectedSupplyHistoryItem) return [] as SupplyAuditMovement[];
+    if (selectedSupplyHistoryRemoteMovements !== null) return selectedSupplyHistoryRemoteMovements;
     return supplyAuditMovementsByInsumoId[selectedSupplyHistoryItem.id] || [];
-  }, [selectedSupplyHistoryItem, supplyAuditMovementsByInsumoId]);
+  }, [selectedSupplyHistoryItem, selectedSupplyHistoryRemoteMovements, supplyAuditMovementsByInsumoId]);
   const auditRowsForHistory = useMemo(() => {
     if (view !== 'history') return normalizedAuditRows;
     if (auditRemoteRows !== null) return normalizedAuditRows;
@@ -3560,21 +3709,29 @@ export default function App() {
     () => new Map(travelDestinationRules.map((row) => [row.code, row])),
     [travelDestinationRules],
   );
+  const travelDestinationCodesKey = useMemo(
+    () => travelDestinationRules.map((row) => row.code).join('|'),
+    [travelDestinationRules],
+  );
   const travelMonthRange = useMemo(
     () => parseMonthInputRange(travelReportMonth),
     [travelReportMonth],
+  );
+  const currentTravelScope = useMemo(
+    () => resolveTravelTechnicianScope(travelReportTechnician, users),
+    [travelReportTechnician, users],
   );
   const effectiveTravelReporterName = useMemo(() => {
     const manual = String(travelReportName || '').trim();
     if (manual) return manual;
     if (travelReportTechnician !== 'TODOS' && travelReportTechnician !== 'SIN_ASIGNAR') {
-      const selected = String(travelReportTechnician || '').trim();
+      const selected = String(currentTravelScope.label || travelReportTechnician || '').trim();
       if (selected) return selected;
     }
     const sessionName = String(sessionUser?.nombre || '').trim();
     return sessionName || 'SIN NOMBRE';
-  }, [sessionUser?.nombre, travelReportName, travelReportTechnician]);
-  const travelReportRows = useMemo(() => {
+  }, [currentTravelScope.label, sessionUser?.nombre, travelReportName, travelReportTechnician]);
+  const travelTicketRows = useMemo(() => {
     if (!isReportsView || !travelMonthRange) return [] as TravelReportRow[];
     const rows: TravelReportRow[] = [];
     const normalizedTechnician = normalizeForCompare(travelReportTechnician);
@@ -3605,7 +3762,6 @@ export default function App() {
         motivo: extractTicketIssueDescription(ticket),
       });
     });
-
     rows.sort((a, b) => {
       if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
       return a.ticketId - b.ticketId;
@@ -3620,21 +3776,75 @@ export default function App() {
     travelReportTechnician,
     travelSourceTickets,
   ]);
-  const travelTripsByCode = useMemo(() => {
+  const travelSuggestedTripsByCode = useMemo(() => {
     const counts = new Map<string, number>();
-    travelReportRows.forEach((row) => {
+    travelTicketRows.forEach((row) => {
       counts.set(row.destinationCode, (counts.get(row.destinationCode) || 0) + 1);
     });
     return counts;
-  }, [travelReportRows]);
-  const travelTotalTrips = travelReportRows.length;
+  }, [travelTicketRows]);
+  const travelCurrentAdjustmentByCode = useMemo(() => {
+    const map = new Map<string, TravelTripAdjustment>();
+    travelAdjustments.forEach((adjustment) => {
+      if (adjustment.month !== travelReportMonth) return;
+      if (adjustment.technicianScopeKey !== currentTravelScope.key) return;
+      map.set(adjustment.destinationCode, adjustment);
+    });
+    return map;
+  }, [currentTravelScope.key, travelAdjustments, travelReportMonth]);
+  useEffect(() => {
+    const nextDrafts: Record<string, string> = {};
+    const destinationCodes = travelDestinationCodesKey ? travelDestinationCodesKey.split('|') : [];
+    destinationCodes.forEach((destinationCode) => {
+      const adjustment = travelCurrentAdjustmentByCode.get(destinationCode);
+      nextDrafts[destinationCode] = adjustment ? String(adjustment.trips) : '';
+    });
+    setTravelTripDrafts(nextDrafts);
+  }, [travelCurrentAdjustmentByCode, travelDestinationCodesKey]);
+  const travelTripsByCode = useMemo(() => {
+    const counts = new Map<string, number>();
+    const destinationCodes = new Set<string>([
+      ...travelDestinationRules.map((row) => row.code),
+      ...travelSuggestedTripsByCode.keys(),
+      ...travelCurrentAdjustmentByCode.keys(),
+    ]);
+    destinationCodes.forEach((destinationCode) => {
+      const adjustment = travelCurrentAdjustmentByCode.get(destinationCode);
+      const suggested = travelSuggestedTripsByCode.get(destinationCode) || 0;
+      counts.set(destinationCode, adjustment ? adjustment.trips : suggested);
+    });
+    return counts;
+  }, [travelCurrentAdjustmentByCode, travelDestinationRules, travelSuggestedTripsByCode]);
+  const travelReportRows = useMemo(
+    () => buildTravelReportRowsFromActualTrips(
+      travelTicketRows,
+      travelTripsByCode,
+      travelDestinationRuleByCode,
+      effectiveTravelReporterName,
+      travelMonthRange,
+    ),
+    [
+      effectiveTravelReporterName,
+      travelDestinationRuleByCode,
+      travelMonthRange,
+      travelTicketRows,
+      travelTripsByCode,
+    ],
+  );
+  const travelTotalTrips = useMemo(
+    () => Array.from(travelTripsByCode.values()).reduce((sum, trips) => sum + trips, 0),
+    [travelTripsByCode],
+  );
   const travelTotalKms = useMemo(
-    () => travelReportRows.reduce((sum, row) => sum + row.kms, 0),
-    [travelReportRows],
+    () => Array.from(travelTripsByCode.entries()).reduce((sum, [destinationCode, trips]) => {
+      const destinationRule = travelDestinationRuleByCode.get(destinationCode);
+      return sum + ((destinationRule?.kms || 0) * trips);
+    }, 0),
+    [travelDestinationRuleByCode, travelTripsByCode],
   );
   const travelFuelEfficiencyValue = useMemo(
     () => parseNonNegativeNumber(travelReportFuelEfficiency, TRAVEL_DEFAULT_FUEL_EFFICIENCY),
-    [travelReportFuelEfficiency],
+  [travelReportFuelEfficiency],
   );
   const travelFuelLiters = travelFuelEfficiencyValue > 0
     ? roundToTwoDecimals(travelTotalKms / travelFuelEfficiencyValue)
@@ -3643,6 +3853,68 @@ export default function App() {
     () => formatMonthInputLabel(travelReportMonth),
     [travelReportMonth],
   );
+  const saveTravelTripAdjustment = useCallback(async (destinationCode: string, rawValue?: string) => {
+    if (!canEdit) {
+      showToast('Solo administradores y tecnicos pueden guardar viajes reales.', 'warning');
+      return;
+    }
+    if (!ensureBackendConnected('Guardar viajes reales')) return;
+    if (!travelMonthRange) {
+      showToast('Selecciona un mes valido para registrar viajes reales.', 'warning');
+      return;
+    }
+
+    const draftValue = String(rawValue ?? travelTripDrafts[destinationCode] ?? '').trim();
+    let trips: number | null = null;
+    if (draftValue) {
+      if (!/^\d+$/.test(draftValue)) {
+        showToast('Los viajes reales deben capturarse como enteros mayores o iguales a cero.', 'warning');
+        return;
+      }
+      trips = Math.max(0, Math.trunc(Number(draftValue)));
+    }
+
+    setTravelSavingCode(destinationCode);
+    try {
+      const response = await apiRequest<TravelTripAdjustmentResponse>('/travel-adjustments', {
+        method: 'PUT',
+        body: JSON.stringify({
+          month: travelReportMonth,
+          technicianScopeKey: currentTravelScope.key,
+          technicianScopeLabel: currentTravelScope.label,
+          destinationCode,
+          trips,
+        }),
+      });
+      setTravelAdjustments((prev) => {
+        const filtered = prev.filter((item) => !(
+          item.month === travelReportMonth
+          && item.technicianScopeKey === currentTravelScope.key
+          && item.destinationCode === destinationCode
+        ));
+        return response.adjustment ? [...filtered, response.adjustment] : filtered;
+      });
+      showToast(
+        trips === null
+          ? 'Viajes reales restablecidos al conteo sugerido por tickets.'
+          : 'Viajes reales guardados para control de gasolina.',
+        'success',
+      );
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'No se pudieron guardar los viajes reales.', 'error');
+    } finally {
+      setTravelSavingCode((current) => (current === destinationCode ? null : current));
+    }
+  }, [
+    canEdit,
+    currentTravelScope.key,
+    currentTravelScope.label,
+    ensureBackendConnected,
+    showToast,
+    travelMonthRange,
+    travelReportMonth,
+    travelTripDrafts,
+  ]);
   const reportScopedTicketsByFilters = useMemo(
     () =>
       !isReportsView
@@ -3921,16 +4193,20 @@ export default function App() {
   const reportAreaMax = Math.max(1, ...reportAreaBars.map((item) => item.count));
   const reportTechMax = Math.max(1, ...reportTechBars.map((item) => item.count));
   const reportIncidentCauseMax = Math.max(1, ...reportIncidentCauseBars.map((item) => item.count));
+  const effectiveReportAuditRows = useMemo(
+    () => (view === 'reports' && reportAuditRowsRemote !== null ? reportAuditRowsRemote : normalizedAuditRows),
+    [normalizedAuditRows, reportAuditRowsRemote, view],
+  );
   const reportAuditRows = useMemo(
     () =>
-      normalizedAuditRows.filter((log) => {
+      effectiveReportAuditRows.filter((log) => {
         const timestamp = getAuditRowTimestampMs(log);
         if (timestamp === null) return false;
         if (reportStartMs !== null && timestamp < reportStartMs) return false;
         if (reportEndMs !== null && timestamp > reportEndMs) return false;
         return true;
       }),
-    [normalizedAuditRows, reportEndMs, reportStartMs],
+    [effectiveReportAuditRows, reportEndMs, reportStartMs],
   );
   const reportAuditModuleBars = useMemo(() => {
     const counts = new Map<AuditModule, number>();
@@ -3945,6 +4221,7 @@ export default function App() {
     }));
   }, [reportAuditRows]);
   const reportAuditMax = Math.max(1, ...reportAuditModuleBars.map((item) => item.count));
+  const reportAuditTotalCount = effectiveReportAuditRows.length;
   const reportInventorySnapshot = {
     totalActivos: activos.length,
     activosEnFalla: activos.filter((asset) => asset.estado === 'Falla').length,
@@ -4992,6 +5269,7 @@ export default function App() {
                   renderLazyView(
                     'Cargando Reporteria...',
                     <LazyReportsView
+                      canEditTravelTrips={canEdit}
                       openReportExecutivePresentation={openReportExecutivePresentation}
                       exportReportExcel={() => {
                         void exportReportExcel();
@@ -5049,7 +5327,12 @@ export default function App() {
                       travelDestinationRules={travelDestinationRules}
                       travelKmsByBranch={travelKmsByBranch}
                       setTravelKmsByBranch={setTravelKmsByBranch}
+                      travelSuggestedTripsByCode={travelSuggestedTripsByCode}
                       travelTripsByCode={travelTripsByCode}
+                      travelTripDrafts={travelTripDrafts}
+                      setTravelTripDrafts={setTravelTripDrafts}
+                      travelSavingCode={travelSavingCode}
+                      saveTravelTripAdjustment={saveTravelTripAdjustment}
                       travelMonthLabel={travelMonthLabel}
                       effectiveTravelReporterName={effectiveTravelReporterName}
                       travelTotalTrips={travelTotalTrips}
@@ -5085,7 +5368,7 @@ export default function App() {
                       reportAuditModuleBars={reportAuditModuleBars}
                       reportAuditMax={reportAuditMax}
                       reportAuditRowsCount={reportAuditRows.length}
-                      normalizedAuditRowsCount={normalizedAuditRows.length}
+                      reportAuditTotalCount={reportAuditTotalCount}
                       reportIncidentCauseBars={reportIncidentCauseBars}
                       applyReportIncidentCauseDrillDown={applyReportIncidentCauseDrillDown}
                       reportIncidentCauseMax={reportIncidentCauseMax}
@@ -5639,7 +5922,7 @@ export default function App() {
                         }`}
                     >
                       <option value="" disabled>Selecciona categoría...</option>
-                      {CATEGORIAS_INSUMO.map((categoria) => (
+                      {supplyCategoryOptions.map((categoria) => (
                         <option key={categoria} value={categoria}>{categoria}</option>
                       ))}
                     </select>

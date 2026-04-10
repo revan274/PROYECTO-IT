@@ -57,6 +57,7 @@ type SupplySnapshot = {
 };
 
 interface ReportsViewProps {
+  canEditTravelTrips: boolean;
   openReportExecutivePresentation: () => void;
   exportReportExcel: () => void;
   exportReportPdf: () => void;
@@ -110,7 +111,12 @@ interface ReportsViewProps {
   travelDestinationRules: readonly TravelDestinationRule[];
   travelKmsByBranch: Record<string, string>;
   setTravelKmsByBranch: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  travelSuggestedTripsByCode: ReadonlyMap<string, number>;
   travelTripsByCode: ReadonlyMap<string, number>;
+  travelTripDrafts: Readonly<Record<string, string>>;
+  setTravelTripDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  travelSavingCode: string | null;
+  saveTravelTripAdjustment: (destinationCode: string, rawValue?: string) => Promise<void> | void;
   travelMonthLabel: string;
   effectiveTravelReporterName: string;
   travelTotalTrips: number;
@@ -152,7 +158,7 @@ interface ReportsViewProps {
   reportAuditModuleBars: readonly AuditModuleBarItem[];
   reportAuditMax: number;
   reportAuditRowsCount: number;
-  normalizedAuditRowsCount: number;
+  reportAuditTotalCount: number;
   reportIncidentCauseBars: readonly IncidentCauseBarItem[];
   applyReportIncidentCauseDrillDown: (area: string, cause: string) => void;
   reportIncidentCauseMax: number;
@@ -161,6 +167,7 @@ interface ReportsViewProps {
 }
 
 export function ReportsView({
+  canEditTravelTrips,
   openReportExecutivePresentation,
   exportReportExcel,
   exportReportPdf,
@@ -214,7 +221,12 @@ export function ReportsView({
   travelDestinationRules,
   travelKmsByBranch,
   setTravelKmsByBranch,
+  travelSuggestedTripsByCode,
   travelTripsByCode,
+  travelTripDrafts,
+  setTravelTripDrafts,
+  travelSavingCode,
+  saveTravelTripAdjustment,
   travelMonthLabel,
   effectiveTravelReporterName,
   travelTotalTrips,
@@ -250,7 +262,7 @@ export function ReportsView({
   reportAuditModuleBars,
   reportAuditMax,
   reportAuditRowsCount,
-  normalizedAuditRowsCount,
+  reportAuditTotalCount,
   reportIncidentCauseBars,
   applyReportIncidentCauseDrillDown,
   reportIncidentCauseMax,
@@ -511,9 +523,12 @@ export function ReportsView({
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Tabla de rutas / kms base (editable)
               </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Viajes sugeridos = tickets. Viajes reales = control manual para gasolina.
+              </p>
               <div className="space-y-2">
                 {travelDestinationRules.map((row) => (
-                  <div key={`travel-kms-${row.code}`} className="grid grid-cols-[42px_1fr_88px_66px] items-center gap-2">
+                  <div key={`travel-kms-${row.code}`} className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-[42px_minmax(0,1fr)_88px_76px_minmax(0,184px)] sm:items-center">
                     <div className="text-xs font-black uppercase text-slate-500 text-center">#{row.index}</div>
                     <div className="text-xs font-black uppercase text-slate-700">{row.label}</div>
                     <input
@@ -526,8 +541,58 @@ export function ReportsView({
                       }
                       className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-700 text-center"
                     />
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 text-right">
-                      Viajes: {travelTripsByCode.get(row.code) || 0}
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 text-left sm:text-right">
+                      Sug: {travelSuggestedTripsByCode.get(row.code) || 0}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        value={travelTripDrafts[row.code] ?? ''}
+                        onChange={(event) =>
+                          setTravelTripDrafts((prev) => ({
+                            ...prev,
+                            [row.code]: event.target.value,
+                          }))
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return;
+                          event.preventDefault();
+                          void saveTravelTripAdjustment(row.code);
+                        }}
+                        placeholder={String(travelSuggestedTripsByCode.get(row.code) || 0)}
+                        disabled={!canEditTravelTrips || travelSavingCode === row.code}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-700 text-center disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void saveTravelTripAdjustment(row.code);
+                        }}
+                        disabled={!canEditTravelTrips || travelSavingCode === row.code}
+                        className="px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black uppercase tracking-wider text-emerald-700 disabled:opacity-50"
+                      >
+                        {travelSavingCode === row.code ? '...' : 'Guardar'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTravelTripDrafts((prev) => ({
+                            ...prev,
+                            [row.code]: '',
+                          }));
+                          void saveTravelTripAdjustment(row.code, '');
+                        }}
+                        disabled={!canEditTravelTrips || travelSavingCode === row.code}
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-600 disabled:opacity-50"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                    <div className="sm:col-start-5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Reales: {travelTripsByCode.get(row.code) || 0}
                     </div>
                   </div>
                 ))}
@@ -564,6 +629,9 @@ export function ReportsView({
               </div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 El formato toma tickets del mes seleccionado y respeta filtros de sucursal, area, estado y prioridad.
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Si capturas viajes reales, esos valores sustituyen el conteo sugerido para gasolina y formato mensual.
               </p>
             </div>
           </div>
@@ -775,7 +843,7 @@ export function ReportsView({
             </div>
           ))}
           <div className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-            Logs filtrados: {reportAuditRowsCount} | Total auditoria: {normalizedAuditRowsCount}
+            Logs filtrados: {reportAuditRowsCount} | Total auditoría: {reportAuditTotalCount}
           </div>
         </div>
       </div>
