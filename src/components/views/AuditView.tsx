@@ -58,11 +58,11 @@ export const AuditView: React.FC<AuditViewProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
         <div className="p-8 md:p-10 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trazabilidad</p>
-            <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Auditoría Ejecutiva</h3>
+            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Auditoría Ejecutiva</h3>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
               {isAuditLoading ? 'Consultando registros...' : `Registros mostrados: ${auditRowsForGrouping.length}`}
             </p>
@@ -149,19 +149,19 @@ export const AuditView: React.FC<AuditViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Tickets</p>
           <p className="text-3xl font-black text-blue-700">{auditModuleTotals.tickets}</p>
         </div>
-        <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+        <div className="rounded-2xl border border-green-100 bg-green-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Insumos</p>
           <p className="text-3xl font-black text-green-700">{auditModuleTotals.insumos}</p>
         </div>
-        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+        <div className="rounded-2xl border border-orange-100 bg-orange-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Activos IT</p>
           <p className="text-3xl font-black text-orange-700">{auditModuleTotals.activos}</p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Otros</p>
           <p className="text-3xl font-black text-slate-700">{auditModuleTotals.otros}</p>
         </div>
@@ -188,10 +188,10 @@ export const AuditView: React.FC<AuditViewProps> = ({
         { module: 'activos' as AuditModule, title: 'Auditoría Activos IT', rows: auditByModule.activos },
         { module: 'otros' as AuditModule, title: 'Auditoría Otros', rows: auditByModule.otros },
       ]).map((section) => (
-        <div key={`audit-${section.module}`} className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div key={`audit-${section.module}`} className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <h4 className="font-black text-slate-800 uppercase tracking-tight">{section.title}</h4>
+              <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{section.title}</h4>
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{section.rows.length} registros</span>
             </div>
             <button
@@ -248,7 +248,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
       ))}
 
       {backendConnected && !isRequesterOnlyUser && (
-        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="glass-panel bg-white/90 rounded-[2rem] shadow-2xl border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setAuditPage((prev: number) => Math.max(1, prev - 1))}

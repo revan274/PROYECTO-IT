@@ -73,9 +73,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 }) => {
   return (
     <>
-              <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+              <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
                 <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-                  <h3 className="font-black text-slate-800 uppercase tracking-tight text-lg">Activos IT</h3>
+                  <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-xl">Activos IT</h3>
                   <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
                     <input
                       ref={inventoryImportInputRef}

@@ -85,26 +85,26 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+          <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Control de Accesos</p>
-                <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Alta de Usuarios por Cargo</h3>
+                <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Alta de Usuarios por Cargo</h3>
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Usuarios que pueden generar tickets
               </span>
             </div>
             <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total Usuarios</p>
                 <p className="text-3xl font-black text-blue-700">{users.length}</p>
               </div>
-              <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+              <div className="rounded-2xl border border-green-100 bg-green-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Activos</p>
                 <p className="text-3xl font-black text-green-700">{activeUsersCount}</p>
               </div>
-              <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Generan Tickets</p>
                 <p className="text-3xl font-black text-orange-700">{ticketEligibleUsersCount}</p>
               </div>
@@ -115,20 +115,20 @@ export const UsersView: React.FC<UsersViewProps> = ({
             <form onSubmit={handleCreateUser} className="xl:col-span-2 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{editingUserId !== null ? 'Editar Usuario' : 'Nuevo Usuario'}</p>
-                <h4 className="font-black text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualizacion de Cuenta' : 'Registro de Cuenta'}</h4>
+                <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualizacion de Cuenta' : 'Registro de Cuenta'}</h4>
               </div>
               <input
                 required
                 placeholder="NOMBRE COMPLETO"
                 value={newUserForm.nombre}
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, nombre: e.target.value }))}
               />
               <input
                 required
                 placeholder="USUARIO"
                 value={newUserForm.username}
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black lowercase outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black lowercase outline-none focus:ring-4 focus:ring-blue-100"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, username: e.target.value }))}
               />
               <input
@@ -136,13 +136,13 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 type="password"
                 placeholder={editingUserId !== null ? 'PASSWORD (OPCIONAL)' : 'PASSWORD (MIN 6)'}
                 value={newUserForm.password}
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, password: e.target.value }))}
               />
               <select
                 required
                 value={newUserForm.departamento}
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, departamento: e.target.value }))}
               >
                 <option value="">Selecciona cargo...</option>
@@ -152,7 +152,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               </select>
               <select
                 value={newUserForm.rol}
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, rol: e.target.value as UserRole }))}
               >
                 {roleCatalogOptions.map((role) => (
@@ -182,7 +182,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
-                      <h4 className="font-black text-slate-800 uppercase tracking-tight">Usuarios Registrados</h4>
+                      <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">Usuarios Registrados</h4>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
                         Mostrando {sortedUsers.length} de {users.length}
                       </p>

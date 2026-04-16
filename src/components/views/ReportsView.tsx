@@ -271,11 +271,11 @@ export function ReportsView({
 }: ReportsViewProps) {
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Analitica Operativa</p>
-            <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Reporteria Ejecutiva</h3>
+            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Reporteria Ejecutiva</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -443,7 +443,7 @@ export function ReportsView({
         <div className="p-8 border-b border-slate-50 bg-amber-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Movilidad y combustible</p>
-            <h3 className="font-black text-slate-800 uppercase tracking-tight text-xl">Formato Mensual de Viajes IT</h3>
+            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Formato Mensual de Viajes IT</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button

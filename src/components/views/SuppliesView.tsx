@@ -86,7 +86,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                       value={supplySearchTerm}
                       onChange={(e) => setSupplySearchTerm(e.target.value)}
                       placeholder="Buscar insumo..."
-                      className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500 outline-none"
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl glass-input  bg-white text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
                     />
                   </div>
                   <select

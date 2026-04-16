@@ -5147,7 +5147,7 @@ export default function App() {
             <div>
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Usuario</label>
               <input
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
                 value={loginForm.username}
                 onChange={(e) => setLoginForm((prev) => ({ ...prev, username: e.target.value }))}
                 placeholder="admin"
@@ -5158,7 +5158,7 @@ export default function App() {
               <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Password</label>
               <input
                 type="password"
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none"
+                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
                 value={loginForm.password}
                 onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
                 placeholder="Ingresa tu password"
@@ -5655,20 +5655,20 @@ export default function App() {
                           required
                           placeholder="TAG *"
                           value={formData.tag || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ tag: e.target.value })}
                         />
                         <input
                           placeholder="ID INTERNO"
                           value={formData.idInterno || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ idInterno: e.target.value })}
                         />
                         <input
                           required
                           placeholder="SERIAL *"
                           value={formData.serial || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ serial: e.target.value })}
                         />
                       </div>
@@ -5677,20 +5677,20 @@ export default function App() {
                           required
                           placeholder="TIPO *"
                           value={formData.tipo || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ tipo: e.target.value })}
                         />
                         <input
                           required
                           placeholder="MARCA *"
                           value={formData.marca || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ marca: e.target.value })}
                         />
                         <input
                           placeholder="MODELO"
                           value={formData.modelo || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ modelo: e.target.value })}
                         />
                       </div>
@@ -5703,19 +5703,19 @@ export default function App() {
                           required
                           placeholder="UBICACION *"
                           value={formData.ubicacion || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ ubicacion: e.target.value })}
                         />
                         <input
                           placeholder="DEPARTAMENTO"
                           value={formData.departamento || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ departamento: e.target.value })}
                         />
                         <input
                           placeholder="RESPONSABLE"
                           value={formData.responsable || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ responsable: e.target.value })}
                         />
                       </div>
@@ -5723,12 +5723,12 @@ export default function App() {
                         <input
                           type="date"
                           value={formData.fechaCompra || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ fechaCompra: e.target.value })}
                         />
                         <select
                           value={formData.estado || 'Operativo'}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ estado: e.target.value as EstadoActivo })}
                         >
                           <option value="Operativo">Operativo</option>
@@ -5743,19 +5743,19 @@ export default function App() {
                         <input
                           placeholder="IP ADDRESS"
                           value={formData.ipAddress || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ ipAddress: e.target.value })}
                         />
                         <input
                           placeholder="MAC ADDRESS"
                           value={formData.macAddress || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ macAddress: e.target.value })}
                         />
                         <input
                           placeholder="ANYDESK"
                           value={formData.anydesk || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ anydesk: e.target.value })}
                         />
                       </div>
@@ -5767,25 +5767,25 @@ export default function App() {
                         <input
                           placeholder="CPU"
                           value={formData.cpu || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ cpu: e.target.value })}
                         />
                         <input
                           placeholder="RAM"
                           value={formData.ram || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ ram: e.target.value })}
                         />
                         <input
                           placeholder="TIPO RAM"
                           value={formData.ramTipo || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ ramTipo: e.target.value })}
                         />
                         <input
                           placeholder="DISCO"
                           value={formData.disco || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ disco: e.target.value })}
                         />
                       </div>
@@ -5793,13 +5793,13 @@ export default function App() {
                         <input
                           placeholder="TIPO DISCO"
                           value={formData.tipoDisco || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ tipoDisco: e.target.value })}
                         />
                         <input
                           placeholder="ANOS DE VIDA"
                           value={formData.aniosVida || ''}
-                          className="p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                           onChange={(e) => updateFormData({ aniosVida: e.target.value })}
                         />
                       </div>
@@ -5810,7 +5810,7 @@ export default function App() {
                       <textarea
                         placeholder="COMENTARIOS"
                         value={formData.comentarios || ''}
-                        className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase h-24 outline-none"
+                        className="w-full p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
                         onChange={(e) => updateFormData({ comentarios: e.target.value })}
                       />
                     </section>
@@ -5938,7 +5938,7 @@ export default function App() {
                 <>
                   <select
                     required
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                     value={formData.sucursal || ''}
                     onChange={e => updateFormData({ sucursal: e.target.value.toUpperCase() })}
                   >
@@ -5977,7 +5977,7 @@ export default function App() {
                     required
                     value={formData.areaAfectada || ''}
                     onChange={e => updateFormData({ areaAfectada: e.target.value, fallaComun: '' })}
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                   >
                     <option value="">Área afectada...</option>
                     {TICKET_AREA_OPTIONS.map((area) => (
@@ -5991,7 +5991,7 @@ export default function App() {
                       const value = normalizeTicketAttentionType(e.target.value);
                       updateFormData({ atencionTipo: value || undefined });
                     }}
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none"
+                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
                   >
                     <option value="">Tipo de atención...</option>
                     {TICKET_ATTENTION_TYPES.map((type) => (
@@ -6002,7 +6002,7 @@ export default function App() {
                     required
                     placeholder="DESCRIPCIÓN DE LA FALLA"
                     value={formData.descripcion || ''}
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase h-24 outline-none"
+                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
                     onChange={e => updateFormData({ descripcion: e.target.value })}
                   />
                   <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
@@ -6033,13 +6033,13 @@ export default function App() {
                     </select>
                   </div>
 
-                  <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.prioridad || 'MEDIA'} onChange={e => updateFormData({ prioridad: e.target.value as PrioridadTicket })}>
+                  <select className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100" value={formData.prioridad || 'MEDIA'} onChange={e => updateFormData({ prioridad: e.target.value as PrioridadTicket })}>
                     <option value="MEDIA">Media</option>
                     <option value="ALTA">Alta</option>
                     <option value="CRITICA">Crítica</option>
                   </select>
                   {canEdit ? (
-                    <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none" value={formData.asignadoA || ''} onChange={e => updateFormData({ asignadoA: e.target.value })}>
+                    <select className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100" value={formData.asignadoA || ''} onChange={e => updateFormData({ asignadoA: e.target.value })}>
                       <option value="">Asignar técnico...</option>
                       {users
                         .filter((u) => (u.rol === 'tecnico' || u.rol === 'admin') && u.activo !== false)
@@ -6056,12 +6056,12 @@ export default function App() {
                     <input
                       disabled
                       value={sessionUser?.nombre || ''}
-                      className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
+                      className="w-full p-4 bg-slate-100 glass-input  rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
                     />
                     <input
                       disabled
                       value={formatTicketBranchFromCatalog(formData.sucursal)}
-                      className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl text-xs font-black uppercase text-slate-500 outline-none"
+                      className="w-full p-4 bg-slate-100 glass-input  rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 font-black uppercase">
