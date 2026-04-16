@@ -453,8 +453,12 @@ export function TicketsView({
       })}
 
       {filteredTickets.length === 0 && (
-        <div className="bg-white border border-slate-100 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-10 text-center text-slate-400 text-xs font-black uppercase tracking-wider">
-          No hay tickets para los filtros seleccionados.
+        <div className="glass-panel bg-white/90 border border-white/40 rounded-[2rem] sm:rounded-[2.5rem] p-12 sm:p-20 text-center flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
+          <div className="w-24 h-24 mb-6 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner">
+            <span className="text-4xl hover-lift inline-block">🚀</span>
+          </div>
+          <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-xl sm:text-2xl">Buzón Limpio</p>
+          <p className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-slate-400 mt-2 max-w-sm">No hay tickets que requieran tu atención con los filtros actuales.</p>
         </div>
       )}
     </div>

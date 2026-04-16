@@ -363,8 +363,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       ))}
                       {sortedFilteredActivos.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-6 py-10 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                            No hay activos con los filtros actuales.
+                          <td colSpan={7} className="px-6 py-20 text-center">
+                            <div className="flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
+                              <div className="w-20 h-20 mb-4 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner">
+                                <span className="text-3xl">📭</span>
+                              </div>
+                              <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-lg">El inventario se encuentra vacío</p>
+                              <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2">Intenta modificar o limpiar los filtros de búsqueda superior.</p>
+                            </div>
                           </td>
                         </tr>
                       )}

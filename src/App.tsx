@@ -456,6 +456,14 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
 
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
   // Estado de Datos
   const [activos, setActivos] = useState<Activo[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);

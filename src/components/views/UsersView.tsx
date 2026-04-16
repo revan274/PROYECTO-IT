@@ -305,8 +305,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     ))}
                     {sortedUsers.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-8 py-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
-                          No hay usuarios para los filtros actuales.
+                        <td colSpan={7} className="px-8 py-20 text-center">
+                          <div className="flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
+                            <div className="w-20 h-20 mb-4 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner hover-lift">
+                              <span className="text-3xl">👥</span>
+                            </div>
+                            <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-lg">Sin Resultados</p>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2">No se encontraron usuarios para los filtros actuales.</p>
+                          </div>
                         </td>
                       </tr>
                     )}
