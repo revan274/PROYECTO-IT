@@ -1,4 +1,6 @@
 import type { KeyboardEvent } from 'react';
+import { NORMALIZED_API_BASE_URL } from '../constants/app';
+import { ApiError } from './app';
 
 export function formatDateTime(value?: string): string {
   if (!value) return 'N/D';
@@ -91,4 +93,60 @@ export function sanitizeFileToken(value: string): string {
   const normalized = normalizeForCompare(value).replace(/[^a-z0-9]+/g, '-');
   const compact = normalized.replace(/^-+|-+$/g, '');
   return compact || 'activo';
+}
+
+export function formatRetryDelay(seconds: number): string {
+  const totalSeconds = Math.max(1, Math.trunc(seconds));
+  if (totalSeconds < 60) {
+    return `${totalSeconds} segundo${totalSeconds === 1 ? '' : 's'}`;
+  }
+
+  const minutes = Math.ceil(totalSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes} minuto${minutes === 1 ? '' : 's'}`;
+  }
+
+  const hours = Math.ceil(minutes / 60);
+  return `${hours} hora${hours === 1 ? '' : 's'}`;
+}
+
+export function getApiErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return '';
+  const message = error.message || '';
+  if (/failed to fetch/i.test(message) || /networkerror/i.test(message) || /load failed/i.test(message)) {
+    return `No se pudo conectar al backend (${NORMALIZED_API_BASE_URL}).`;
+  }
+
+  const trimmed = message.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const apiError = parsed?.error ? String(parsed.error) : '';
+      const retryAfterSec = Number(parsed?.retryAfterSec);
+      if (Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
+        const waitLabel = formatRetryDelay(retryAfterSec);
+        if (apiError) return `${apiError} Intenta de nuevo en ${waitLabel}.`;
+        return `Demasiados intentos. Intenta de nuevo en ${waitLabel}.`;
+      }
+      if (apiError) return apiError;
+    } catch {
+      return message;
+    }
+  }
+
+  return message;
+}
+
+export function isRouteNotFoundApiError(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 404) return false;
+  const message = normalizeForCompare(getApiErrorMessage(error));
+  return message.includes('ruta no encontrada');
+}
+
+export function isSessionRejectedApiError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 401) return true;
+  if (error.status !== 403) return false;
+  const message = normalizeForCompare(getApiErrorMessage(error));
+  return message.includes('rol esta deshabilitado en catalogo');
 }

@@ -1,7 +1,9 @@
 import type {
   AuditFiltersState,
+  Insumo,
   AuditModule,
   RegistroAuditoria,
+  SupplyAuditMovement,
 } from '../types/app';
 import { normalizeForCompare, normalizeLooseDateString } from './format';
 
@@ -131,4 +133,63 @@ export function filterAuditRowsClient(rows: RegistroAuditoria[], filters: AuditF
     return rightTs - leftTs;
   });
   return filtered;
+}
+
+export function buildSupplyAuditMovementsByInsumoId(
+  rows: readonly RegistroAuditoria[],
+  insumos: readonly Insumo[],
+): Record<number, SupplyAuditMovement[]> {
+  const insumoById = new Map(insumos.map((item) => [item.id, item]));
+  const insumoIdByName = new Map(
+    insumos.map((item) => [normalizeForCompare(item.nombre), item.id]),
+  );
+  const grouped: Record<number, SupplyAuditMovement[]> = {};
+
+  rows.forEach((log) => {
+    if (resolveAuditModule(log) !== 'insumos') return;
+
+    const action = normalizeForCompare(log.accion || '');
+    const isSupplyMovement =
+      action.includes('entrada')
+      || action.includes('salida')
+      || action.includes('ajuste')
+      || action.includes('registro nuevo')
+      || action.includes('edicion insumo')
+      || action.includes('baja logica')
+      || action.includes('baja');
+    if (!isSupplyMovement) return;
+
+    let insumoId: number | null = null;
+    const entityId = Number(log.entidadId);
+    if (Number.isFinite(entityId) && insumoById.has(Math.trunc(entityId))) {
+      insumoId = Math.trunc(entityId);
+    } else {
+      const fallbackId = insumoIdByName.get(normalizeForCompare(log.item || ''));
+      if (typeof fallbackId === 'number') insumoId = fallbackId;
+    }
+    if (insumoId === null) return;
+
+    const movement: SupplyAuditMovement = {
+      logId: Math.trunc(Number(log.id) || 0),
+      insumoId,
+      accion: String(log.accion || 'Movimiento'),
+      cantidad: Math.max(0, Math.trunc(Number(log.cantidad) || 0)),
+      usuario: String(log.usuario || log.username || 'Sistema').trim() || 'Sistema',
+      fecha: String(log.timestamp || log.fecha || '').trim(),
+      timestampMs: getAuditRowTimestampMs(log) || 0,
+      resultado: String(log.resultado || 'ok').toLowerCase() === 'error' ? 'error' : 'ok',
+    };
+
+    if (!grouped[insumoId]) grouped[insumoId] = [];
+    grouped[insumoId].push(movement);
+  });
+
+  Object.values(grouped).forEach((movements) => {
+    movements.sort((left, right) => {
+      if (left.timestampMs !== right.timestampMs) return right.timestampMs - left.timestampMs;
+      return right.logId - left.logId;
+    });
+  });
+
+  return grouped;
 }

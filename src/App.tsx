@@ -1,37 +1,36 @@
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import {
-  Moon,
-  Save,
-  Sun,
-  User,
-  X,
-} from 'lucide-react';
-import { LogoGigantes } from './components/brand/LogoGigantes';
 import { useAppStore } from './store/useAppStore';
 import { AppHeader } from './components/layout/AppHeader';
 import { AppSidebar } from './components/layout/AppSidebar';
-import { AssetDetailModal } from './components/modals/AssetDetailModal';
-import { ImportPreviewModal } from './components/modals/ImportPreviewModal';
-import { QrScannerModal } from './components/modals/QrScannerModal';
-import { SupplyHistoryModal } from './components/modals/SupplyHistoryModal';
+import { useAuditUiState } from './hooks/useAuditUiState';
+import { useAppBootstrap } from './hooks/useAppBootstrap';
+import { useBootstrapHandlers } from './hooks/useBootstrapHandlers';
+import { useCoreData } from './hooks/useCoreData';
+import { useInventoryUiState } from './hooks/useInventoryUiState';
+import { useModalState } from './hooks/useModalState';
+import { useQrScanner } from './hooks/useQrScanner';
+import { useReportState } from './hooks/useReportState';
+import { useTicketUiState } from './hooks/useTicketUiState';
+import { useUserUiState } from './hooks/useUserUiState';
+import { useAssetActions } from './hooks/actions/useAssetActions';
+import { useAuthActions } from './hooks/actions/useAuthActions';
+import { useSessionActions } from './hooks/actions/useSessionActions';
+import { useSupplyActions } from './hooks/actions/useSupplyActions';
+import { useTicketActions } from './hooks/actions/useTicketActions';
+import { useUserActions } from './hooks/actions/useUserActions';
 
 import { Toast } from './components/ui/Toast';
+import { LoginView } from './components/views/LoginView';
 import { TicketsView } from './components/views/TicketsView';
 import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
   CATEGORIAS_INSUMO,
-  CLIENT_ATTACHMENT_MAX_BYTES,
-  CLIENT_ATTACHMENT_MAX_COUNT,
   COMMON_TICKET_ISSUES,
 
   DEFAULT_CATALOGS,
   NAV_ITEMS,
-  NORMALIZED_API_BASE_URL,
-  SLA_POLICY,
-  SUPPLY_UNIT_OPTIONS,
-  TICKET_AREA_OPTIONS,
   TICKET_ATTENTION_TYPES,
   TICKET_STATES,
   TRAVEL_DEFAULT_AUTHORIZER,
@@ -45,77 +44,44 @@ import {
 } from './constants/app';
 import type {
   Activo,
-  AssetQrResolveResponse,
   AssetQrTokenResponse,
-  AssetRiskSummary,
-  AuditAlertsState,
   AuditFiltersState,
   AuditHistoryResponse,
-  AuditIntegrityState,
   AuditModule,
-  AuditPaginationState,
-  AuditSummaryState,
-  BootstrapResponse,
   CatalogBranch,
-  CatalogState,
   DashboardRange,
-  EstadoActivo,
-  FormDataState,
   ImportAssetDetail,
   ImportAssetsResponse,
-  ImportDraftState,
-  Insumo,
-  InsumoErrors,
-  InsumoField,
-  InsumoTouchedState,
   InventoryRiskFilter,
-  InventorySortDirection,
   InventorySortField,
-  LoginResponse,
   ModalType,
   PrioridadTicket,
   RegistroAuditoria,
-  ReportAttentionFilter,
   ReportFilterPreset,
   ReportFilterSnapshot,
-  ReportPriorityFilter,
-  ReportStateFilter,
   SupplyAuditMovement,
-  SupplyStatusFilter,
-  ToastState,
-  ToastType,
-  TicketAttentionType,
-  TicketAttachment,
-  TicketAttachmentUploadResponse,
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
   TravelTripAdjustment,
   TravelTripAdjustmentResponse,
   ViewType,
-
   TravelReportRow,
-  UserItem,
   UserRole,
 } from './types/app';
 import {
-  ApiError,
   apiRequest,
   applyThemeToDocument,
-  buildApiUrl,
-  buildCurrentMonthInputValue,
   buildDefaultAuditFilters,
   buildDefaultAuditPagination,
   buildDefaultReportFilterSnapshot,
-  buildDefaultTravelKmsByBranch,
-  createEmptyInsumoTouched,
-  getStoredSessionToken,
   normalizeReportFilterSnapshot,
   readStoredReportFilterPresets,
   writeStoredReportFilterPresets,
 } from './utils/app';
 import {
   auditModuleLabel,
+  buildSupplyAuditMovementsByInsumoId,
   filterAuditRowsClient,
   getAuditRowTimestampMs,
   resolveAuditModule,
@@ -124,32 +90,29 @@ import {
   assetRequiresNetworkIdentity,
   assetRequiresResponsible,
   calculateAssetRiskSummary,
+  enrichAssetsWithNetworkSheet,
   formatTicketBranch,
   formatUserCargo,
   isUserRole,
-  normalizeCatalogState,
-  normalizeIpAddress,
-  normalizeMacAddress,
-
+  parseNetworkSheetRows,
   parseAssetLifeYears,
   resolveAssetBranchCode,
   spreadsheetCellToText,
 } from './utils/assets';
 import {
-  digitsOnly,
   escapeHtml,
   formatBytes,
   formatDateTime,
+  getApiErrorMessage,
   includesAllSearchTokens,
+  isRouteNotFoundApiError,
+  isSessionRejectedApiError,
   normalizeForCompare,
   parseDateToTimestamp,
-  preventInvalidIntegerInputKeys,
   sanitizeFileToken,
   tokenizeSearchQuery,
 } from './utils/format';
 import {
-  buildTicketDescription,
-  buildTicketHistoryEntry,
   formatTicketAttentionType,
   getSlaStatus,
   isTicketSlaExpired,
@@ -160,8 +123,6 @@ import {
 
 import {
   buildAssetQrCanvasId,
-  extractSignedQrToken,
-  toActivoFromQrLookup,
 } from './utils/qrTokens';
 
 import {
@@ -197,7 +158,6 @@ import {
   calculatePercentile,
   calculateMedian,
   ticketBelongsToSessionUser,
-  buildInitialFormDataForModal,
   getModalTitle,
   getModalSubmitLabel,
   getSupplyHealthStatus,
@@ -252,193 +212,6 @@ function useDebouncedValue<T>(value: T, delayMs = 220): T {
   return debouncedValue;
 }
 
-function parseNetworkSheetRows(rows: NetworkSheetRow[]): Array<{ macAddress: string; ipAddress: string; deviceLabel: string }> {
-  return rows
-    .map((row) => {
-      const rawMac = spreadsheetCellToText(row[0]);
-      const rawIp = spreadsheetCellToText(row[1]);
-      const rawLabel = spreadsheetCellToText(row[2]);
-      const macAddress = normalizeMacAddress(rawMac);
-      const ipAddress = normalizeIpAddress(rawIp);
-      const label = rawLabel.trim();
-      const isHeader =
-        normalizeForCompare(rawMac).includes('mac') ||
-        normalizeForCompare(rawIp).includes('ip') ||
-        normalizeForCompare(rawLabel).includes('nombre');
-
-      return { macAddress, ipAddress, deviceLabel: label, isHeader };
-    })
-    .filter((row) => !row.isHeader)
-    .filter((row) => !!row.macAddress || !!row.ipAddress || !!row.deviceLabel)
-    .map((row) => ({
-      macAddress: row.macAddress,
-      ipAddress: row.ipAddress,
-      deviceLabel: row.deviceLabel,
-    }));
-}
-
-function enrichAssetsWithNetworkSheet(
-  parsedRows: Array<{ rowNumber: number; item: Omit<Activo, 'id'> }>,
-  networkRows: Array<{ macAddress: string; ipAddress: string; deviceLabel: string }>,
-): Array<{ rowNumber: number; item: Omit<Activo, 'id'> }> {
-  if (networkRows.length === 0 || parsedRows.length === 0) return parsedRows;
-
-  const byMac = new Map<string, { macAddress: string; ipAddress: string; deviceLabel: string }>();
-  const byIp = new Map<string, { macAddress: string; ipAddress: string; deviceLabel: string }>();
-
-  networkRows.forEach((row) => {
-    if (row.macAddress) byMac.set(normalizeForCompare(row.macAddress), row);
-    if (row.ipAddress) byIp.set(normalizeForCompare(row.ipAddress), row);
-  });
-
-  return parsedRows.map((entry) => {
-    const macKey = normalizeForCompare(entry.item.macAddress || '');
-    const ipKey = normalizeForCompare(entry.item.ipAddress || '');
-    const match = (macKey ? byMac.get(macKey) : undefined) || (ipKey ? byIp.get(ipKey) : undefined);
-    if (!match) return entry;
-
-    return {
-      rowNumber: entry.rowNumber,
-      item: {
-        ...entry.item,
-        macAddress: entry.item.macAddress || match.macAddress,
-        ipAddress: entry.item.ipAddress || match.ipAddress,
-        responsable: entry.item.responsable || match.deviceLabel,
-      },
-    };
-  });
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const payload = result.includes(',') ? result.split(',')[1] : result;
-      if (!payload) {
-        reject(new Error('No se pudo codificar el archivo.'));
-        return;
-      }
-      resolve(payload);
-    };
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function formatRetryDelay(seconds: number): string {
-  const totalSeconds = Math.max(1, Math.trunc(seconds));
-  if (totalSeconds < 60) {
-    return `${totalSeconds} segundo${totalSeconds === 1 ? '' : 's'}`;
-  }
-
-  const minutes = Math.ceil(totalSeconds / 60);
-  if (minutes < 60) {
-    return `${minutes} minuto${minutes === 1 ? '' : 's'}`;
-  }
-
-  const hours = Math.ceil(minutes / 60);
-  return `${hours} hora${hours === 1 ? '' : 's'}`;
-}
-
-function getApiErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return '';
-  const message = error.message || '';
-  if (/failed to fetch/i.test(message) || /networkerror/i.test(message) || /load failed/i.test(message)) {
-    return `No se pudo conectar al backend (${NORMALIZED_API_BASE_URL}).`;
-  }
-  const trimmed = message.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      const apiError = parsed?.error ? String(parsed.error) : '';
-      const retryAfterSec = Number(parsed?.retryAfterSec);
-      if (Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
-        const waitLabel = formatRetryDelay(retryAfterSec);
-        if (apiError) return `${apiError} Intenta de nuevo en ${waitLabel}.`;
-        return `Demasiados intentos. Intenta de nuevo en ${waitLabel}.`;
-      }
-      if (apiError) return apiError;
-    } catch {
-      return message;
-    }
-  }
-  return message;
-}
-
-function isRouteNotFoundApiError(error: unknown): boolean {
-  if (!(error instanceof ApiError) || error.status !== 404) return false;
-  const message = normalizeForCompare(getApiErrorMessage(error));
-  return message.includes('ruta no encontrada');
-}
-
-function isSessionRejectedApiError(error: unknown): boolean {
-  if (!(error instanceof ApiError)) return false;
-  if (error.status === 401) return true;
-  if (error.status !== 403) return false;
-  const message = normalizeForCompare(getApiErrorMessage(error));
-  return message.includes('rol esta deshabilitado en catalogo');
-}
-
-function buildSupplyAuditMovementsByInsumoId(
-  rows: readonly RegistroAuditoria[],
-  insumos: readonly Insumo[],
-): Record<number, SupplyAuditMovement[]> {
-  const insumoById = new Map(insumos.map((item) => [item.id, item]));
-  const insumoIdByName = new Map(
-    insumos.map((item) => [normalizeForCompare(item.nombre), item.id]),
-  );
-  const grouped: Record<number, SupplyAuditMovement[]> = {};
-
-  rows.forEach((log) => {
-    if (resolveAuditModule(log) !== 'insumos') return;
-
-    const action = normalizeForCompare(log.accion || '');
-    const isSupplyMovement =
-      action.includes('entrada')
-      || action.includes('salida')
-      || action.includes('ajuste')
-      || action.includes('registro nuevo')
-      || action.includes('edicion insumo')
-      || action.includes('baja logica')
-      || action.includes('baja');
-    if (!isSupplyMovement) return;
-
-    let insumoId: number | null = null;
-    const entityId = Number(log.entidadId);
-    if (Number.isFinite(entityId) && insumoById.has(Math.trunc(entityId))) {
-      insumoId = Math.trunc(entityId);
-    } else {
-      const fallbackId = insumoIdByName.get(normalizeForCompare(log.item || ''));
-      if (typeof fallbackId === 'number') insumoId = fallbackId;
-    }
-    if (insumoId === null) return;
-
-    const movement: SupplyAuditMovement = {
-      logId: Math.trunc(Number(log.id) || 0),
-      insumoId,
-      accion: String(log.accion || 'Movimiento'),
-      cantidad: Math.max(0, Math.trunc(Number(log.cantidad) || 0)),
-      usuario: String(log.usuario || log.username || 'Sistema').trim() || 'Sistema',
-      fecha: String(log.timestamp || log.fecha || '').trim(),
-      timestampMs: getAuditRowTimestampMs(log) || 0,
-      resultado: String(log.resultado || 'ok').toLowerCase() === 'error' ? 'error' : 'ok',
-    };
-
-    if (!grouped[insumoId]) grouped[insumoId] = [];
-    grouped[insumoId].push(movement);
-  });
-
-  Object.values(grouped).forEach((movements) => {
-    movements.sort((left, right) => {
-      if (left.timestampMs !== right.timestampMs) return right.timestampMs - left.timestampMs;
-      return right.logId - left.logId;
-    });
-  });
-
-  return grouped;
-}
-
 // --- APP PRINCIPAL ---
 
 export default function App() {
@@ -446,15 +219,22 @@ export default function App() {
   const navigate = useNavigate();
   const {
     sessionUser,
-    setStoredSession,
-    logout,
+    globalSearchTerm,
+    setGlobalSearchTerm,
+    clearGlobalSearchTerm,
     theme,
     toggleTheme,
     sidebarOpen,
     setSidebarOpen,
+    backendConnected,
+    toast,
+    setToast,
+    showToast,
+    clearToast,
   } = useAppStore();
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [loginLoading, setLoginLoading] = useState(false);
+  const searchTerm = globalSearchTerm;
+  const setSearchTerm = setGlobalSearchTerm;
+  const clearSearchTerm = clearGlobalSearchTerm;
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -464,118 +244,188 @@ export default function App() {
     }
   }, [theme]);
 
-  // Estado de Datos
-  const [activos, setActivos] = useState<Activo[]>([]);
-  const [insumos, setInsumos] = useState<Insumo[]>([]);
-  const [tickets, setTickets] = useState<TicketItem[]>([]);
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [catalogos, setCatalogos] = useState<CatalogState>(DEFAULT_CATALOGS);
-  const [auditoria, setAuditoria] = useState<RegistroAuditoria[]>([]);
-  const [auditRemoteRows, setAuditRemoteRows] = useState<RegistroAuditoria[] | null>(null);
-  const [reportAuditRowsRemote, setReportAuditRowsRemote] = useState<RegistroAuditoria[] | null>(null);
-  const [auditFilters, setAuditFilters] = useState<AuditFiltersState>(() => buildDefaultAuditFilters());
-  const [auditPage, setAuditPage] = useState(1);
-  const [auditPageSize, setAuditPageSize] = useState(25);
-  const [auditPagination, setAuditPagination] = useState<AuditPaginationState>(() => buildDefaultAuditPagination(25));
-  const [auditSummary, setAuditSummary] = useState<AuditSummaryState | null>(null);
-  const [auditIntegrity, setAuditIntegrity] = useState<AuditIntegrityState | null>(null);
-  const [auditAlerts, setAuditAlerts] = useState<AuditAlertsState | null>(null);
-  const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const {
+    activos,
+    insumos,
+    tickets,
+    users,
+    catalogos,
+    auditoria,
+  } = useCoreData();
+
+  const {
+    auditRemoteRows,
+    setAuditRemoteRows,
+    reportAuditRowsRemote,
+    setReportAuditRowsRemote,
+    auditFilters,
+    setAuditFilters,
+    auditPage,
+    setAuditPage,
+    auditPageSize,
+    setAuditPageSize,
+    auditPagination,
+    setAuditPagination,
+    auditSummary,
+    setAuditSummary,
+    auditIntegrity,
+    setAuditIntegrity,
+    auditAlerts,
+    setAuditAlerts,
+    isAuditLoading,
+    setIsAuditLoading,
+  } = useAuditUiState();
 
   // UI States
-  const [searchTerm, setSearchTerm] = useState('');
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>('30D');
-  const [reportDateFrom, setReportDateFrom] = useState(() => buildDefaultReportFilterSnapshot().dateFrom);
-  const [reportDateTo, setReportDateTo] = useState(() => buildDefaultReportFilterSnapshot().dateTo);
-  const [reportBranchFilter, setReportBranchFilter] = useState(() => buildDefaultReportFilterSnapshot().branch);
-  const [reportAreaFilter, setReportAreaFilter] = useState(() => buildDefaultReportFilterSnapshot().area);
-  const [reportStateFilter, setReportStateFilter] = useState<ReportStateFilter>(() => buildDefaultReportFilterSnapshot().state);
-  const [reportPriorityFilter, setReportPriorityFilter] = useState<ReportPriorityFilter>(() => buildDefaultReportFilterSnapshot().priority);
-  const [reportAttentionFilter, setReportAttentionFilter] = useState<ReportAttentionFilter>(() => buildDefaultReportFilterSnapshot().attention);
-  const [reportTechnicianFilter, setReportTechnicianFilter] = useState(() => buildDefaultReportFilterSnapshot().technician);
-  const [reportPresetName, setReportPresetName] = useState('');
-  const [reportFilterPresets, setReportFilterPresets] = useState<ReportFilterPreset[]>([]);
-  const [travelReportMonth, setTravelReportMonth] = useState(() => buildCurrentMonthInputValue());
-  const [travelReportTechnician, setTravelReportTechnician] = useState('TODOS');
-  const [travelReportName, setTravelReportName] = useState('');
-  const [travelReportDepartment, setTravelReportDepartment] = useState(TRAVEL_DEFAULT_DEPARTMENT);
-  const [travelReportFuelEfficiency, setTravelReportFuelEfficiency] = useState(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
-  const [travelReportAuthorizer, setTravelReportAuthorizer] = useState(TRAVEL_DEFAULT_AUTHORIZER);
-  const [travelReportFinance, setTravelReportFinance] = useState(TRAVEL_DEFAULT_FINANCE);
-  const [travelKmsByBranch, setTravelKmsByBranch] = useState<Record<string, string>>(() => buildDefaultTravelKmsByBranch());
-  const [travelAdjustments, setTravelAdjustments] = useState<TravelTripAdjustment[]>([]);
-  const [travelTripDrafts, setTravelTripDrafts] = useState<Record<string, string>>({});
-  const [travelSavingCode, setTravelSavingCode] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState<ModalType>(null);
-  const [selectedAsset, setSelectedAsset] = useState<Activo | null>(null);
-  const [selectedSupplyHistoryItem, setSelectedSupplyHistoryItem] = useState<Insumo | null>(null);
-  const [selectedSupplyHistoryRemoteMovements, setSelectedSupplyHistoryRemoteMovements] = useState<SupplyAuditMovement[] | null>(null);
-  const [showQrScanner, setShowQrScanner] = useState(false);
-  const [qrScannerStatus, setQrScannerStatus] = useState('Escanea un QR firmado (mtiqr1).');
-  const [isQrScannerActive, setIsQrScannerActive] = useState(false);
-  const [isResolvingQr, setIsResolvingQr] = useState(false);
-  const [qrManualInput, setQrManualInput] = useState('');
-  const [selectedAssetQrValue, setSelectedAssetQrValue] = useState('');
-  const [selectedAssetQrMode, setSelectedAssetQrMode] = useState<'signed' | 'unavailable'>('unavailable');
-  const [selectedAssetQrIssuedAt, setSelectedAssetQrIssuedAt] = useState('');
-  const [selectedAssetQrLoading, setSelectedAssetQrLoading] = useState(false);
-  const [editingAssetId, setEditingAssetId] = useState<number | null>(null);
-  const [editingInsumoId, setEditingInsumoId] = useState<number | null>(null);
-  const [isModalSaving, setIsModalSaving] = useState(false);
-  const [formData, setFormData] = useState<FormDataState>({});
-  const [insumoTouched, setInsumoTouched] = useState<InsumoTouchedState>(() => createEmptyInsumoTouched());
-  const [ticketLifecycleFilter, setTicketLifecycleFilter] = useState<'TODOS' | 'ABIERTOS' | 'CERRADOS'>('TODOS');
-  const [ticketStateFilter, setTicketStateFilter] = useState<TicketEstado | 'TODOS'>('TODOS');
-  const [ticketPriorityFilter, setTicketPriorityFilter] = useState<PrioridadTicket | 'TODAS'>('TODAS');
-  const [ticketAssignmentFilter, setTicketAssignmentFilter] = useState<'TODOS' | 'ASIGNADOS' | 'SIN_ASIGNAR'>('TODOS');
-  const [ticketSlaFilter, setTicketSlaFilter] = useState<'TODOS' | 'VENCIDO'>('TODOS');
-  const [ticketCommentDrafts, setTicketCommentDrafts] = useState<Record<number, string>>({});
-  const [ticketAttachmentLoadingId, setTicketAttachmentLoadingId] = useState<number | null>(null);
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const [supplyStockDrafts, setSupplyStockDrafts] = useState<Record<number, string>>({});
+  const {
+    reportDateFrom,
+    setReportDateFrom,
+    reportDateTo,
+    setReportDateTo,
+    reportBranchFilter,
+    setReportBranchFilter,
+    reportAreaFilter,
+    setReportAreaFilter,
+    reportStateFilter,
+    setReportStateFilter,
+    reportPriorityFilter,
+    setReportPriorityFilter,
+    reportAttentionFilter,
+    setReportAttentionFilter,
+    reportTechnicianFilter,
+    setReportTechnicianFilter,
+    reportPresetName,
+    setReportPresetName,
+    reportFilterPresets,
+    setReportFilterPresets,
+    travelReportMonth,
+    setTravelReportMonth,
+    travelReportTechnician,
+    setTravelReportTechnician,
+    travelReportName,
+    setTravelReportName,
+    travelReportDepartment,
+    setTravelReportDepartment,
+    travelReportFuelEfficiency,
+    setTravelReportFuelEfficiency,
+    travelReportAuthorizer,
+    setTravelReportAuthorizer,
+    travelReportFinance,
+    setTravelReportFinance,
+    travelKmsByBranch,
+    setTravelKmsByBranch,
+    travelAdjustments,
+    setTravelAdjustments,
+    travelTripDrafts,
+    setTravelTripDrafts,
+    travelSavingCode,
+    setTravelSavingCode,
+  } = useReportState();
+  const {
+    showModal,
+    setShowModal,
+    selectedAsset,
+    setSelectedAsset,
+    selectedSupplyHistoryItem,
+    setSelectedSupplyHistoryItem,
+    selectedSupplyHistoryRemoteMovements,
+    setSelectedSupplyHistoryRemoteMovements,
+    showQrScanner,
+    setShowQrScanner,
+    qrScannerStatus,
+    setQrScannerStatus,
+    isQrScannerActive,
+    setIsQrScannerActive,
+    isResolvingQr,
+    setIsResolvingQr,
+    qrManualInput,
+    setQrManualInput,
+    selectedAssetQrValue,
+    setSelectedAssetQrValue,
+    selectedAssetQrMode,
+    setSelectedAssetQrMode,
+    selectedAssetQrIssuedAt,
+    setSelectedAssetQrIssuedAt,
+    selectedAssetQrLoading,
+    setSelectedAssetQrLoading,
+    editingAssetId,
+    setEditingAssetId,
+    editingInsumoId,
+    setEditingInsumoId,
+    isModalSaving,
+    setIsModalSaving,
+    formData,
+    setFormData,
+    insumoTouched,
+    setInsumoTouched,
+    markInsumoTouched,
+    insumoFormValidation,
+    supplyStockDrafts,
+    setSupplyStockDrafts,
+    isImportingInventory,
+    setIsImportingInventory,
+    inventoryDepartmentFilter,
+    setInventoryDepartmentFilter,
+    inventoryEquipmentFilter,
+    setInventoryEquipmentFilter,
+    inventoryStatusFilter,
+    setInventoryStatusFilter,
+    inventoryRiskFilter,
+    setInventoryRiskFilter,
+    inventorySortField,
+    setInventorySortField,
+    inventorySortDirection,
+    setInventorySortDirection,
+    supplySearchTerm,
+    setSupplySearchTerm,
+    supplyCategoryFilter,
+    setSupplyCategoryFilter,
+    supplyStatusFilter,
+    setSupplyStatusFilter,
+    importDraft,
+    setImportDraft,
+    isApplyingImport,
+    setIsApplyingImport,
+    setAssetRiskSummary,
+  } = useInventoryUiState({ insumos });
+  const {
+    ticketLifecycleFilter,
+    setTicketLifecycleFilter,
+    ticketStateFilter,
+    setTicketStateFilter,
+    ticketPriorityFilter,
+    setTicketPriorityFilter,
+    ticketAssignmentFilter,
+    setTicketAssignmentFilter,
+    ticketSlaFilter,
+    setTicketSlaFilter,
+    ticketCommentDrafts,
+    setTicketCommentDrafts,
+    ticketAttachmentLoadingId,
+    setTicketAttachmentLoadingId,
+  } = useTicketUiState();
+  const {
+    newUserForm,
+    setNewUserForm,
+    isCreatingUser,
+    setIsCreatingUser,
+    editingUserId,
+    setEditingUserId,
+    userActionLoadingId,
+    setUserActionLoadingId,
+    userSearchTerm,
+    setUserSearchTerm,
+    userRoleFilter,
+    setUserRoleFilter,
+    userStatusFilter,
+    setUserStatusFilter,
+    userDepartmentFilter,
+    setUserDepartmentFilter,
+  } = useUserUiState();
   const inventoryImportInputRef = useRef<HTMLInputElement | null>(null);
-  const qrScannerVideoRef = useRef<HTMLVideoElement | null>(null);
-  const qrScannerStreamRef = useRef<MediaStream | null>(null);
-  const qrScannerIntervalRef = useRef<number | null>(null);
-  const qrScannerBusyRef = useRef(false);
   const fetchAuditHistoryRef = useRef<(options?: { force?: boolean }) => void>(() => { });
-  const [isImportingInventory, setIsImportingInventory] = useState(false);
-  const [inventoryDepartmentFilter, setInventoryDepartmentFilter] = useState('TODOS');
-  const [inventoryEquipmentFilter, setInventoryEquipmentFilter] = useState('TODOS');
-  const [inventoryStatusFilter, setInventoryStatusFilter] = useState<'TODOS' | EstadoActivo>('TODOS');
-  const [inventoryRiskFilter, setInventoryRiskFilter] = useState<InventoryRiskFilter>('TODOS');
-  const [inventorySortField, setInventorySortField] = useState<InventorySortField>('tag');
-  const [inventorySortDirection, setInventorySortDirection] = useState<InventorySortDirection>('asc');
-  const [supplySearchTerm, setSupplySearchTerm] = useState('');
-  const [supplyCategoryFilter, setSupplyCategoryFilter] = useState<string>('TODAS');
-  const [supplyStatusFilter, setSupplyStatusFilter] = useState<SupplyStatusFilter>('TODOS');
-  const [importDraft, setImportDraft] = useState<ImportDraftState | null>(null);
-  const [isApplyingImport, setIsApplyingImport] = useState(false);
-  const [, setAssetRiskSummary] = useState<AssetRiskSummary | null>(null);
-  const [newUserForm, setNewUserForm] = useState<{
-    nombre: string;
-    username: string;
-    password: string;
-    departamento: string;
-    rol: UserRole;
-  }>({
-    nombre: '',
-    username: '',
-    password: '',
-    departamento: '',
-    rol: 'solicitante',
-  });
-  const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [editingUserId, setEditingUserId] = useState<number | null>(null);
-  const [userActionLoadingId, setUserActionLoadingId] = useState<number | null>(null);
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'TODOS' | UserRole>('TODOS');
-  const [userStatusFilter, setUserStatusFilter] = useState<'TODOS' | 'ACTIVOS' | 'INACTIVOS'>('TODOS');
-  const [userDepartmentFilter, setUserDepartmentFilter] = useState('TODOS');
 
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
   const [liveNow, setLiveNow] = useState(() => Date.now());
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const debouncedSupplySearchTerm = useDebouncedValue(supplySearchTerm);
@@ -592,84 +442,7 @@ export default function App() {
     () => tokenizeSearchQuery(debouncedUserSearchTerm),
     [debouncedUserSearchTerm],
   );
-  const markInsumoTouched = useCallback((field: InsumoField) => {
-    setInsumoTouched((prev) => {
-      if (prev[field]) return prev;
-      return { ...prev, [field]: true };
-    });
-  }, []);
-  const insumoFormValidation = useMemo(() => {
-    const nombre = String(formData.nombre || '').trim();
-    const unidad = String(formData.unidad || '').trim();
-    const categoria = String(formData.categoria || '').trim().toUpperCase();
-    const stockInput = String(formData.stock ?? '').trim();
-    const minInput = String(formData.min ?? '').trim();
-    const errors: InsumoErrors = {};
-    let stock: number | null = null;
-    let min: number | null = null;
-
-    if (!nombre) errors.nombre = 'Nombre requerido.';
-    if (!unidad) errors.unidad = 'Unidad requerida.';
-    if (!categoria) errors.categoria = 'Selecciona una categoría.';
-
-    if (!stockInput) {
-      errors.stock = 'Stock requerido.';
-    } else {
-      const value = Number(stockInput);
-      if (!Number.isFinite(value)) errors.stock = 'Stock debe ser numérico.';
-      else if (value < 0) errors.stock = 'Stock debe ser mayor o igual a 0.';
-      else if (!Number.isInteger(value)) errors.stock = 'Stock debe ser entero.';
-      else stock = Math.trunc(value);
-    }
-
-    if (!minInput) {
-      errors.min = 'Mínimo requerido.';
-    } else {
-      const value = Number(minInput);
-      if (!Number.isFinite(value)) errors.min = 'Mínimo debe ser numérico.';
-      else if (value < 0) errors.min = 'Mínimo debe ser mayor o igual a 0.';
-      else if (!Number.isInteger(value)) errors.min = 'Mínimo debe ser entero.';
-      else min = Math.trunc(value);
-    }
-
-    if (stock !== null && min !== null && min > stock) {
-      errors.min = 'El mínimo no puede ser mayor al stock inicial.';
-    }
-
-    if (!errors.nombre && nombre && categoria) {
-      const duplicateLocal = insumos.some(
-        (item) =>
-          item.id !== editingInsumoId &&
-          normalizeForCompare(item.nombre) === normalizeForCompare(nombre)
-          && normalizeForCompare(item.categoria) === normalizeForCompare(categoria),
-      );
-      if (duplicateLocal) errors.nombre = 'Ya existe un insumo con ese nombre y categoría.';
-    }
-
-    const firstError = errors.nombre || errors.unidad || errors.stock || errors.min || errors.categoria || '';
-    return {
-      nombre,
-      unidad,
-      categoria,
-      stock,
-      min,
-      errors,
-      firstError,
-      isValid: !firstError,
-    };
-  }, [editingInsumoId, formData.categoria, formData.min, formData.nombre, formData.stock, formData.unidad, insumos]);
-  const showToast = useCallback((message: string, type: ToastType = 'success') => {
-    setToast({ message, type });
-  }, []);
   const effectiveSelectedAssetQrValue = selectedAssetQrValue;
-  const isQrCameraSupported = useMemo(
-    () =>
-      typeof window !== 'undefined'
-      && typeof navigator !== 'undefined'
-      && !!navigator.mediaDevices?.getUserMedia
-      && 'BarcodeDetector' in window,
-    [],
-  );
 
   useEffect(() => {
     applyThemeToDocument(theme);
@@ -688,7 +461,7 @@ export default function App() {
       return;
     }
     setReportFilterPresets(readStoredReportFilterPresets(sessionUser));
-  }, [sessionUser]);
+  }, [sessionUser, setReportFilterPresets, setReportPresetName]);
 
   useEffect(() => {
     if (!selectedAsset) {
@@ -719,7 +492,7 @@ export default function App() {
         if (cancelled) return;
 
         const token = String(response?.token || '').trim();
-        if (!token) throw new Error('QR token vacío');
+        if (!token) throw new Error('QR token vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o');
 
         setSelectedAssetQrValue(token);
         setSelectedAssetQrMode('signed');
@@ -737,23 +510,21 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [backendConnected, selectedAsset]);
+  }, [
+    backendConnected,
+    selectedAsset,
+    setSelectedAssetQrIssuedAt,
+    setSelectedAssetQrLoading,
+    setSelectedAssetQrMode,
+    setSelectedAssetQrValue,
+  ]);
 
   const canEdit = sessionUser?.rol === 'admin' || sessionUser?.rol === 'tecnico';
   const canCreateTickets = canEdit || sessionUser?.rol === 'solicitante';
   const canSubmitInsumo = canEdit && insumoFormValidation.isValid && !isModalSaving;
-  const currentModal = showModal;
-  const isAssetModal = currentModal === 'activo';
-  const isSupplyModal = currentModal === 'insumo';
-  const isTicketModal = currentModal === 'ticket';
-  const canSubmitModal = isTicketModal
-    ? canCreateTickets && !isModalSaving
-    : isSupplyModal
-      ? canSubmitInsumo
-      : canEdit && !isModalSaving;
-  const modalWidthClass = isAssetModal ? 'max-w-5xl' : 'max-w-lg';
-  const modalTitle = getModalTitle(currentModal, editingAssetId, editingInsumoId);
-  const modalSubmitLabel = getModalSubmitLabel(currentModal, isModalSaving, editingAssetId, editingInsumoId);
+  const isAssetModalOpen = showModal === 'activo';
+  const isSupplyModalOpen = showModal === 'insumo';
+  const isTicketModalOpen = showModal === 'ticket';
   const canManageUsers = sessionUser?.rol === 'admin';
   const isReadOnly = !canEdit;
   const isRequesterOnlyUser = sessionUser?.rol === 'solicitante';
@@ -900,185 +671,204 @@ export default function App() {
     setReportPriorityFilter(snapshot.priority);
     setReportAttentionFilter(snapshot.attention);
     setReportTechnicianFilter(snapshot.technician);
+  }, [
+    setReportAreaFilter,
+    setReportAttentionFilter,
+    setReportBranchFilter,
+    setReportDateFrom,
+    setReportDateTo,
+    setReportPriorityFilter,
+    setReportStateFilter,
+    setReportTechnicianFilter,
+  ]);
+  const { clearSession } = useSessionActions({
+    setView,
+    applyReportFilterSnapshot,
+    setAuditRemoteRows,
+    setReportAuditRowsRemote,
+    setAuditFilters,
+    setAuditPage,
+    setAuditPageSize,
+    setAuditPagination,
+    setAuditSummary,
+    setAuditIntegrity,
+    setAuditAlerts,
+    setIsAuditLoading,
+    setAssetRiskSummary,
+    setImportDraft,
+    setIsApplyingImport,
+    setSupplyStockDrafts,
+    setSelectedAsset,
+    setSelectedSupplyHistoryItem,
+    setSelectedSupplyHistoryRemoteMovements,
+    setEditingAssetId,
+    setEditingInsumoId,
+    setFormData,
+    setInsumoTouched,
+    setShowModal,
+    setShowQrScanner,
+    setQrManualInput,
+    setQrScannerStatus,
+    setIsQrScannerActive,
+    setIsResolvingQr,
+    setTicketCommentDrafts,
+    setTicketAttachmentLoadingId,
+    setReportPresetName,
+    setReportFilterPresets,
+    setTravelReportMonth,
+    setTravelReportTechnician,
+    setTravelReportName,
+    setTravelReportDepartment,
+    setTravelReportFuelEfficiency,
+    setTravelReportAuthorizer,
+    setTravelReportFinance,
+    setTravelKmsByBranch,
+    setTravelAdjustments,
+    setTravelTripDrafts,
+    setTravelSavingCode,
+  });
+
+  const {
+    handleBootstrapData,
+    handleBootstrapFailure,
+  } = useBootstrapHandlers({
+    auditPageSize,
+    setAuditRemoteRows,
+    setReportAuditRowsRemote,
+    setAuditSummary,
+    setAuditIntegrity,
+    setAuditAlerts,
+    setAuditPagination,
+    setTravelAdjustments,
+    setSelectedSupplyHistoryRemoteMovements,
+    setAssetRiskSummary,
+  });
+
+  const handleBootstrapSuccess = useCallback(() => {
+    fetchAuditHistoryRef.current({ force: true });
   }, []);
-  const clearSession = useCallback(() => {
-    logout();
-    setLoginForm({ username: '', password: '' });
-    setView('dashboard');
-    setActivos([]);
-    setInsumos([]);
-    setTickets([]);
-    setAuditoria([]);
-    setAuditRemoteRows(null);
-    setReportAuditRowsRemote(null);
-    setAuditFilters(buildDefaultAuditFilters());
-    setAuditPage(1);
-    setAuditPageSize(25);
-    setAuditPagination(buildDefaultAuditPagination(25));
-    setAuditSummary(null);
-    setAuditIntegrity(null);
-    setAuditAlerts(null);
-    setIsAuditLoading(false);
-    setUsers([]);
-    setCatalogos(DEFAULT_CATALOGS);
-    setBackendConnected(false);
-    setAssetRiskSummary(null);
-    setLastSync(null);
-    setImportDraft(null);
-    setIsApplyingImport(false);
-    setSupplyStockDrafts({});
-    setSearchTerm('');
-    applyReportFilterSnapshot(buildDefaultReportFilterSnapshot());
-    setReportPresetName('');
-    setReportFilterPresets([]);
-    setTravelReportMonth(buildCurrentMonthInputValue());
-    setTravelReportTechnician('TODOS');
-    setTravelReportName('');
-    setTravelReportDepartment(TRAVEL_DEFAULT_DEPARTMENT);
-    setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
-    setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
-    setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
-    setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
-    setTravelAdjustments([]);
-    setTravelTripDrafts({});
-    setTravelSavingCode(null);
-    setSelectedAsset(null);
-    setSelectedSupplyHistoryItem(null);
-    setSelectedSupplyHistoryRemoteMovements(null);
-    setEditingAssetId(null);
-    setEditingInsumoId(null);
-    setFormData({});
-    setInsumoTouched(createEmptyInsumoTouched());
-    setTicketCommentDrafts({});
-    setTicketAttachmentLoadingId(null);
-    setShowModal(null);
-    setShowQrScanner(false);
-    setQrManualInput('');
-    setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
-    setIsQrScannerActive(false);
-    setIsResolvingQr(false);
-  }, [applyReportFilterSnapshot, logout, setView]);
 
-  const ensureBackendConnected = useCallback((action: string) => {
-    if (backendConnected) return true;
-    showToast(`${action} requiere conexion con el backend.`, 'warning');
-    return false;
-  }, [backendConnected, showToast]);
+  const {
+    refreshData,
+    ensureBackendConnected,
+    isSyncing,
+    lastSync,
+  } = useAppBootstrap({
+    onSessionRejected: clearSession,
+    onBootstrapData: handleBootstrapData,
+    onRefreshFailure: handleBootstrapFailure,
+    onRefreshSuccess: handleBootstrapSuccess,
+  });
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await apiRequest('/auth/logout', { method: 'POST' });
-    } catch {
-      // Ignora error de logout remoto y limpia sesión local de todas formas.
+  const {
+    loginForm,
+    setLoginForm,
+    loginLoading,
+    handleLogin,
+    handleLogout,
+  } = useAuthActions({ clearSession });
+
+  useEffect(() => {
+    if (!sessionUser) {
+      setLoginForm({ username: '', password: '' });
     }
-    clearSession();
-  }, [clearSession]);
+  }, [sessionUser, setLoginForm]);
+  const {
+    updateFormData,
+    openModal: openManagedModal,
+    closeModal,
+    openAssetEditModal: openAssetEditModalByAsset,
+    openInsumoEditModal,
+  } = useModalState({
+    activeTicketBranches,
+    canEdit,
+    setShowModal,
+    setFormData,
+    setEditingAssetId,
+    setEditingInsumoId,
+    setIsModalSaving,
+    setInsumoTouched,
+    setSelectedAsset,
+    showToast,
+  });
 
-  const handleLogin = async (e?: React.FormEvent<HTMLFormElement>) => {
-    if (e) e.preventDefault();
-    if (!loginForm.username.trim() || !loginForm.password.trim()) {
-      showToast('Usuario y password son requeridos', 'warning');
-      return;
+  const openModal = useCallback((modal: ModalType | string) => {
+    if (modal === 'activo' || modal === 'insumo' || modal === 'ticket') {
+      openManagedModal(modal);
     }
-    setLoginLoading(true);
-
-    try {
-      const auth = await apiRequest<LoginResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(loginForm),
-      });
-      setStoredSession({
-        user: auth.user,
-        token: auth.token,
-        loggedAt: auth.loggedAt,
-      });
-      showToast(`Bienvenido ${auth.user.nombre}`, 'success');
-    } catch (error) {
-      const message = getApiErrorMessage(error);
-      showToast(message || 'No se pudo conectar con el backend', 'error');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const updateFormData = (updates: Partial<FormDataState>) => {
-    setFormData((prev) => ({ ...prev, ...updates }));
-  };
-
-  const openModal = (modal: Exclude<ModalType, null>) => {
-    setEditingAssetId(null);
-    setEditingInsumoId(null);
-    setIsModalSaving(false);
-    setInsumoTouched(createEmptyInsumoTouched());
-    setFormData(buildInitialFormDataForModal(modal, activeTicketBranches[0]?.code || ''));
-    setShowModal(modal);
-  };
-
-  const closeModal = () => {
-    setIsModalSaving(false);
-    setShowModal(null);
-    setEditingAssetId(null);
-    setEditingInsumoId(null);
-    setFormData({});
-    setInsumoTouched(createEmptyInsumoTouched());
-  };
+  }, [openManagedModal]);
 
   const openAssetEditModal = useCallback(() => {
     if (!selectedAsset) return;
-    if (!canEdit) {
-      showToast('Tu rol no permite editar activos', 'warning');
-      return;
-    }
+    openAssetEditModalByAsset(selectedAsset);
+  }, [openAssetEditModalByAsset, selectedAsset]);
 
-    setEditingInsumoId(null);
-    setEditingAssetId(selectedAsset.id);
-    setFormData({
-      tag: selectedAsset.tag || '',
-      tipo: selectedAsset.tipo || '',
-      marca: selectedAsset.marca || '',
-      modelo: selectedAsset.modelo || '',
-      ubicacion: selectedAsset.ubicacion || '',
-      serial: selectedAsset.serial || '',
-      fechaCompra: selectedAsset.fechaCompra || '',
-      estado: selectedAsset.estado || 'Operativo',
-      idInterno: selectedAsset.idInterno || '',
-      equipo: selectedAsset.equipo || selectedAsset.tipo || '',
-      cpu: selectedAsset.cpu || '',
-      ram: selectedAsset.ram || '',
-      ramTipo: selectedAsset.ramTipo || '',
-      disco: selectedAsset.disco || '',
-      tipoDisco: selectedAsset.tipoDisco || '',
-      macAddress: selectedAsset.macAddress || '',
-      ipAddress: selectedAsset.ipAddress || '',
-      responsable: selectedAsset.responsable || '',
-      departamento: selectedAsset.departamento || '',
-      anydesk: selectedAsset.anydesk || '',
-      aniosVida: selectedAsset.aniosVida || '',
-      comentarios: selectedAsset.comentarios || '',
-    });
-    setSelectedAsset(null);
-    setShowModal('activo');
-  }, [canEdit, selectedAsset, showToast]);
+  const {
+    handleSaveActivo,
+    eliminarActivo,
+    eliminarTodosActivos,
+  } = useAssetActions({
+    onAfterBulkDelete: () => setSelectedAsset(null),
+  });
 
-  const openInsumoEditModal = useCallback((insumo: Insumo) => {
-    if (!canEdit) {
-      showToast('Tu rol no permite editar insumos', 'warning');
-      return;
-    }
+  const {
+    handleSaveInsumo,
+    eliminarInsumo,
+    ajustarStock,
+    reponerCriticos,
+    confirmarStockManual,
+  } = useSupplyActions({
+    setInsumoTouched,
+    getSupplyHealthStatus,
+    setSupplyStockDrafts,
+    supplyStockDrafts,
+  });
 
-    setEditingAssetId(null);
-    setEditingInsumoId(insumo.id);
-    setIsModalSaving(false);
-    setInsumoTouched(createEmptyInsumoTouched());
-    setFormData({
-      nombre: insumo.nombre || '',
-      unidad: insumo.unidad || 'Piezas',
-      stock: String(insumo.stock),
-      min: String(insumo.min),
-      categoria: insumo.categoria || '',
-    });
-    setShowModal('insumo');
-  }, [canEdit, showToast]);
+  const handleQrAssetResolved = useCallback((asset: Activo) => {
+    setView('inventory');
+    setSearchTerm(asset.tag);
+    setSelectedAsset(asset);
+  }, [setSearchTerm, setSelectedAsset, setView]);
+
+  const {
+    qrScannerVideoRef,
+    isQrCameraSupported,
+    resolveQrFromManualInput,
+  } = useQrScanner({
+    activos,
+    backendConnected,
+    qrManualInput,
+    showQrScanner,
+    isResolvingQr,
+    setShowQrScanner,
+    setQrManualInput,
+    setQrScannerStatus,
+    setIsQrScannerActive,
+    setIsResolvingQr,
+    showToast,
+    onAssetResolved: handleQrAssetResolved,
+  });
+
+  const {
+    handleCreateTicket,
+    actualizarTicket,
+    resolverTicket,
+    agregarComentarioTicket,
+    eliminarTicket,
+    cargarAdjuntoTicket,
+    descargarAdjuntoTicket,
+    eliminarAdjuntoTicket,
+  } = useTicketActions({
+    canEdit,
+    canCreateTickets,
+    canCreateComments: canCreateTickets,
+    isValidTicketBranchValue,
+    ticketAssetOptionsCount: ticketAssetOptions.length,
+    ticketAssetOptionsIncludes: (tag) => ticketAssetOptions.some((option) => option.tag === tag),
+    setTicketCommentDrafts,
+    ticketCommentDrafts,
+    setTicketAttachmentLoadingId,
+  });
 
   const descargarQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
@@ -1482,57 +1272,6 @@ export default function App() {
     window.setTimeout(triggerPrint, 450);
   }, [activeTicketBranchCodes, effectiveSelectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
-  const refreshData = useCallback(async (silent = false) => {
-    if (!sessionUser) return;
-    if (!silent) setIsSyncing(true);
-
-    try {
-      const data = await apiRequest<BootstrapResponse>('/bootstrap');
-      setActivos(data.activos);
-      setInsumos(data.insumos);
-      setTickets(data.tickets);
-      setAuditoria(Array.isArray(data.auditoria) ? data.auditoria : []);
-      setAuditSummary(null);
-      setAuditIntegrity(null);
-      setAuditAlerts(null);
-      setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-      setUsers(data.users || []);
-      setCatalogos(normalizeCatalogState(data.catalogos));
-      setTravelAdjustments(data.travelAdjustments || []);
-      if (data.riskSummary) {
-        setAssetRiskSummary(data.riskSummary);
-      } else {
-        setAssetRiskSummary(calculateAssetRiskSummary(data.activos));
-      }
-      setBackendConnected(true);
-      setLastSync(new Date().toLocaleTimeString());
-      fetchAuditHistoryRef.current({ force: true });
-    } catch (error) {
-      if (isSessionRejectedApiError(error)) {
-        clearSession();
-        if (!silent) showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
-        return;
-      }
-      setBackendConnected(false);
-      setAuditRemoteRows(null);
-      setReportAuditRowsRemote(null);
-      setAuditSummary(null);
-      setAuditIntegrity(null);
-      setAuditAlerts(null);
-      setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-      setTravelAdjustments([]);
-      setSelectedSupplyHistoryRemoteMovements(null);
-      showToast(getApiErrorMessage(error) || 'No se pudo sincronizar con el backend', 'warning');
-    } finally {
-      if (!silent) setIsSyncing(false);
-    }
-  }, [auditPageSize, clearSession, sessionUser, showToast]);
-
-  useEffect(() => {
-    if (!sessionUser) return;
-    void refreshData(true);
-  }, [refreshData, sessionUser]);
-
   const fetchAllAuditRows = useCallback(async (filters: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
@@ -1580,11 +1319,11 @@ export default function App() {
     } catch (error) {
       if (isSessionRejectedApiError(error)) {
         clearSession();
-        showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+        showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
         return;
       }
       if (!isRouteNotFoundApiError(error)) {
-        showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría', 'warning');
+        showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a', 'warning');
       }
       setAuditRemoteRows(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
@@ -1609,6 +1348,12 @@ export default function App() {
     clearSession,
     isRequesterOnlyUser,
     sessionUser,
+    setAuditAlerts,
+    setAuditIntegrity,
+    setAuditPagination,
+    setAuditRemoteRows,
+    setAuditSummary,
+    setIsAuditLoading,
     showToast,
     view,
   ]);
@@ -1644,11 +1389,11 @@ export default function App() {
         if (cancelled) return;
         if (isSessionRejectedApiError(error)) {
           clearSession();
-          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+          showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
           return;
         }
         if (!isRouteNotFoundApiError(error)) {
-          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría para reportes', 'warning');
+          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a para reportes', 'warning');
         }
         setReportAuditRowsRemote(null);
       }
@@ -1665,6 +1410,7 @@ export default function App() {
     reportDateFrom,
     reportDateTo,
     sessionUser,
+    setReportAuditRowsRemote,
     showToast,
     view,
   ]);
@@ -1673,7 +1419,7 @@ export default function App() {
     if (!selectedSupplyHistoryItem) return;
     const exists = insumos.some((item) => item.id === selectedSupplyHistoryItem.id);
     if (!exists) setSelectedSupplyHistoryItem(null);
-  }, [insumos, selectedSupplyHistoryItem]);
+  }, [insumos, selectedSupplyHistoryItem, setSelectedSupplyHistoryItem]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1705,7 +1451,7 @@ export default function App() {
         if (cancelled) return;
         if (isSessionRejectedApiError(error)) {
           clearSession();
-          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+          showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
           return;
         }
         setSelectedSupplyHistoryRemoteMovements(null);
@@ -1723,6 +1469,7 @@ export default function App() {
     isRequesterOnlyUser,
     selectedSupplyHistoryItem,
     sessionUser,
+    setSelectedSupplyHistoryRemoteMovements,
     showToast,
   ]);
 
@@ -1737,7 +1484,7 @@ export default function App() {
       if (!prevTag || prevTag !== currentTag) return prev;
       return { ...prev, activoTag: '' };
     });
-  }, [formData.activoTag, showModal, ticketAssetOptions]);
+  }, [formData.activoTag, setFormData, showModal, ticketAssetOptions]);
 
   useEffect(() => {
     if (!roleCatalogOptions.some((role) => role.value === newUserForm.rol)) {
@@ -1746,176 +1493,8 @@ export default function App() {
         setNewUserForm((prev) => ({ ...prev, rol: fallbackRole }));
       }
     }
-  }, [newUserForm.rol, roleCatalogOptions]);
+  }, [newUserForm.rol, roleCatalogOptions, setNewUserForm]);
 
-
-  const stopQrCameraScan = useCallback(() => {
-    if (qrScannerIntervalRef.current !== null) {
-      window.clearInterval(qrScannerIntervalRef.current);
-      qrScannerIntervalRef.current = null;
-    }
-    const stream = qrScannerStreamRef.current;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      qrScannerStreamRef.current = null;
-    }
-    if (qrScannerVideoRef.current) {
-      qrScannerVideoRef.current.srcObject = null;
-    }
-    qrScannerBusyRef.current = false;
-    setIsQrScannerActive(false);
-  }, []);
-
-  const resolveQrPayload = useCallback(async (rawInput: string): Promise<boolean> => {
-    const raw = String(rawInput || '').trim();
-    if (!raw) {
-      showToast('QR vacío. Intenta de nuevo.', 'warning');
-      return false;
-    }
-
-    const signedToken = extractSignedQrToken(raw);
-    if (!signedToken) {
-      showToast('QR no reconocido. Solo se aceptan QR firmados (mtiqr1).', 'warning');
-      return false;
-    }
-
-    if (!backendConnected) {
-        showToast('El QR firmado requiere backend online para validación', 'warning');
-        return false;
-      }
-
-      setIsResolvingQr(true);
-      try {
-        const result = await apiRequest<AssetQrResolveResponse>(`/qr/resolve/${encodeURIComponent(signedToken)}`);
-        const resolvedFromApi = toActivoFromQrLookup(result.asset || {});
-        if (!resolvedFromApi) {
-          showToast('QR válido pero sin datos de activo', 'warning');
-          return false;
-        }
-
-        const localMatch = activos.find((asset) => Number(asset.id) === Number(resolvedFromApi.id));
-        const nextAsset = localMatch || resolvedFromApi;
-        setView('inventory');
-        setSearchTerm(nextAsset.tag);
-        setSelectedAsset(nextAsset);
-        showToast(`Activo ${nextAsset.tag} resuelto por QR`, 'success');
-        return true;
-      } catch (error) {
-        showToast(getApiErrorMessage(error) || 'No se pudo resolver el QR firmado', 'error');
-        return false;
-      } finally {
-        setIsResolvingQr(false);
-      }
-
-  }, [activos, backendConnected, setView, showToast]);
-
-  const resolveQrFromManualInput = useCallback(async () => {
-    const ok = await resolveQrPayload(qrManualInput);
-    if (ok) setShowQrScanner(false);
-  }, [qrManualInput, resolveQrPayload]);
-
-  useEffect(() => {
-    if (!showQrScanner) {
-      stopQrCameraScan();
-      setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
-      return;
-    }
-
-    if (!backendConnected) {
-      stopQrCameraScan();
-      setQrScannerStatus('La validacion QR requiere backend online.');
-      return;
-    }
-
-    if (!isQrCameraSupported) {
-      setQrScannerStatus('Escaneo por cámara no disponible en este navegador. Usa resolución manual.');
-      return;
-    }
-
-    let cancelled = false;
-    setQrScannerStatus('Solicitando acceso a cámara...');
-
-    void (async () => {
-      try {
-        const media = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        });
-        if (cancelled) {
-          media.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        qrScannerStreamRef.current = media;
-        const video = qrScannerVideoRef.current;
-        if (!video) {
-          media.getTracks().forEach((track) => track.stop());
-          qrScannerStreamRef.current = null;
-          setQrScannerStatus('No se pudo inicializar la vista de cámara.');
-          return;
-        }
-
-        video.srcObject = media;
-        await video.play().catch(() => undefined);
-
-        const detectorCtor = (window as unknown as {
-          BarcodeDetector?: new (options?: { formats?: string[] }) => {
-            detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
-          };
-        }).BarcodeDetector;
-
-        if (!detectorCtor) {
-          setQrScannerStatus('Detector QR no disponible en este navegador.');
-          return;
-        }
-
-        const detector = new detectorCtor({ formats: ['qr_code'] });
-        setIsQrScannerActive(true);
-        setQrScannerStatus('Apunta la cámara al QR...');
-
-        qrScannerIntervalRef.current = window.setInterval(() => {
-          void (async () => {
-            const currentVideo = qrScannerVideoRef.current;
-            if (!currentVideo || currentVideo.readyState < 2) return;
-            if (qrScannerBusyRef.current || isResolvingQr) return;
-
-            qrScannerBusyRef.current = true;
-            try {
-              const detected = await detector.detect(currentVideo);
-              const rawValue = String(detected?.[0]?.rawValue || '').trim();
-              if (!rawValue) return;
-
-              setQrManualInput(rawValue);
-              setQrScannerStatus('QR detectado, resolviendo...');
-              stopQrCameraScan();
-
-              const ok = await resolveQrPayload(rawValue);
-              if (ok) {
-                setShowQrScanner(false);
-              } else {
-                setQrScannerStatus('No se pudo resolver. Solo se aceptan QR firmados (mtiqr1).');
-              }
-            } catch {
-              // Ignora errores intermitentes del detector/cámara.
-            } finally {
-              qrScannerBusyRef.current = false;
-            }
-          })();
-        }, 420);
-      } catch {
-        setQrScannerStatus('No se pudo acceder a la cámara. Usa resolución manual.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      stopQrCameraScan();
-    };
-  }, [backendConnected, isQrCameraSupported, isResolvingQr, resolveQrPayload, showQrScanner, stopQrCameraScan]);
 
   const resetNewUserForm = () => {
     const fallbackRoleRaw = roleCatalogOptions[0]?.value;
@@ -1930,138 +1509,21 @@ export default function App() {
     setEditingUserId(null);
   };
 
-  const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canManageUsers) {
-      showToast('Solo administradores pueden crear usuarios', 'warning');
-      return;
-    }
-
-    const isEditing = editingUserId !== null;
-    const nombre = newUserForm.nombre.trim();
-    const username = newUserForm.username.trim().toLowerCase();
-    const password = newUserForm.password;
-    const departamento = newUserForm.departamento.trim().toUpperCase();
-    const rol = newUserForm.rol;
-
-    if (!nombre || !username || !departamento) {
-      showToast('Completa nombre, usuario y cargo', 'warning');
-      return;
-    }
-    if (!isEditing && !password) {
-      showToast('Password requerido para nuevo usuario', 'warning');
-      return;
-    }
-    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
-      showToast('Usuario inválido: usa a-z, 0-9, ., _, - (3 a 32)', 'warning');
-      return;
-    }
-    if (password && password.length < 6) {
-      showToast('El password debe tener al menos 6 caracteres', 'warning');
-      return;
-    }
-    if (users.some((u) => normalizeForCompare(u.username) === normalizeForCompare(username) && (!isEditing || u.id !== editingUserId))) {
-      showToast('El usuario ya existe', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Guardar usuarios')) return;
-
-    setIsCreatingUser(true);
-    try {
-      if (isEditing && editingUserId !== null) {
-        const payload: Record<string, unknown> = { nombre, username, departamento, rol };
-        if (password) payload.password = password;
-        await apiRequest<UserItem>(`/users/${editingUserId}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiRequest<UserItem>('/users', {
-          method: 'POST',
-          body: JSON.stringify({
-            nombre,
-            username,
-            password,
-            departamento,
-            rol,
-          }),
-        });
-      }
-      await refreshData(true);
-      showToast(isEditing ? `Usuario ${username} actualizado` : `Usuario ${username} creado`, 'success');
-      resetNewUserForm();
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo guardar el usuario', 'error');
-    } finally {
-      setIsCreatingUser(false);
-    }
-  };
-
-  const handleEditUser = (user: UserItem) => {
-    if (!canManageUsers) return;
-    const currentCargo = String(user.departamento || '').trim().toUpperCase();
-    const isKnownCargo = userCargoOptions.some((cargo) => cargo.value === currentCargo);
-    setEditingUserId(user.id);
-    setNewUserForm({
-      nombre: user.nombre,
-      username: user.username,
-      password: '',
-      departamento: isKnownCargo ? currentCargo : '',
-      rol: user.rol,
-    });
-  };
-
-  const handleToggleUserActive = async (user: UserItem) => {
-    if (!canManageUsers) return;
-    if (sessionUser && user.id === sessionUser.id) {
-      showToast('No puedes desactivar tu propio usuario', 'warning');
-      return;
-    }
-
-    const nextActive = user.activo === false;
-    if (!ensureBackendConnected('Actualizar usuarios')) return;
-    setUserActionLoadingId(user.id);
-    try {
-      await apiRequest<UserItem>(`/users/${user.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ activo: nextActive }),
-      });
-      await refreshData(true);
-      showToast(nextActive ? 'Usuario activado' : 'Usuario desactivado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo actualizar el estado del usuario', 'error');
-    } finally {
-      setUserActionLoadingId(null);
-    }
-  };
-
-  const handleDeleteUser = async (user: UserItem) => {
-    if (!canManageUsers) return;
-    if (sessionUser && user.id === sessionUser.id) {
-      showToast('No puedes eliminar tu propio usuario', 'warning');
-      return;
-    }
-    const ok = window.confirm(`Eliminar usuario ${user.username}?`);
-    if (!ok) return;
-
-    if (!ensureBackendConnected('Eliminar usuarios')) return;
-    setUserActionLoadingId(user.id);
-    try {
-      await apiRequest<{ ok: boolean }>(`/users/${user.id}`, {
-        method: 'DELETE',
-      });
-      await refreshData(true);
-
-      if (editingUserId === user.id) {
-        resetNewUserForm();
-      }
-      showToast('Usuario eliminado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo eliminar el usuario', 'error');
-    } finally {
-      setUserActionLoadingId(null);
-    }
-  };
+  const {
+    handleCreateUser,
+    handleEditUser,
+    handleToggleUserActive,
+    handleDeleteUser,
+  } = useUserActions({
+    canManageUsers,
+    editingUserId,
+    newUserForm,
+    setNewUserForm,
+    setIsCreatingUser,
+    setEditingUserId,
+    setUserActionLoadingId,
+    resetNewUserForm,
+  });
 
   const handleImportInventory = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly) {
@@ -2090,7 +1552,7 @@ export default function App() {
       const sheet = workbook.Sheets[firstSheetName];
       const rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(sheet, { defval: '' });
       if (rows.length === 0) {
-        showToast('El archivo está vacío', 'warning');
+        showToast('El archivo estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o', 'warning');
         return;
       }
 
@@ -2106,7 +1568,7 @@ export default function App() {
           localInvalidDetails.push({
             rowNumber,
             status: 'invalid',
-            reason: 'Fila inválida o sin identificador utilizable.',
+            reason: 'Fila invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida o sin identificador utilizable.',
           });
           return;
         }
@@ -2137,8 +1599,8 @@ export default function App() {
       if (parsedRows.length === 0) {
         showToast(
           invalidRows > 0
-            ? `No se importaron filas válidas. Inválidas: ${invalidRows}`
-            : 'No se encontraron equipos válidos',
+            ? `No se importaron filas validas. Invalidas: ${invalidRows}`
+            : 'No se encontraron equipos validos',
           'warning',
         );
         return;
@@ -2235,281 +1697,25 @@ export default function App() {
         `Creados: ${result.created}`,
         `actualizados: ${result.updated}`,
         `omitidos: ${result.skipped}`,
-        `inválidos: ${invalidTotal}`,
+        `invalidos: ${invalidTotal}`,
       ];
       showToast(parts.join(' | '), invalidTotal > 0 ? 'warning' : 'success');
       setImportDraft(null);
     } catch (error) {
-      const message = getApiErrorMessage(error) || 'No se pudo confirmar la importación';
+      const message = getApiErrorMessage(error) || 'No se pudo confirmar la importaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n';
       showToast(message, 'error');
     } finally {
       setIsApplyingImport(false);
     }
   };
 
-  const registrarLog = (
-    accion: string,
-    item: string,
-    cantidad: number,
-    modulo: AuditModule,
-    extra: Partial<RegistroAuditoria> = {},
-  ) => {
-    const now = new Date();
-    const nuevoLog: RegistroAuditoria = {
-      id: Date.now(),
-      accion,
-      item,
-      cantidad,
-      fecha: now.toLocaleString(),
-      timestamp: now.toISOString(),
-      usuario: sessionUser?.nombre || 'Sistema',
-      modulo,
-      ...extra,
-    };
-    setAuditoria((prev) => [nuevoLog, ...prev]);
-  };
-
-  const ajustarStock = async (id: number, cantidad: number) => {
-    setSupplyStockDrafts((prev) => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-
-    if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Actualizar stock')) return;
-
-    try {
-      await apiRequest(`/insumos/${id}/stock`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          delta: cantidad,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-    } catch {
-      showToast('No se pudo actualizar el stock', 'error');
-    }
-  };
-
-  const reponerCriticos = async (cantidad = 5) => {
-    if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
-      return;
-    }
-
-    const target = insumos.filter((item) => getSupplyHealthStatus(item) !== 'OK');
-    if (target.length === 0) {
-      showToast('No hay insumos criticos para reponer', 'warning');
-      return;
-    }
-
-    if (!ensureBackendConnected('Reponer insumos')) return;
-
-    try {
-      await Promise.all(
-        target.map((item) =>
-          apiRequest(`/insumos/${item.id}/stock`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              delta: cantidad,
-              usuario: sessionUser?.nombre || 'Admin IT',
-              rol: sessionUser?.rol || 'admin',
-            }),
-          }),
-        ),
-      );
-      await refreshData(true);
-      showToast(`Reposicion aplicada a ${target.length} insumos criticos`, 'success');
-    } catch {
-      showToast('No se pudo ejecutar la reposicion masiva', 'error');
-    }
-  };
-
-  const establecerStockManual = async (id: number, valor: string): Promise<boolean> => {
-    if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
-      return false;
-    }
-
-    const rawValue = valor.trim();
-    if (!rawValue) return false;
-    const parsedValue = Number(rawValue);
-    if (!Number.isFinite(parsedValue) || parsedValue < 0) return false;
-    const nuevaCantidad = Math.trunc(parsedValue);
-    if (!ensureBackendConnected('Establecer stock manual')) return false;
-
-    try {
-      await apiRequest(`/insumos/${id}/stock`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          stock: nuevaCantidad,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      return true;
-    } catch {
-      showToast('No se pudo establecer el stock', 'error');
-      return false;
-    }
-  };
-
-  const confirmarStockManual = async (id: number) => {
-    const draft = supplyStockDrafts[id];
-    if (draft === undefined) return;
-
-    const item = insumos.find((s) => s.id === id);
-    const clearDraft = () =>
-      setSupplyStockDrafts((prev) => {
-        if (!(id in prev)) return prev;
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-
-    if (!item) {
-      clearDraft();
-      return;
-    }
-
-    const normalized = draft.trim();
-    if (!normalized) {
-      clearDraft();
-      return;
-    }
-
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      showToast('Ingresa un stock válido (0 o mayor)', 'warning');
-      clearDraft();
-      return;
-    }
-
-    const nextStock = String(Math.trunc(parsed));
-    if (nextStock === String(item.stock)) {
-      clearDraft();
-      return;
-    }
-
-    const updated = await establecerStockManual(id, nextStock);
-    if (updated) clearDraft();
-  };
-
-  const eliminarInsumo = async (id: number, e?: React.MouseEvent<HTMLButtonElement>) => {
-    if (e) e.stopPropagation();
-    if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
-      return;
-    }
-    const itemToDelete = insumos.find((i) => i.id === id);
-    if (!itemToDelete) return;
-
-    const confirmacion = window.confirm(`Estas seguro de eliminar "${itemToDelete.nombre}"?`);
-    if (!confirmacion) return;
-    if (!ensureBackendConnected('Eliminar insumos')) return;
-
-    try {
-      await apiRequest(`/insumos/${id}`, {
-        method: 'DELETE',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      showToast('Insumo eliminado', 'success');
-    } catch {
-      showToast('No se pudo eliminar el insumo', 'error');
-    }
-  };
-
-  const eliminarActivo = async (id: number, e?: React.MouseEvent<HTMLElement>): Promise<boolean> => {
-    if (e) e.stopPropagation();
-    if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
-      return false;
-    }
-    const activoToDelete = activos.find((a) => a.id === id);
-    if (!activoToDelete) return false;
-
-    const confirmacion = window.confirm(`Eliminar activo ${activoToDelete.tag}?`);
-    if (!confirmacion) return false;
-    if (!ensureBackendConnected('Eliminar activos')) return false;
-
-    try {
-      await apiRequest(`/activos/${id}`, {
-        method: 'DELETE',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      showToast(`Activo ${activoToDelete.tag} dado de baja`, 'success');
-      return true;
-    } catch {
-      showToast('No se pudo eliminar el activo', 'error');
-      return false;
-    }
-  };
-
-  const eliminarTodosActivos = async (): Promise<boolean> => {
-    if (!canManageUsers) {
-      showToast('Solo administradores pueden borrar todos los activos', 'warning');
-      return false;
-    }
-    if (activos.length === 0) {
-      showToast('No hay activos para eliminar', 'warning');
-      return false;
-    }
-
-    const confirmacionInicial = window.confirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`);
-    if (!confirmacionInicial) return false;
-    const confirmacionFinal = window.confirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
-    if (!confirmacionFinal) return false;
-    if (!ensureBackendConnected('Eliminar el inventario completo')) return false;
-
-    try {
-      const result = await apiRequest<{ ok: boolean; removedCount?: number }>('/activos', {
-        method: 'DELETE',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      setSelectedAsset(null);
-      const removedCount = Number(result?.removedCount || 0);
-      if (removedCount <= 0) {
-        showToast('No habia activos para eliminar', 'warning');
-      } else {
-        showToast(`Se eliminaron ${removedCount} activos`, 'success');
-      }
-      return true;
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        clearSession();
-        showToast('Sesion expirada. Inicia sesion nuevamente.', 'warning');
-        return false;
-      }
-      showToast(getApiErrorMessage(error) || 'No se pudo eliminar el inventario de activos', 'error');
-      return false;
-    }
-  };
-
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isModalSaving) return;
+
     const modalType = showModal;
     if (!modalType) return;
+
     const isTicketModal = modalType === 'ticket';
     if (isTicketModal) {
       if (!canCreateTickets) {
@@ -2517,129 +1723,23 @@ export default function App() {
         return;
       }
     } else if (!canEdit) {
-      showToast('Tu rol no permite esta acción', 'warning');
+      showToast('Tu rol no permite esta accion', 'warning');
       return;
     }
-    if (!ensureBackendConnected(isTicketModal ? 'Crear tickets' : 'Guardar cambios')) return;
-    const prioridad = formData.prioridad || 'MEDIA';
-    setIsModalSaving(true);
 
+    if (!ensureBackendConnected(isTicketModal ? 'Crear tickets' : 'Guardar cambios')) return;
+
+    setIsModalSaving(true);
     try {
       if (modalType === 'activo') {
-        const isEditingAsset = editingAssetId !== null;
-        const activoPayload = {
-          tag: formData.tag || '',
-          tipo: formData.tipo || '',
-          marca: formData.marca || '',
-          modelo: formData.modelo || '',
-          ubicacion: formData.ubicacion || '',
-          serial: formData.serial || '',
-          fechaCompra: formData.fechaCompra || '',
-          estado: formData.estado || 'Operativo',
-          idInterno: formData.idInterno || '',
-          equipo: formData.equipo || formData.tipo || '',
-          cpu: formData.cpu || '',
-          ram: formData.ram || '',
-          ramTipo: formData.ramTipo || '',
-          disco: formData.disco || '',
-          tipoDisco: formData.tipoDisco || '',
-          macAddress: formData.macAddress || '',
-          ipAddress: formData.ipAddress || '',
-          responsable: formData.responsable || '',
-          departamento: formData.departamento || '',
-          anydesk: formData.anydesk || '',
-          aniosVida: formData.aniosVida || '',
-          comentarios: formData.comentarios || '',
-        };
-
-        const method = isEditingAsset ? 'PATCH' : 'POST';
-        const path = isEditingAsset ? `/activos/${editingAssetId}` : '/activos';
-        await apiRequest(path, {
-          method,
-          body: JSON.stringify({
-            ...activoPayload,
-            usuario: sessionUser?.nombre || 'Admin IT',
-            rol: sessionUser?.rol || 'admin',
-          }),
-        });
-        await refreshData(true);
-        showToast(editingAssetId !== null ? 'Activo actualizado' : 'Activo registrado', 'success');
+        const ok = await handleSaveActivo(formData, editingAssetId);
+        if (!ok) return;
       } else if (modalType === 'insumo') {
-        setInsumoTouched({
-          nombre: true,
-          unidad: true,
-          stock: true,
-          min: true,
-          categoria: true,
-        });
-        if (!insumoFormValidation.isValid) {
-          showToast(insumoFormValidation.firstError || 'Completa los campos requeridos', 'warning');
-          return;
-        }
-        const nombre = insumoFormValidation.nombre;
-        const unidad = insumoFormValidation.unidad;
-        const categoria = insumoFormValidation.categoria;
-        const stock = insumoFormValidation.stock as number;
-        const min = insumoFormValidation.min as number;
-        const isEditingInsumo = editingInsumoId !== null;
-
-        await apiRequest(isEditingInsumo ? `/insumos/${editingInsumoId}` : '/insumos', {
-          method: isEditingInsumo ? 'PATCH' : 'POST',
-          body: JSON.stringify({
-            nombre,
-            unidad,
-            stock,
-            min,
-            categoria,
-            usuario: sessionUser?.nombre || 'Admin IT',
-            rol: sessionUser?.rol || 'admin',
-          }),
-        });
-        await refreshData(true);
-        showToast(editingInsumoId !== null ? 'Insumo actualizado' : 'Insumo añadido', 'success');
+        const ok = await handleSaveInsumo(insumoFormValidation, editingInsumoId);
+        if (!ok) return;
       } else if (modalType === 'ticket') {
-        const activoTag = String(formData.activoTag || '').trim().toUpperCase();
-        const sucursal = String(formData.sucursal || '').trim().toUpperCase();
-        const areaAfectada = String(formData.areaAfectada || '').trim();
-        const atencionTipo = normalizeTicketAttentionType(formData.atencionTipo);
-        const descripcionBase = String(formData.descripcion || '').trim();
-        const ticketValidationError = !isValidTicketBranchValue(sucursal)
-          ? 'Selecciona una sucursal válida para el ticket'
-          : ticketAssetOptions.length === 0
-            ? 'No hay activos registrados en la sucursal seleccionada'
-            : !activoTag
-              ? 'Selecciona un TAG del equipo'
-              : !ticketAssetOptions.some((option) => option.tag === activoTag)
-                ? 'Selecciona un TAG válido para la sucursal elegida'
-                : !areaAfectada
-                  ? 'Selecciona área afectada'
-                  : !atencionTipo
-                    ? 'Selecciona si la atención fue presencial o remota'
-                    : !descripcionBase
-                      ? 'Agrega la descripción de la falla'
-                      : '';
-        if (ticketValidationError) {
-          showToast(ticketValidationError, 'warning');
-          return;
-        }
-        const descripcionFinal = buildTicketDescription(areaAfectada, descripcionBase);
-
-        await apiRequest('/tickets', {
-          method: 'POST',
-          body: JSON.stringify({
-            activoTag,
-            descripcion: descripcionFinal,
-            sucursal,
-            prioridad,
-            atencionTipo,
-            asignadoA: canEdit ? (formData.asignadoA || '') : '',
-            usuario: sessionUser?.nombre || 'Admin IT',
-            rol: sessionUser?.rol || 'admin',
-            departamento: sessionUser?.departamento || '',
-          }),
-        });
-        await refreshData(true);
-        showToast('Ticket creado', 'success');
+        const ok = await handleCreateTicket(formData);
+        if (!ok) return;
       }
 
       closeModal();
@@ -2647,248 +1747,6 @@ export default function App() {
       showToast(getApiErrorMessage(error) || 'No se pudo guardar el registro', 'error');
     } finally {
       setIsModalSaving(false);
-    }
-  };
-
-  const resolverTicket = async (id: number) => {
-    if (!canEdit) {
-      showToast('Tu rol no permite resolver tickets', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Resolver tickets')) return;
-
-    try {
-      await apiRequest(`/tickets/${id}/resolve`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      showToast('Ticket cerrado', 'success');
-    } catch {
-      showToast('No se pudo cerrar el ticket', 'error');
-    }
-  };
-
-  const eliminarTicket = async (ticketId: number) => {
-    const ticketToDelete = tickets.find((ticket) => ticket.id === ticketId);
-    if (!ticketToDelete) return;
-    if (!canDeleteTicket(ticketToDelete)) {
-      showToast('No autorizado para eliminar este ticket', 'warning');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`,
-    );
-    if (!confirmed) return;
-    if (!ensureBackendConnected('Eliminar tickets')) return;
-
-    try {
-      await apiRequest(`/tickets/${ticketId}`, {
-        method: 'DELETE',
-      });
-      await refreshData(true);
-      showToast('Ticket eliminado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo eliminar el ticket', 'error');
-    }
-  };
-
-  const actualizarTicket = async (ticketId: number, updates: { estado?: TicketEstado; asignadoA?: string; comentario?: string; atencionTipo?: TicketAttentionType }) => {
-    if (!canEdit) {
-      showToast('Tu rol no permite editar tickets', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Actualizar tickets')) return;
-
-    try {
-      await apiRequest(`/tickets/${ticketId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          ...updates,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      showToast('Ticket actualizado', 'success');
-    } catch {
-      showToast('No se pudo actualizar el ticket', 'error');
-    }
-  };
-
-  const agregarComentarioTicket = async (ticketId: number) => {
-    if (!canCreateTickets) {
-      showToast('Tu rol no permite comentar tickets', 'warning');
-      return;
-    }
-    const comentario = String(ticketCommentDrafts[ticketId] || '').trim();
-    if (!comentario) {
-      showToast('Escribe un comentario para guardar', 'warning');
-      return;
-    }
-
-    const target = tickets.find((ticket) => ticket.id === ticketId);
-    if (!target) return;
-    if (!canAccessTicketBySession(target)) {
-      showToast('Solo puedes comentar tus propios tickets', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Agregar comentarios')) return;
-
-    try {
-      const updatedTicket = await apiRequest<TicketItem>(`/tickets/${ticketId}/comments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          comentario,
-          usuario: sessionUser?.nombre || 'Sistema',
-          rol: sessionUser?.rol || 'consulta',
-        }),
-      });
-      setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)));
-      setTicketCommentDrafts((prev) => ({
-        ...prev,
-        [ticketId]: '',
-      }));
-      showToast('Comentario agregado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo guardar el comentario', 'error');
-    }
-  };
-
-  const cargarAdjuntoTicket = async (ticketId: number, files: FileList | null) => {
-    if (!canCreateTickets) {
-      showToast('Tu rol no permite adjuntar archivos', 'warning');
-      return;
-    }
-    const file = files?.[0];
-    if (!file) return;
-
-    const target = tickets.find((ticket) => ticket.id === ticketId);
-    if (!target) return;
-    if (!canAccessTicketBySession(target)) {
-      showToast('Solo puedes adjuntar archivos a tus propios tickets', 'warning');
-      return;
-    }
-    const currentAttachments = target.attachments || [];
-    if (currentAttachments.length >= CLIENT_ATTACHMENT_MAX_COUNT) {
-      showToast(`Limite de ${CLIENT_ATTACHMENT_MAX_COUNT} adjuntos por ticket alcanzado`, 'warning');
-      return;
-    }
-    if (file.size > CLIENT_ATTACHMENT_MAX_BYTES) {
-      const maxMb = Math.round((CLIENT_ATTACHMENT_MAX_BYTES / (1024 * 1024)) * 10) / 10;
-      showToast(`Adjunto excede limite de ${maxMb} MB`, 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Adjuntar archivos')) return;
-
-    setTicketAttachmentLoadingId(ticketId);
-    try {
-      const contentBase64 = await fileToBase64(file);
-      const response = await apiRequest<TicketAttachmentUploadResponse>(`/tickets/${ticketId}/attachments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          fileName: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          contentBase64,
-          usuario: sessionUser?.nombre || 'Sistema',
-          rol: sessionUser?.rol || 'consulta',
-        }),
-      });
-      setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? response.ticket : ticket)));
-      showToast('Adjunto agregado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo adjuntar el archivo', 'error');
-    } finally {
-      setTicketAttachmentLoadingId(null);
-    }
-  };
-
-  const descargarAdjuntoTicket = async (ticketId: number, attachment: TicketAttachment) => {
-    try {
-      const targetTicket = tickets.find((ticket) => ticket.id === ticketId);
-      if (targetTicket && !canAccessTicketBySession(targetTicket)) {
-        showToast('Solo puedes descargar adjuntos de tus propios tickets', 'warning');
-        return;
-      }
-      if (backendConnected && !attachment.localOnly) {
-        const token = getStoredSessionToken();
-        const response = await fetch(buildApiUrl(`/tickets/${ticketId}/attachments/${attachment.id}/download`), {
-          method: 'GET',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!response.ok) {
-          const raw = await response.text();
-          throw new ApiError(response.status, raw || `HTTP ${response.status}`);
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = attachment.fileName || `adjunto_${attachment.id}`;
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-        return;
-      }
-
-      if (attachment.localUrl) {
-        const link = document.createElement('a');
-        link.href = attachment.localUrl;
-        link.download = attachment.fileName || `adjunto_${attachment.id}`;
-        link.click();
-        return;
-      }
-
-      showToast('Adjunto no disponible para descarga', 'warning');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo descargar el adjunto', 'error');
-    }
-  };
-
-  const eliminarAdjuntoTicket = async (ticketId: number, attachment: TicketAttachment) => {
-    if (!canEdit) {
-      showToast('Tu rol no permite eliminar adjuntos', 'warning');
-      return;
-    }
-    const target = tickets.find((ticket) => ticket.id === ticketId);
-    if (!target) return;
-    const confirmacion = window.confirm(`Eliminar adjunto "${attachment.fileName}" del ticket #${ticketId}?`);
-    if (!confirmacion) return;
-    if (!ensureBackendConnected('Eliminar adjuntos')) return;
-
-    try {
-      if (backendConnected && !attachment.localOnly) {
-        const updatedTicket = await apiRequest<TicketItem>(`/tickets/${ticketId}/attachments/${attachment.id}`, {
-          method: 'DELETE',
-          body: JSON.stringify({
-            usuario: sessionUser?.nombre || 'Sistema',
-            rol: sessionUser?.rol || 'tecnico',
-          }),
-        });
-        setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? updatedTicket : ticket)));
-      } else {
-        setTickets((prev) =>
-          prev.map((ticket) =>
-            ticket.id === ticketId
-              ? {
-                ...ticket,
-                attachments: (ticket.attachments || []).filter((item) => item.id !== attachment.id),
-                historial: [
-                  buildTicketHistoryEntry('Adjunto eliminado', ticket.estado, sessionUser?.nombre || 'Sistema', attachment.fileName),
-                  ...(ticket.historial || []),
-                ],
-              }
-              : ticket,
-          ),
-        );
-        registrarLog('Adjunto Ticket', `${target.activoTag} | ${attachment.fileName} | eliminado`, 1, 'tickets');
-      }
-      showToast('Adjunto eliminado', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo eliminar el adjunto', 'error');
     }
   };
 
@@ -2908,12 +1766,12 @@ export default function App() {
       ? sourceBase.filter((log) => log.modulo === module)
       : sourceBase;
     if (rowsSource.length === 0) {
-      const label = module ? auditModuleLabel(module) : 'auditoría';
+      const label = module ? auditModuleLabel(module) : 'auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a';
       showToast(`No hay registros para exportar en ${label}`, 'warning');
       return;
     }
 
-    const headers = ['Módulo', 'Fecha', 'Usuario', 'Acción', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
+    const headers = ['MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³dulo', 'Fecha', 'Usuario', 'AcciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
     const rows = rowsSource.map((log) => [
       auditModuleLabel(log.modulo || 'otros'),
       log.fecha,
@@ -3001,7 +1859,7 @@ export default function App() {
   const applyInventoryFocus = (focus: 'FALLA' | InventoryRiskFilter) => {
     setInventoryDepartmentFilter('TODOS');
     setInventoryEquipmentFilter('TODOS');
-    setSearchTerm('');
+    clearSearchTerm();
     if (focus === 'FALLA') {
       setInventoryStatusFilter('Falla');
       setInventoryRiskFilter('TODOS');
@@ -3808,7 +2666,7 @@ export default function App() {
       nextDrafts[destinationCode] = adjustment ? String(adjustment.trips) : '';
     });
     setTravelTripDrafts(nextDrafts);
-  }, [travelCurrentAdjustmentByCode, travelDestinationCodesKey]);
+  }, [setTravelTripDrafts, travelCurrentAdjustmentByCode, travelDestinationCodesKey]);
   const travelTripsByCode = useMemo(() => {
     const counts = new Map<string, number>();
     const destinationCodes = new Set<string>([
@@ -3918,6 +2776,8 @@ export default function App() {
     currentTravelScope.key,
     currentTravelScope.label,
     ensureBackendConnected,
+    setTravelAdjustments,
+    setTravelSavingCode,
     showToast,
     travelMonthRange,
     travelReportMonth,
@@ -4245,19 +3105,19 @@ export default function App() {
     if (reportBranchFilter !== 'TODAS' && !reportBranchOptions.includes(reportBranchFilter)) {
       setReportBranchFilter('TODAS');
     }
-  }, [reportBranchFilter, reportBranchOptions]);
+  }, [reportBranchFilter, reportBranchOptions, setReportBranchFilter]);
 
   useEffect(() => {
     if (reportAreaFilter !== 'TODAS' && !reportAreaOptions.some((area) => normalizeForCompare(area) === normalizeForCompare(reportAreaFilter))) {
       setReportAreaFilter('TODAS');
     }
-  }, [reportAreaFilter, reportAreaOptions]);
+  }, [reportAreaFilter, reportAreaOptions, setReportAreaFilter]);
 
   useEffect(() => {
     if (reportTechnicianFilter === 'TODOS' || reportTechnicianFilter === 'SIN_ASIGNAR') return;
     const exists = reportTechnicianOptions.some((name) => normalizeForCompare(name) === normalizeForCompare(reportTechnicianFilter));
     if (!exists) setReportTechnicianFilter('TODOS');
-  }, [reportTechnicianFilter, reportTechnicianOptions]);
+  }, [reportTechnicianFilter, reportTechnicianOptions, setReportTechnicianFilter]);
   useEffect(() => {
     setTravelKmsByBranch((prev) => {
       let changed = false;
@@ -4271,16 +3131,16 @@ export default function App() {
       });
       return changed ? next : prev;
     });
-  }, [activeTicketBranches]);
+  }, [activeTicketBranches, setTravelKmsByBranch]);
   useEffect(() => {
     if (travelReportTechnician === 'TODOS' || travelReportTechnician === 'SIN_ASIGNAR') return;
     const exists = travelTechnicianOptions.some((name) => normalizeForCompare(name) === normalizeForCompare(travelReportTechnician));
     if (!exists) setTravelReportTechnician('TODOS');
-  }, [travelReportTechnician, travelTechnicianOptions]);
+  }, [setTravelReportTechnician, travelReportTechnician, travelTechnicianOptions]);
 
   const applyTicketFocus = (focus: 'ABIERTOS' | 'SLA' | 'CRITICA' | 'SIN_ASIGNAR' | 'EN_PROCESO') => {
     setView('tickets');
-    setSearchTerm('');
+    clearSearchTerm();
     setTicketLifecycleFilter('TODOS');
     setTicketStateFilter('TODOS');
     setTicketPriorityFilter('TODAS');
@@ -4320,7 +3180,7 @@ export default function App() {
     setTicketPriorityFilter('TODAS');
     setTicketAssignmentFilter('TODOS');
     setTicketSlaFilter('TODOS');
-    setSearchTerm('');
+    clearSearchTerm();
 
     if (filters.estado) setTicketStateFilter(filters.estado);
     if (filters.prioridad) setTicketPriorityFilter(filters.prioridad);
@@ -4389,7 +3249,7 @@ export default function App() {
     writeStoredReportFilterPresets(sessionUser, next);
     setReportPresetName('');
     showToast(existing ? 'Preset actualizado' : 'Preset guardado', 'success');
-  }, [reportCurrentFilterSnapshot, reportFilterPresets, reportPresetName, sessionUser, showToast]);
+  }, [reportCurrentFilterSnapshot, reportFilterPresets, reportPresetName, sessionUser, setReportFilterPresets, setReportPresetName, showToast]);
   const deleteReportFilterPreset = useCallback((preset: ReportFilterPreset) => {
     if (!sessionUser) return;
     const confirmed = window.confirm(`Eliminar preset "${preset.name}"?`);
@@ -4400,7 +3260,7 @@ export default function App() {
       return next;
     });
     showToast('Preset eliminado', 'success');
-  }, [sessionUser, showToast]);
+  }, [sessionUser, setReportFilterPresets, showToast]);
   const buildReportPresentationHtml = (): string => {
     const periodLabel = `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}`;
     const branchLabel = reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter);
@@ -5135,63 +3995,31 @@ export default function App() {
     return content;
   };
 
+
   if (!sessionUser) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-          className="fixed top-4 right-4 z-20 w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 flex items-center justify-center transition-colors"
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <div className="bg-white w-full max-w-md rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 p-8 sm:p-12 text-center">
-          <div className="flex justify-center mb-6"><LogoGigantes className="w-20 h-20 sm:w-24 sm:h-24 animate-bounce" /></div>
-          <h1 className="text-2xl sm:text-3xl font-black text-[#F58220]">LOS GIGANTES</h1>
-          <p className="text-[#8CC63F] font-bold text-sm tracking-[0.2em] uppercase mb-8">IT Management System</p>
-
-          <form onSubmit={handleLogin} className="space-y-4 text-left">
-            <div>
-              <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Usuario</label>
-              <input
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
-                value={loginForm.username}
-                onChange={(e) => setLoginForm((prev) => ({ ...prev, username: e.target.value }))}
-                placeholder="admin"
-                autoComplete="username"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Password</label>
-              <input
-                type="password"
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
-                placeholder="Ingresa tu password"
-                autoComplete="current-password"
-              />
-            </div>
-            <button type="submit" disabled={loginLoading} className="w-full bg-[#F58220] text-white font-black py-4 rounded-3xl shadow-xl hover:scale-[1.02] transition-all uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
-              <User size={18} /> {loginLoading ? 'Entrando...' : 'Iniciar Sesión'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-left text-[10px] text-slate-400 font-black uppercase tracking-wider">
-            <p>Solicita tus credenciales al administrador del sistema.</p>
-            <p className="mt-2 text-[9px] font-semibold normal-case tracking-normal text-slate-300">{AUTHOR_SIGNATURE}</p>
-          </div>
-        </div>
-        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      </div>
+      <Routes>
+        <Route path="*" element={
+          <LoginView
+            theme={theme}
+            toggleTheme={toggleTheme}
+            handleLogin={handleLogin}
+            loginLoading={loginLoading}
+            loginForm={loginForm}
+            setLoginForm={setLoginForm}
+            AUTHOR_SIGNATURE={AUTHOR_SIGNATURE}
+            toast={toast}
+            setToast={setToast}
+          />
+        } />
+      </Routes>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-700 overflow-x-hidden">
       <AppSidebar
-        view={view}
         navItems={visibleNavItems}
         sidebarOpen={sidebarOpen}
         onCloseSidebar={() => setSidebarOpen(false)}
@@ -5433,8 +4261,55 @@ export default function App() {
                       updateInventorySort={updateInventorySort}
                       getInventorySortIndicator={getInventorySortIndicator}
                       sortedFilteredActivos={sortedFilteredActivos}
+                      selectedAsset={selectedAsset}
                       setSelectedAsset={setSelectedAsset}
+                      selectedAssetQrLoading={selectedAssetQrLoading}
+                      selectedAssetQrMode={selectedAssetQrMode}
+                      selectedAssetQrIssuedAt={selectedAssetQrIssuedAt}
+                      effectiveSelectedAssetQrValue={effectiveSelectedAssetQrValue}
+                      LazyQRCodeCanvas={LazyQRCodeCanvas}
+                      buildAssetQrCanvasId={buildAssetQrCanvasId}
+                      formatDateTime={formatDateTime}
+                      openAssetEditModal={openAssetEditModal}
+                      descargarQrActivoSeleccionado={descargarQrActivoSeleccionado}
+                      imprimirEtiquetaQrActivoSeleccionado={imprimirEtiquetaQrActivoSeleccionado}
                       eliminarActivo={eliminarActivo}
+                      showQrScanner={showQrScanner}
+                      qrScannerVideoRef={qrScannerVideoRef}
+                      isQrScannerActive={isQrScannerActive}
+                      isQrCameraSupported={isQrCameraSupported}
+                      qrScannerStatus={qrScannerStatus}
+                      qrManualInput={qrManualInput}
+                      isResolvingQr={isResolvingQr}
+                      resolveQrFromManualInput={resolveQrFromManualInput}
+                      importPreviewOpen={!!importDraft}
+                      importPreviewFileName={importDraft?.fileName || ''}
+                      importPreviewSummary={importDraft?.preview || {
+                        totalRows: 0,
+                        created: 0,
+                        updated: 0,
+                        skipped: 0,
+                        invalid: 0,
+                      }}
+                      importPreviewLocalInvalidCount={importDraft?.localInvalidDetails?.length || 0}
+                      importIssueRows={importIssueRows}
+                      isApplyingImport={isApplyingImport}
+                      closeImportPreview={() => setImportDraft(null)}
+                      exportImportIssuesCsv={exportImportIssuesCsv}
+                      applyImportDraft={() => {
+                        void applyImportDraft();
+                      }}
+                      assetFormModal={{
+                        isOpen: isAssetModalOpen,
+                        title: getModalTitle('activo', editingAssetId, editingInsumoId),
+                        submitLabel: getModalSubmitLabel('activo', isModalSaving, editingAssetId, editingInsumoId),
+                        formData,
+                        isSaving: isModalSaving,
+                        canSubmit: canEdit && !isModalSaving,
+                        onClose: closeModal,
+                        onSubmit: handleSave,
+                        onChange: updateFormData,
+                      }}
                     />,
                   ),
                 )}
@@ -5463,11 +4338,27 @@ export default function App() {
                       openInsumoEditModal={openInsumoEditModal}
                       eliminarInsumo={eliminarInsumo}
                       formatDateTime={formatDateTime}
+                      selectedSupplyHistoryItem={selectedSupplyHistoryItem}
                       setSelectedSupplyHistoryItem={setSelectedSupplyHistoryItem}
+                      selectedSupplyMovements={selectedSupplyMovements}
                       ajustarStock={ajustarStock}
                       supplyStockDrafts={supplyStockDrafts}
                       setSupplyStockDrafts={setSupplyStockDrafts}
                       confirmarStockManual={confirmarStockManual}
+                      insumoFormModal={{
+                        isOpen: isSupplyModalOpen,
+                        title: getModalTitle('insumo', editingAssetId, editingInsumoId),
+                        submitLabel: getModalSubmitLabel('insumo', isModalSaving, editingAssetId, editingInsumoId),
+                        formData,
+                        isSaving: isModalSaving,
+                        canSubmit: canSubmitInsumo,
+                        insumoTouched,
+                        validationErrors: insumoFormValidation.errors,
+                        onClose: closeModal,
+                        onSubmit: handleSave,
+                        onChange: updateFormData,
+                        onTouchField: markInsumoTouched,
+                      }}
                     />,
                   ),
                 )}
@@ -5533,8 +4424,12 @@ export default function App() {
                       sessionUser={sessionUser}
                       userActionLoadingId={userActionLoadingId}
                       handleEditUser={handleEditUser}
-                      handleToggleUserActive={handleToggleUserActive}
-                      handleDeleteUser={handleDeleteUser}
+                      handleToggleUserActive={async (user) => {
+                        await handleToggleUserActive(user);
+                      }}
+                      handleDeleteUser={async (user) => {
+                        await handleDeleteUser(user);
+                      }}
                     />,
                   ),
                   { requiresUserManagement: true },
@@ -5584,7 +4479,7 @@ export default function App() {
                       setTicketPriorityFilter('TODAS');
                       setTicketAssignmentFilter('TODOS');
                       setTicketSlaFilter('TODOS');
-                      setSearchTerm('');
+                      clearSearchTerm();
                     }}
                     onStatusChange={(ticketId, estado) => {
                       void actualizarTicket(ticketId, { estado: estado as TicketEstado });
@@ -5625,6 +4520,22 @@ export default function App() {
                     onSaveComment={(ticketId) => {
                       void agregarComentarioTicket(ticketId);
                     }}
+                    ticketFormModal={{
+                      isOpen: isTicketModalOpen,
+                      title: getModalTitle('ticket', editingAssetId, editingInsumoId),
+                      submitLabel: getModalSubmitLabel('ticket', isModalSaving, editingAssetId, editingInsumoId),
+                      formData,
+                      isSaving: isModalSaving,
+                      canSubmit: canCreateTickets && !isModalSaving,
+                      activeTicketBranches,
+                      ticketAssetOptions,
+                      selectedIssueArea,
+                      issueOptionsForSelectedArea,
+                      sessionUser,
+                      onClose: closeModal,
+                      onSubmit: handleSave,
+                      onChange: updateFormData,
+                    }}
                   />
                 )}
               />
@@ -5634,554 +4545,8 @@ export default function App() {
         </div>
       </main>
 
-      {/* MODAL UNIVERSAL */}
-      {currentModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className={`bg-white w-full ${modalWidthClass} rounded-[3rem] shadow-2xl overflow-hidden`}>
-            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/30 font-black uppercase text-sm">
-              {modalTitle}
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={isModalSaving}
-                className="text-slate-300 hover:text-red-500 disabled:opacity-40"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <form onSubmit={handleSave} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
-              {isAssetModal && (
-                <>
-                  <div className="space-y-6">
-                    <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Datos Base</p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Requeridos: Tag, Tipo, Marca, Serial, Ubicacion</p>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input
-                          required
-                          placeholder="TAG *"
-                          value={formData.tag || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ tag: e.target.value })}
-                        />
-                        <input
-                          placeholder="ID INTERNO"
-                          value={formData.idInterno || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ idInterno: e.target.value })}
-                        />
-                        <input
-                          required
-                          placeholder="SERIAL *"
-                          value={formData.serial || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ serial: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input
-                          required
-                          placeholder="TIPO *"
-                          value={formData.tipo || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ tipo: e.target.value })}
-                        />
-                        <input
-                          required
-                          placeholder="MARCA *"
-                          value={formData.marca || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ marca: e.target.value })}
-                        />
-                        <input
-                          placeholder="MODELO"
-                          value={formData.modelo || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ modelo: e.target.value })}
-                        />
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicacion y Estado</p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input
-                          required
-                          placeholder="UBICACION *"
-                          value={formData.ubicacion || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ ubicacion: e.target.value })}
-                        />
-                        <input
-                          placeholder="DEPARTAMENTO"
-                          value={formData.departamento || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ departamento: e.target.value })}
-                        />
-                        <input
-                          placeholder="RESPONSABLE"
-                          value={formData.responsable || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ responsable: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input
-                          type="date"
-                          value={formData.fechaCompra || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ fechaCompra: e.target.value })}
-                        />
-                        <select
-                          value={formData.estado || 'Operativo'}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ estado: e.target.value as EstadoActivo })}
-                        >
-                          <option value="Operativo">Operativo</option>
-                          <option value="Falla">Falla</option>
-                        </select>
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Red y Acceso</p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input
-                          placeholder="IP ADDRESS"
-                          value={formData.ipAddress || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ ipAddress: e.target.value })}
-                        />
-                        <input
-                          placeholder="MAC ADDRESS"
-                          value={formData.macAddress || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ macAddress: e.target.value })}
-                        />
-                        <input
-                          placeholder="ANYDESK"
-                          value={formData.anydesk || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ anydesk: e.target.value })}
-                        />
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hardware y Ciclo de Vida</p>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input
-                          placeholder="CPU"
-                          value={formData.cpu || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ cpu: e.target.value })}
-                        />
-                        <input
-                          placeholder="RAM"
-                          value={formData.ram || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ ram: e.target.value })}
-                        />
-                        <input
-                          placeholder="TIPO RAM"
-                          value={formData.ramTipo || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ ramTipo: e.target.value })}
-                        />
-                        <input
-                          placeholder="DISCO"
-                          value={formData.disco || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ disco: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input
-                          placeholder="TIPO DISCO"
-                          value={formData.tipoDisco || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ tipoDisco: e.target.value })}
-                        />
-                        <input
-                          placeholder="ANOS DE VIDA"
-                          value={formData.aniosVida || ''}
-                          className="p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                          onChange={(e) => updateFormData({ aniosVida: e.target.value })}
-                        />
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
-                      <textarea
-                        placeholder="COMENTARIOS"
-                        value={formData.comentarios || ''}
-                        className="w-full p-4 bg-white glass-input  rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
-                        onChange={(e) => updateFormData({ comentarios: e.target.value })}
-                      />
-                    </section>
-                  </div>
-                </>
-              )}
-              {isSupplyModal && (
-                <>
-                  <div className="space-y-1">
-                    <input
-                      required
-                      autoFocus
-                      placeholder="NOMBRE"
-                      value={formData.nombre || ''}
-                      onBlur={() => markInsumoTouched('nombre')}
-                      onChange={(e) => updateFormData({ nombre: e.target.value })}
-                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.nombre && insumoFormValidation.errors.nombre
-                          ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                          : 'bg-slate-50 border border-slate-100'
-                        }`}
-                    />
-                    {insumoTouched.nombre && insumoFormValidation.errors.nombre && (
-                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                        {insumoFormValidation.errors.nombre}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <input
-                      required
-                      placeholder="UNIDAD"
-                      value={formData.unidad || ''}
-                      onBlur={() => markInsumoTouched('unidad')}
-                      onChange={(e) => updateFormData({ unidad: e.target.value })}
-                      list="supply-unit-options"
-                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.unidad && insumoFormValidation.errors.unidad
-                          ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                          : 'bg-slate-50 border border-slate-100'
-                        }`}
-                    />
-                    <datalist id="supply-unit-options">
-                      {SUPPLY_UNIT_OPTIONS.map((unidad) => (
-                        <option key={unidad} value={unidad} />
-                      ))}
-                    </datalist>
-                    {insumoTouched.unidad && insumoFormValidation.errors.unidad && (
-                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                        {insumoFormValidation.errors.unidad}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <input
-                        required
-                        type="number"
-                        min={0}
-                        step={1}
-                        inputMode="numeric"
-                        placeholder="STOCK"
-                        value={String(formData.stock ?? '')}
-                        onBlur={() => markInsumoTouched('stock')}
-                        onKeyDown={preventInvalidIntegerInputKeys}
-                        onChange={(e) => updateFormData({ stock: digitsOnly(e.target.value) })}
-                        className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${insumoTouched.stock && insumoFormValidation.errors.stock
-                            ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                            : 'bg-slate-50 border border-slate-100'
-                          }`}
-                      />
-                      {insumoTouched.stock && insumoFormValidation.errors.stock && (
-                        <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                          {insumoFormValidation.errors.stock}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <input
-                        required
-                        type="number"
-                        min={0}
-                        step={1}
-                        inputMode="numeric"
-                        placeholder="MÍNIMO"
-                        value={String(formData.min ?? '')}
-                        onBlur={() => markInsumoTouched('min')}
-                        onKeyDown={preventInvalidIntegerInputKeys}
-                        onChange={(e) => updateFormData({ min: digitsOnly(e.target.value) })}
-                        className={`w-full p-5 rounded-2xl text-sm font-black outline-none ${insumoTouched.min && insumoFormValidation.errors.min
-                            ? 'bg-red-50/40 border border-red-200 text-red-700 placeholder:text-red-300'
-                            : 'bg-slate-50 border border-slate-100'
-                          }`}
-                      />
-                      {insumoTouched.min && insumoFormValidation.errors.min && (
-                        <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                          {insumoFormValidation.errors.min}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <select
-                      required
-                      value={formData.categoria || ''}
-                      onBlur={() => markInsumoTouched('categoria')}
-                      onChange={(e) => updateFormData({ categoria: e.target.value.toUpperCase() })}
-                      className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${insumoTouched.categoria && insumoFormValidation.errors.categoria
-                          ? 'bg-red-50/40 border border-red-200 text-red-700'
-                          : 'bg-slate-50 border border-slate-100 text-slate-700'
-                        }`}
-                    >
-                      <option value="" disabled>Selecciona categoría...</option>
-                      {supplyCategoryOptions.map((categoria) => (
-                        <option key={categoria} value={categoria}>{categoria}</option>
-                      ))}
-                    </select>
-                    {insumoTouched.categoria && insumoFormValidation.errors.categoria && (
-                      <p className="px-1 text-[10px] font-black uppercase tracking-wider text-red-500">
-                        {insumoFormValidation.errors.categoria}
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
-              {isTicketModal && (
-                <>
-                  <select
-                    required
-                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                    value={formData.sucursal || ''}
-                    onChange={e => updateFormData({ sucursal: e.target.value.toUpperCase() })}
-                  >
-                    {activeTicketBranches.length === 0 ? (
-                      <option value="">Sin sucursales configuradas</option>
-                    ) : (
-                      activeTicketBranches.map((branch) => (
-                        <option key={branch.code} value={branch.code}>{branch.code} - {branch.name}</option>
-                      ))
-                    )}
-                  </select>
-                  <select
-                    required
-                    disabled={!formData.sucursal || ticketAssetOptions.length === 0}
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
-                    value={formData.activoTag || ''}
-                    onChange={e => updateFormData({ activoTag: e.target.value.toUpperCase() })}
-                  >
-                    <option value="">
-                      {!formData.sucursal
-                        ? 'Primero selecciona sucursal...'
-                        : ticketAssetOptions.length === 0
-                          ? 'Sin activos registrados en esta sucursal'
-                          : 'Selecciona TAG equipo...'}
-                    </option>
-                    {ticketAssetOptions.map((assetOption) => (
-                      <option key={assetOption.tag} value={assetOption.tag}>
-                        {assetOption.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-400 font-black uppercase">
-                    Activos en sucursal seleccionada: {ticketAssetOptions.length}
-                  </p>
-                  <select
-                    required
-                    value={formData.areaAfectada || ''}
-                    onChange={e => updateFormData({ areaAfectada: e.target.value, fallaComun: '' })}
-                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                  >
-                    <option value="">Área afectada...</option>
-                    {TICKET_AREA_OPTIONS.map((area) => (
-                      <option key={`afe-${area}`} value={area}>{area}</option>
-                    ))}
-                  </select>
-                  <select
-                    required
-                    value={formData.atencionTipo || ''}
-                    onChange={(e) => {
-                      const value = normalizeTicketAttentionType(e.target.value);
-                      updateFormData({ atencionTipo: value || undefined });
-                    }}
-                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-                  >
-                    <option value="">Tipo de atención...</option>
-                    {TICKET_ATTENTION_TYPES.map((type) => (
-                      <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    required
-                    placeholder="DESCRIPCIÓN DE LA FALLA"
-                    value={formData.descripcion || ''}
-                    className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
-                    onChange={e => updateFormData({ descripcion: e.target.value })}
-                  />
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Falla común por área
-                    </p>
-                    <select
-                      value={formData.fallaComun || ''}
-                      disabled={!selectedIssueArea || issueOptionsForSelectedArea.length === 0}
-                      onChange={(e) =>
-                        updateFormData({
-                          fallaComun: e.target.value,
-                          descripcion: e.target.value,
-                        })
-                      }
-                      className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
-                    >
-                      <option value="">
-                        {!selectedIssueArea
-                          ? 'Primero selecciona área afectada'
-                          : issueOptionsForSelectedArea.length === 0
-                            ? 'Sin fallas configuradas para esta área'
-                            : 'Selecciona una falla común...'}
-                      </option>
-                      {issueOptionsForSelectedArea.map((issue) => (
-                        <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <select className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100" value={formData.prioridad || 'MEDIA'} onChange={e => updateFormData({ prioridad: e.target.value as PrioridadTicket })}>
-                    <option value="MEDIA">Media</option>
-                    <option value="ALTA">Alta</option>
-                    <option value="CRITICA">Crítica</option>
-                  </select>
-                  {canEdit ? (
-                    <select className="w-full p-5 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100" value={formData.asignadoA || ''} onChange={e => updateFormData({ asignadoA: e.target.value })}>
-                      <option value="">Asignar técnico...</option>
-                      {users
-                        .filter((u) => (u.rol === 'tecnico' || u.rol === 'admin') && u.activo !== false)
-                        .map((u) => (
-                          <option key={u.id} value={u.nombre}>{u.nombre}</option>
-                        ))}
-                    </select>
-                  ) : (
-                    <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
-                      El ticket se registrará sin asignación inicial.
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      disabled
-                      value={sessionUser?.nombre || ''}
-                      className="w-full p-4 bg-slate-100 glass-input  rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
-                    />
-                    <input
-                      disabled
-                      value={formatTicketBranchFromCatalog(formData.sucursal)}
-                      className="w-full p-4 bg-slate-100 glass-input  rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-black uppercase">
-                    Cargo solicitante: {formatCargoFromCatalog(sessionUser?.departamento)}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-black uppercase">
-                    SLA estimado: {SLA_POLICY[formData.prioridad || 'MEDIA']} horas
-                  </p>
-                </>
-              )}
-              {isSupplyModal ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    disabled={isModalSaving}
-                    className="w-full py-5 border border-slate-200 text-slate-600 rounded-2xl font-black uppercase hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    disabled={!canSubmitModal}
-                    type="submit"
-                    className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 flex justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Save size={18} /> {modalSubmitLabel}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  disabled={!canSubmitModal}
-                  type="submit"
-                  className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 mt-4 flex justify-center gap-2 disabled:opacity-50"
-                >
-                  <Save size={18} /> {modalSubmitLabel}
-                </button>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL HISTORIAL INSUMO */}
-      <SupplyHistoryModal
-        item={selectedSupplyHistoryItem}
-        movements={selectedSupplyMovements}
-        formatDateTime={formatDateTime}
-        onClose={() => setSelectedSupplyHistoryItem(null)}
-      />
-
-      {/* MODAL PREVIEW IMPORTACION */}
-      <ImportPreviewModal
-        open={!!importDraft}
-        fileName={importDraft?.fileName || ''}
-        preview={importDraft?.preview || {
-          totalRows: 0,
-          created: 0,
-          updated: 0,
-          skipped: 0,
-          invalid: 0,
-        }}
-        localInvalidCount={importDraft?.localInvalidDetails?.length || 0}
-        issues={importIssueRows}
-        isApplying={isApplyingImport}
-        onClose={() => setImportDraft(null)}
-        onExportIssues={exportImportIssuesCsv}
-        onConfirm={() => {
-          void applyImportDraft();
-        }}
-      />
-
-      {/* MODAL ESCANER QR */}
-      <QrScannerModal
-        open={showQrScanner}
-        videoRef={qrScannerVideoRef}
-        isScannerActive={isQrScannerActive}
-        isCameraSupported={isQrCameraSupported}
-        scannerStatus={qrScannerStatus}
-        manualInput={qrManualInput}
-        isResolving={isResolvingQr}
-        onClose={() => setShowQrScanner(false)}
-        onManualInputChange={setQrManualInput}
-        onResolve={resolveQrFromManualInput}
-        onClear={() => setQrManualInput('')}
-      />
-
-      {/* MODAL DETALLE ACTIVO */}
-      <AssetDetailModal
-        asset={selectedAsset}
-        canEdit={canEdit}
-        selectedAssetQrLoading={selectedAssetQrLoading}
-        selectedAssetQrMode={selectedAssetQrMode}
-        selectedAssetQrIssuedAt={selectedAssetQrIssuedAt}
-        effectiveSelectedAssetQrValue={effectiveSelectedAssetQrValue}
-        LazyQRCodeCanvas={LazyQRCodeCanvas}
-        buildAssetQrCanvasId={buildAssetQrCanvasId}
-        formatDateTime={formatDateTime}
-        onClose={() => setSelectedAsset(null)}
-        onEdit={openAssetEditModal}
-        onDownloadQr={descargarQrActivoSeleccionado}
-        onPrintQr={imprimirEtiquetaQrActivoSeleccionado}
-        onDeleteAsset={eliminarActivo}
-      />
-
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={clearToast} />}
 
     </div>
   );
 }
-
-
-
-
-
-

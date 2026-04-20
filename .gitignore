@@ -51,6 +51,8 @@ server/data/backups/
 /fix_di.cjs
 /migrate_app_routing.cjs
 /refactor-auth.cjs
+/src/*.cjs
+/src/*.txt
 /src/extractAudit.cjs
 /src/extractDashboard.cjs
 /src/audit_block.txt

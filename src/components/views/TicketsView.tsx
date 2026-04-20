@@ -1,52 +1,42 @@
+import React from 'react';
 import { Ticket, Trash2 } from 'lucide-react';
+import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
+import type {
+  CatalogBranch,
+  FormDataState,
+  TicketAttentionType,
+  TicketAttachment,
+  TicketEstado,
+  TicketItem,
+  UserItem,
+  UserSession,
+} from '../../types/app';
 
 type TicketLifecycleFilter = 'TODOS' | 'ABIERTOS' | 'CERRADOS';
 type TicketAssignmentFilter = 'TODOS' | 'ASIGNADOS' | 'SIN_ASIGNAR';
 type TicketSlaFilter = 'TODOS' | 'VENCIDO';
 type TicketFocusAction = 'ABIERTOS' | 'CRITICA' | 'SIN_ASIGNAR' | 'SLA' | 'EN_PROCESO';
-type PrioridadTicket = 'MEDIA' | 'ALTA' | 'CRITICA';
-type TicketEstado = 'Abierto' | 'En Proceso' | 'En Espera' | 'Resuelto' | 'Cerrado';
-type TicketAttentionType = 'PRESENCIAL' | 'REMOTO';
+type TicketHistoryEntry = NonNullable<TicketItem['historial']>[number];
+type TicketAttachmentRow = TicketAttachment;
+type TicketRow = TicketItem;
+type TechnicianOption = Pick<UserItem, 'id' | 'nombre' | 'rol' | 'activo'>;
 
-interface TicketHistoryEntry {
-  fecha: string;
-  usuario: string;
-  accion: string;
-  estado: TicketEstado;
-  comentario?: string;
-}
-
-interface TicketAttachmentRow {
-  id: number;
-  fileName: string;
-  size?: number;
-  uploadedAt?: string;
-}
-
-interface TicketRow {
-  id: number;
-  activoTag: string;
-  descripcion: string;
-  prioridad: PrioridadTicket;
-  estado: TicketEstado;
-  atencionTipo?: TicketAttentionType;
-  fecha: string;
-  fechaCreacion?: string;
-  fechaLimite?: string;
-  asignadoA?: string;
-  solicitadoPor?: string;
-  departamento?: string;
-  sucursal?: string;
-  historial?: TicketHistoryEntry[];
-  attachments?: TicketAttachmentRow[];
-}
-
-interface TechnicianOption {
-  id: number;
-  nombre: string;
-  rol: string;
-  activo?: boolean;
+interface TicketFormModalConfig {
+  isOpen: boolean;
+  title: string;
+  submitLabel: string;
+  formData: FormDataState;
+  isSaving: boolean;
+  canSubmit: boolean;
+  activeTicketBranches: CatalogBranch[];
+  ticketAssetOptions: Array<{ tag: string; label: string }>;
+  selectedIssueArea: string;
+  issueOptionsForSelectedArea: string[];
+  sessionUser: UserSession | null;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onChange: (updates: Partial<FormDataState>) => void;
 }
 
 interface TicketsViewProps {
@@ -66,14 +56,14 @@ interface TicketsViewProps {
   filteredTickets: TicketRow[];
   technicians: TechnicianOption[];
   ticketStates: string[];
-  ticketAttentionTypes: string[];
+  ticketAttentionTypes: TicketAttentionType[];
   ticketAttachmentLoadingId: number | null;
   ticketCommentDrafts: Record<number, string>;
   formatTicketBranchFromCatalog: (value?: string) => string;
   formatCargoFromCatalog: (value?: string) => string;
   formatDateTime: (value?: string) => string;
   formatBytes: (value?: number) => string;
-  normalizeTicketAttentionType: (value: unknown) => string | null;
+  normalizeTicketAttentionType: (value: unknown) => TicketAttentionType | null;
   formatTicketAttentionType: (value: unknown) => string;
   getSlaStatus: (ticket: TicketRow) => { label: string; className: string };
   canDeleteTicket: (ticket: TicketRow) => boolean;
@@ -85,8 +75,8 @@ interface TicketsViewProps {
   onTicketAssignmentFilterChange: (value: TicketAssignmentFilter) => void;
   onTicketSlaFilterChange: (value: TicketSlaFilter) => void;
   onResetFilters: () => void;
-  onStatusChange: (ticketId: number, estado: string) => void;
-  onAttentionChange: (ticketId: number, atencionTipo: string) => void;
+  onStatusChange: (ticketId: number, estado: TicketEstado) => void;
+  onAttentionChange: (ticketId: number, atencionTipo: TicketAttentionType) => void;
   onAssigneeChange: (ticketId: number, asignadoA: string) => void;
   onViewAsset: (tag: string) => void;
   onResolveTicket: (ticketId: number) => void;
@@ -96,6 +86,7 @@ interface TicketsViewProps {
   onDeleteAttachment: (ticketId: number, attachment: TicketAttachmentRow) => void;
   onCommentDraftChange: (ticketId: number, value: string) => void;
   onSaveComment: (ticketId: number) => void;
+  ticketFormModal: TicketFormModalConfig;
 }
 
 export function TicketsView({
@@ -145,101 +136,114 @@ export function TicketsView({
   onDeleteAttachment,
   onCommentDraftChange,
   onSaveComment,
+  ticketFormModal,
 }: TicketsViewProps) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operación y Seguimiento</p>
-          <h3 className="font-black text-slate-800 uppercase text-xl">Tickets IT</h3>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operación y seguimiento</p>
+          <h3 className="text-xl font-black uppercase text-slate-800">Tickets IT</h3>
         </div>
         <button
           disabled={!canCreateTickets}
           onClick={onOpenTicketModal}
-          className="w-full sm:w-auto bg-slate-800 text-white px-8 py-4 rounded-3xl font-black text-xs uppercase disabled:opacity-50"
+          className="w-full rounded-3xl bg-slate-800 px-8 py-4 text-xs font-black uppercase text-white disabled:opacity-50 sm:w-auto"
         >
-          Nuevo Ticket
+          Nuevo ticket
         </button>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <button onClick={() => onApplyTicketFocus('ABIERTOS')} className="text-left bg-white border border-slate-100 rounded-2xl px-5 py-4 shadow-sm hover:border-slate-200">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <button
+          onClick={() => onApplyTicketFocus('ABIERTOS')}
+          className="rounded-2xl border border-slate-100 bg-white px-5 py-4 text-left shadow-sm hover:border-slate-200"
+        >
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
-          <p className="text-2xl sm:text-3xl font-black text-[#F58220]">{openTicketsCount}</p>
+          <p className="text-2xl font-black text-[#F58220] sm:text-3xl">{openTicketsCount}</p>
         </button>
-        <button onClick={() => onApplyTicketFocus('CRITICA')} className="text-left bg-amber-50 border border-amber-100 rounded-2xl px-5 py-4 shadow-sm hover:border-amber-200">
+        <button
+          onClick={() => onApplyTicketFocus('CRITICA')}
+          className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-left shadow-sm hover:border-amber-200"
+        >
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Críticos</p>
-          <p className="text-2xl sm:text-3xl font-black text-amber-700">{criticalTicketsCount}</p>
+          <p className="text-2xl font-black text-amber-700 sm:text-3xl">{criticalTicketsCount}</p>
         </button>
-        <button onClick={() => onApplyTicketFocus('SIN_ASIGNAR')} className="text-left bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 shadow-sm hover:border-indigo-200">
-          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Sin Asignar</p>
-          <p className="text-2xl sm:text-3xl font-black text-indigo-700">{unassignedTicketsCount}</p>
+        <button
+          onClick={() => onApplyTicketFocus('SIN_ASIGNAR')}
+          className="rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-left shadow-sm hover:border-indigo-200"
+        >
+          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Sin asignar</p>
+          <p className="text-2xl font-black text-indigo-700 sm:text-3xl">{unassignedTicketsCount}</p>
         </button>
-        <button onClick={() => onApplyTicketFocus('SLA')} className="text-left bg-red-50 border border-red-100 rounded-2xl px-5 py-4 shadow-sm hover:border-red-200">
-          <p className="text-[10px] font-black uppercase tracking-widest text-red-500">SLA Vencido</p>
-          <p className="text-2xl sm:text-3xl font-black text-red-600">{slaExpiredCount}</p>
+        <button
+          onClick={() => onApplyTicketFocus('SLA')}
+          className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-left shadow-sm hover:border-red-200"
+        >
+          <p className="text-[10px] font-black uppercase tracking-widest text-red-500">SLA vencido</p>
+          <p className="text-2xl font-black text-red-600 sm:text-3xl">{slaExpiredCount}</p>
         </button>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2rem] p-4 sm:p-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
+      <div className="rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-7">
           <select
             value={ticketLifecycleFilter}
-            onChange={(e) => onTicketLifecycleFilterChange(e.target.value as TicketLifecycleFilter)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            onChange={(event) => onTicketLifecycleFilterChange(event.target.value as TicketLifecycleFilter)}
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODOS">Ciclo: Todos</option>
-            <option value="ABIERTOS">Solo Abiertos</option>
-            <option value="CERRADOS">Solo Cerrados</option>
+            <option value="TODOS">Ciclo: todos</option>
+            <option value="ABIERTOS">Solo abiertos</option>
+            <option value="CERRADOS">Solo cerrados</option>
           </select>
           <select
             value={ticketStateFilter}
-            onChange={(e) => onTicketStateFilterChange(e.target.value)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            onChange={(event) => onTicketStateFilterChange(event.target.value)}
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODOS">Estado: Todos</option>
+            <option value="TODOS">Estado: todos</option>
             {ticketStates.map((state) => (
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
           <select
             value={ticketPriorityFilter}
-            onChange={(e) => onTicketPriorityFilterChange(e.target.value)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            onChange={(event) => onTicketPriorityFilterChange(event.target.value)}
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODAS">Prioridad: Todas</option>
+            <option value="TODAS">Prioridad: todas</option>
             <option value="MEDIA">Media</option>
             <option value="ALTA">Alta</option>
             <option value="CRITICA">Crítica</option>
           </select>
           <select
             value={ticketAssignmentFilter}
-            onChange={(e) => onTicketAssignmentFilterChange(e.target.value as TicketAssignmentFilter)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            onChange={(event) => onTicketAssignmentFilterChange(event.target.value as TicketAssignmentFilter)}
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODOS">Asignación: Todos</option>
-            <option value="ASIGNADOS">Solo Asignados</option>
-            <option value="SIN_ASIGNAR">Sin Asignar</option>
+            <option value="TODOS">Asignación: todos</option>
+            <option value="ASIGNADOS">Solo asignados</option>
+            <option value="SIN_ASIGNAR">Sin asignar</option>
           </select>
           <select
             value={ticketSlaFilter}
-            onChange={(e) => onTicketSlaFilterChange(e.target.value as TicketSlaFilter)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            onChange={(event) => onTicketSlaFilterChange(event.target.value as TicketSlaFilter)}
+            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODOS">SLA: Todos</option>
-            <option value="VENCIDO">Solo Vencido</option>
+            <option value="TODOS">SLA: todos</option>
+            <option value="VENCIDO">Solo vencido</option>
           </select>
           <button
             onClick={() => onApplyTicketFocus('EN_PROCESO')}
-            className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
           >
-            Ver En Proceso
+            Ver en proceso
           </button>
           <button
             onClick={onResetFilters}
-            className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
           >
-            Limpiar Filtros
+            Limpiar filtros
           </button>
         </div>
       </div>
@@ -248,49 +252,56 @@ export function TicketsView({
         const latestHistory = Array.isArray(ticket.historial) && ticket.historial.length > 0 ? ticket.historial[0] : null;
         const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
         const historyWithComment = (ticket.historial || [])
-          .filter((entry) => String(entry.comentario || '').trim().length > 0)
+          .filter((entry): entry is TicketHistoryEntry => String(entry.comentario || '').trim().length > 0)
           .slice(0, 4);
 
         return (
-          <div key={ticket.id} className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
-            <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-6">
-              <div className="flex items-start gap-4 sm:gap-6 min-w-0">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-50 rounded-3xl flex items-center justify-center text-[#F58220] shrink-0"><Ticket size={28} /></div>
+          <div
+            key={ticket.id}
+            className="space-y-6 rounded-[2rem] border border-slate-100 bg-white p-4 shadow-xl sm:rounded-[2.5rem] sm:p-6 lg:p-8"
+          >
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex min-w-0 items-start gap-4 sm:gap-6">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-orange-50 text-[#F58220] sm:h-16 sm:w-16">
+                  <Ticket size={28} />
+                </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-3 mb-1 flex-wrap">
+                  <div className="mb-1 flex flex-wrap items-center gap-3">
                     <Badge variant={ticket.prioridad}>{ticket.prioridad}</Badge>
                     <Badge variant={ticket.estado}>{ticket.estado}</Badge>
                     <Badge variant={normalizeTicketAttentionType(ticket.atencionTipo) || 'sin definir'}>
                       {formatTicketAttentionType(ticket.atencionTipo)}
                     </Badge>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getSlaStatus(ticket).className}`}>
+                    <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${getSlaStatus(ticket).className}`}>
                       {getSlaStatus(ticket).label}
                     </span>
-                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">#{ticket.id}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">#{ticket.id}</span>
                   </div>
-                  <h4 className="font-black text-slate-800 uppercase text-sm sm:text-md break-words">{ticket.activoTag} | {ticket.descripcion}</h4>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mt-2">
+                  <h4 className="break-words text-sm font-black uppercase text-slate-800 sm:text-md">
+                    {ticket.activoTag} | {ticket.descripcion}
+                  </h4>
+                  <p className="mt-2 text-[10px] font-black uppercase text-slate-400">
                     Asignado: {ticket.asignadoA || 'Sin asignar'} | Sucursal: {formatTicketBranchFromCatalog(ticket.sucursal)}
                   </p>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mt-1">
-                    Creado: {formatDateTime(ticket.fechaCreacion || ticket.fecha)} | Fecha limite: {formatDateTime(ticket.fechaLimite)}
+                  <p className="mt-1 text-[10px] font-black uppercase text-slate-400">
+                    Creado: {formatDateTime(ticket.fechaCreacion || ticket.fecha)} | Fecha límite: {formatDateTime(ticket.fechaLimite)}
                   </p>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mt-1">
+                  <p className="mt-1 text-[10px] font-black uppercase text-slate-400">
                     Solicitó: {ticket.solicitadoPor || 'N/D'} | Cargo: {formatCargoFromCatalog(ticket.departamento)}
                   </p>
                   {latestHistory?.comentario && (
-                    <p className="text-xs font-bold text-slate-500 mt-2 line-clamp-2">
-                      Ultimo comentario: {latestHistory.comentario}
+                    <p className="mt-2 line-clamp-2 text-xs font-bold text-slate-500">
+                      Último comentario: {latestHistory.comentario}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full xl:w-auto">
+              <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center xl:w-auto">
                 <select
                   disabled={!canEdit}
                   value={ticket.estado}
-                  onChange={(e) => onStatusChange(ticket.id, e.target.value)}
-                  className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  onChange={(event) => onStatusChange(ticket.id, event.target.value as TicketEstado)}
+                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
                 >
                   {ticketStates.map((state) => (
                     <option key={state} value={state}>{state}</option>
@@ -299,12 +310,12 @@ export function TicketsView({
                 <select
                   disabled={!canEdit}
                   value={normalizeTicketAttentionType(ticket.atencionTipo) || ''}
-                  onChange={(e) => {
-                    const value = normalizeTicketAttentionType(e.target.value);
+                  onChange={(event) => {
+                    const value = normalizeTicketAttentionType(event.target.value);
                     if (!value) return;
                     onAttentionChange(ticket.id, value);
                   }}
-                  className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
                 >
                   <option value="">Sin definir</option>
                   {ticketAttentionTypes.map((type) => (
@@ -314,8 +325,8 @@ export function TicketsView({
                 <select
                   disabled={!canEdit}
                   value={ticket.asignadoA || ''}
-                  onChange={(e) => onAssigneeChange(ticket.id, e.target.value)}
-                  className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  onChange={(event) => onAssigneeChange(ticket.id, event.target.value)}
+                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
                 >
                   <option value="">Sin asignar</option>
                   {technicians
@@ -326,14 +337,14 @@ export function TicketsView({
                 </select>
                 <button
                   onClick={() => onViewAsset(ticket.activoTag)}
-                  className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
                 >
-                  Ver Activo
+                  Ver activo
                 </button>
                 <button
                   disabled={!canEdit || ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado'}
                   onClick={() => onResolveTicket(ticket.id)}
-                  className="bg-[#8CC63F] text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase disabled:opacity-50"
+                  className="rounded-2xl bg-[#8CC63F] px-6 py-4 text-[10px] font-black uppercase text-white disabled:opacity-50"
                 >
                   Resolver
                 </button>
@@ -342,21 +353,22 @@ export function TicketsView({
                     type="button"
                     disabled={!canDeleteTicket(ticket)}
                     onClick={() => onDeleteTicket(ticket.id)}
-                    className="px-4 py-3 rounded-2xl border border-red-200 text-[10px] font-black uppercase text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 flex items-center justify-center gap-2"
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[10px] font-black uppercase text-red-600 hover:bg-red-100 disabled:opacity-40"
                   >
-                    <Trash2 size={14} /> Eliminar
+                    <Trash2 size={14} />
+                    Eliminar
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Adjuntos ({attachments.length})
                   </p>
-                  <label className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${canCreateTickets ? 'bg-white border-slate-200 text-slate-600 cursor-pointer hover:bg-slate-50' : 'bg-slate-100 border-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                  <label className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wider ${canCreateTickets ? 'cursor-pointer border-slate-200 bg-white text-slate-600 hover:bg-slate-50' : 'cursor-not-allowed border-slate-100 bg-slate-100 text-slate-400'}`}>
                     {ticketAttachmentLoadingId === ticket.id ? 'Subiendo...' : 'Adjuntar archivo'}
                     <input
                       type="file"
@@ -371,9 +383,12 @@ export function TicketsView({
                 </div>
                 <div className="space-y-2">
                   {attachments.map((attachment) => (
-                    <div key={`attachment-${ticket.id}-${attachment.id}`} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2">
+                    <div
+                      key={`attachment-${ticket.id}-${attachment.id}`}
+                      className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
                       <div className="min-w-0">
-                        <p className="text-xs font-black text-slate-700 truncate">{attachment.fileName}</p>
+                        <p className="truncate text-xs font-black text-slate-700">{attachment.fileName}</p>
                         <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                           {formatBytes(attachment.size)} | {formatDateTime(attachment.uploadedAt)}
                         </p>
@@ -382,7 +397,7 @@ export function TicketsView({
                         <button
                           type="button"
                           onClick={() => onDownloadAttachment(ticket.id, attachment)}
-                          className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50"
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50"
                         >
                           Descargar
                         </button>
@@ -390,7 +405,7 @@ export function TicketsView({
                           type="button"
                           disabled={!canEdit}
                           onClick={() => onDeleteAttachment(ticket.id, attachment)}
-                          className="px-2 py-1 rounded-lg border border-red-200 text-[10px] font-black uppercase text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40"
+                          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-black uppercase text-red-600 hover:bg-red-100 disabled:opacity-40"
                         >
                           Eliminar
                         </button>
@@ -405,9 +420,9 @@ export function TicketsView({
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     type="text"
                     value={ticketCommentDrafts[ticket.id] || ''}
@@ -420,13 +435,13 @@ export function TicketsView({
                       }
                     }}
                     placeholder="Agregar comentario..."
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-100 bg-white text-xs font-bold text-slate-600 outline-none disabled:opacity-50"
+                    className="flex-1 rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none disabled:opacity-50"
                   />
                   <button
                     type="button"
                     disabled={!canCreateComments}
                     onClick={() => onSaveComment(ticket.id)}
-                    className="w-full sm:w-auto px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Guardar
                   </button>
@@ -435,7 +450,7 @@ export function TicketsView({
                   {historyWithComment.map((entry, index) => (
                     <div key={`comment-${ticket.id}-${entry.fecha}-${index}`} className="rounded-xl border border-slate-100 bg-white px-3 py-2">
                       <p className="text-xs font-bold text-slate-700">{entry.comentario}</p>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-1">
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
                         {entry.usuario} | {formatDateTime(entry.fecha)} | {entry.accion}
                       </p>
                     </div>
@@ -453,14 +468,39 @@ export function TicketsView({
       })}
 
       {filteredTickets.length === 0 && (
-        <div className="glass-panel bg-white/90 border border-white/40 rounded-[2rem] sm:rounded-[2.5rem] p-12 sm:p-20 text-center flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
-          <div className="w-24 h-24 mb-6 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner">
-            <span className="text-4xl hover-lift inline-block">🚀</span>
+        <div className="glass-panel flex flex-col items-center justify-center rounded-[2rem] border border-white/40 bg-white/90 p-12 text-center opacity-70 transition-opacity hover:opacity-100 sm:rounded-[2.5rem] sm:p-20">
+          <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] border border-slate-100 bg-slate-50 shadow-inner">
+            <span className="inline-block text-4xl hover-lift">🚀</span>
           </div>
-          <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-xl sm:text-2xl">Buzón Limpio</p>
-          <p className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-slate-400 mt-2 max-w-sm">No hay tickets que requieran tu atención con los filtros actuales.</p>
+          <p className="font-['Outfit'] text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">Buzón limpio</p>
+          <p className="mt-2 max-w-sm text-[11px] font-black uppercase tracking-widest text-slate-400 sm:text-xs">
+            No hay tickets que requieran tu atención con los filtros actuales.
+          </p>
         </div>
       )}
+
+      <TicketFormModal
+        isOpen={ticketFormModal.isOpen}
+        title={ticketFormModal.title}
+        submitLabel={ticketFormModal.submitLabel}
+        formData={ticketFormModal.formData}
+        isSaving={ticketFormModal.isSaving}
+        canSubmit={ticketFormModal.canSubmit}
+        canEdit={canEdit}
+        activeTicketBranches={ticketFormModal.activeTicketBranches}
+        ticketAssetOptions={ticketFormModal.ticketAssetOptions}
+        selectedIssueArea={ticketFormModal.selectedIssueArea}
+        issueOptionsForSelectedArea={ticketFormModal.issueOptionsForSelectedArea}
+        users={technicians}
+        sessionUser={ticketFormModal.sessionUser}
+        onClose={ticketFormModal.onClose}
+        onSubmit={ticketFormModal.onSubmit}
+        onChange={ticketFormModal.onChange}
+        formatTicketBranchFromCatalog={formatTicketBranchFromCatalog}
+        formatCargoFromCatalog={formatCargoFromCatalog}
+        normalizeTicketAttentionType={normalizeTicketAttentionType}
+        formatTicketAttentionType={formatTicketAttentionType}
+      />
     </div>
   );
 }

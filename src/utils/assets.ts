@@ -18,6 +18,8 @@ import { normalizeForCompare } from './format';
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
+type NetworkSheetRow = unknown[];
+
 export function formatTicketBranch(value?: string, labels: Record<string, string> = TICKET_BRANCH_LABEL_BY_CODE): string {
   const code = String(value || '').trim().toUpperCase();
   if (!code) return 'Sin sucursal';
@@ -86,6 +88,63 @@ export function normalizeIpAddress(value: string): string {
     normalized.push(String(n));
   }
   return normalized.join('.');
+}
+
+export function parseNetworkSheetRows(rows: NetworkSheetRow[]): Array<{ macAddress: string; ipAddress: string; deviceLabel: string }> {
+  return rows
+    .map((row) => {
+      const rawMac = spreadsheetCellToText(row[0]);
+      const rawIp = spreadsheetCellToText(row[1]);
+      const rawLabel = spreadsheetCellToText(row[2]);
+      const macAddress = normalizeMacAddress(rawMac);
+      const ipAddress = normalizeIpAddress(rawIp);
+      const label = rawLabel.trim();
+      const isHeader =
+        normalizeForCompare(rawMac).includes('mac')
+        || normalizeForCompare(rawIp).includes('ip')
+        || normalizeForCompare(rawLabel).includes('nombre');
+
+      return { macAddress, ipAddress, deviceLabel: label, isHeader };
+    })
+    .filter((row) => !row.isHeader)
+    .filter((row) => !!row.macAddress || !!row.ipAddress || !!row.deviceLabel)
+    .map((row) => ({
+      macAddress: row.macAddress,
+      ipAddress: row.ipAddress,
+      deviceLabel: row.deviceLabel,
+    }));
+}
+
+export function enrichAssetsWithNetworkSheet(
+  parsedRows: Array<{ rowNumber: number; item: Omit<Activo, 'id'> }>,
+  networkRows: Array<{ macAddress: string; ipAddress: string; deviceLabel: string }>,
+): Array<{ rowNumber: number; item: Omit<Activo, 'id'> }> {
+  if (networkRows.length === 0 || parsedRows.length === 0) return parsedRows;
+
+  const byMac = new Map<string, { macAddress: string; ipAddress: string; deviceLabel: string }>();
+  const byIp = new Map<string, { macAddress: string; ipAddress: string; deviceLabel: string }>();
+
+  networkRows.forEach((row) => {
+    if (row.macAddress) byMac.set(normalizeForCompare(row.macAddress), row);
+    if (row.ipAddress) byIp.set(normalizeForCompare(row.ipAddress), row);
+  });
+
+  return parsedRows.map((entry) => {
+    const macKey = normalizeForCompare(entry.item.macAddress || '');
+    const ipKey = normalizeForCompare(entry.item.ipAddress || '');
+    const match = (macKey ? byMac.get(macKey) : undefined) || (ipKey ? byIp.get(ipKey) : undefined);
+    if (!match) return entry;
+
+    return {
+      rowNumber: entry.rowNumber,
+      item: {
+        ...entry.item,
+        macAddress: entry.item.macAddress || match.macAddress,
+        ipAddress: entry.item.ipAddress || match.ipAddress,
+        responsable: entry.item.responsable || match.deviceLabel,
+      },
+    };
+  });
 }
 
 export function parseAssetLifeYears(value?: string): number | null {
