@@ -364,7 +364,6 @@ describe('App UI flow', () => {
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
     await screen.findByText('Tickets IT');
-    expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
     expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
   });
 

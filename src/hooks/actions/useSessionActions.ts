@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type {
@@ -88,61 +88,66 @@ export function useSessionActions(options: UseSessionActionsOptions) {
   const clearToast = useAppStore((state) => state.clearToast);
   const clearGlobalSearchTerm = useAppStore((state) => state.clearGlobalSearchTerm);
 
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
   const clearSession = useCallback(() => {
     logout();
-    options.setView('dashboard');
+    const currentOptions = optionsRef.current;
+    currentOptions.setView('dashboard');
     resetCoreData();
-    options.setAuditRemoteRows(null);
-    options.setReportAuditRowsRemote(null);
-    options.setAuditFilters(buildDefaultAuditFilters());
-    options.setAuditPage(1);
-    options.setAuditPageSize(25);
-    options.setAuditPagination(buildDefaultAuditPagination(25));
-    options.setAuditSummary(null);
-    options.setAuditIntegrity(null);
-    options.setAuditAlerts(null);
-    options.setIsAuditLoading(false);
+    currentOptions.setAuditRemoteRows(null);
+    currentOptions.setReportAuditRowsRemote(null);
+    currentOptions.setAuditFilters(buildDefaultAuditFilters());
+    currentOptions.setAuditPage(1);
+    currentOptions.setAuditPageSize(25);
+    currentOptions.setAuditPagination(buildDefaultAuditPagination(25));
+    currentOptions.setAuditSummary(null);
+    currentOptions.setAuditIntegrity(null);
+    currentOptions.setAuditAlerts(null);
+    currentOptions.setIsAuditLoading(false);
     resetSyncStatus();
-    options.setAssetRiskSummary(null);
-    options.setImportDraft(null);
-    options.setIsApplyingImport(false);
-    options.setSupplyStockDrafts({});
+    currentOptions.setAssetRiskSummary(null);
+    currentOptions.setImportDraft(null);
+    currentOptions.setIsApplyingImport(false);
+    currentOptions.setSupplyStockDrafts({});
     clearToast();
     clearGlobalSearchTerm();
-    options.applyReportFilterSnapshot(buildDefaultReportFilterSnapshot());
-    options.setReportPresetName('');
-    options.setReportFilterPresets([]);
-    options.setTravelReportMonth(buildCurrentMonthInputValue());
-    options.setTravelReportTechnician('TODOS');
-    options.setTravelReportName('');
-    options.setTravelReportDepartment(TRAVEL_DEFAULT_DEPARTMENT);
-    options.setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
-    options.setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
-    options.setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
-    options.setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
-    options.setTravelAdjustments([]);
-    options.setTravelTripDrafts({});
-    options.setTravelSavingCode(null);
-    options.setSelectedAsset(null);
-    options.setSelectedSupplyHistoryItem(null);
-    options.setSelectedSupplyHistoryRemoteMovements(null);
-    options.setEditingAssetId(null);
-    options.setEditingInsumoId(null);
-    options.setFormData({});
-    options.setInsumoTouched(createEmptyInsumoTouched());
-    options.setTicketCommentDrafts({});
-    options.setTicketAttachmentLoadingId(null);
-    options.setShowModal(null);
-    options.setShowQrScanner(false);
-    options.setQrManualInput('');
-    options.setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
-    options.setIsQrScannerActive(false);
-    options.setIsResolvingQr(false);
+    currentOptions.applyReportFilterSnapshot(buildDefaultReportFilterSnapshot());
+    currentOptions.setReportPresetName('');
+    currentOptions.setReportFilterPresets([]);
+    currentOptions.setTravelReportMonth(buildCurrentMonthInputValue());
+    currentOptions.setTravelReportTechnician('TODOS');
+    currentOptions.setTravelReportName('');
+    currentOptions.setTravelReportDepartment(TRAVEL_DEFAULT_DEPARTMENT);
+    currentOptions.setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
+    currentOptions.setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
+    currentOptions.setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
+    currentOptions.setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
+    currentOptions.setTravelAdjustments([]);
+    currentOptions.setTravelTripDrafts({});
+    currentOptions.setTravelSavingCode(null);
+    currentOptions.setSelectedAsset(null);
+    currentOptions.setSelectedSupplyHistoryItem(null);
+    currentOptions.setSelectedSupplyHistoryRemoteMovements(null);
+    currentOptions.setEditingAssetId(null);
+    currentOptions.setEditingInsumoId(null);
+    currentOptions.setFormData({});
+    currentOptions.setInsumoTouched(createEmptyInsumoTouched());
+    currentOptions.setTicketCommentDrafts({});
+    currentOptions.setTicketAttachmentLoadingId(null);
+    currentOptions.setShowModal(null);
+    currentOptions.setShowQrScanner(false);
+    currentOptions.setQrManualInput('');
+    currentOptions.setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
+    currentOptions.setIsQrScannerActive(false);
+    currentOptions.setIsResolvingQr(false);
   }, [
     clearGlobalSearchTerm,
     clearToast,
     logout,
-    options,
     resetCoreData,
     resetSyncStatus,
   ]);
