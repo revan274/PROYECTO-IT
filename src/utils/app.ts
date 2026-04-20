@@ -1,8 +1,6 @@
 ﻿import type {
-  Activo,
   AuditFiltersState,
   AuditPaginationState,
-  Insumo,
   InsumoTouchedState,
   ReportAttentionFilter,
   ReportFilterPreset,
@@ -12,22 +10,16 @@
   StoredSession,
   ThemeMode,
   TicketEstado,
-  TicketItem,
   UserSession,
-  RegistroAuditoria,
 } from '../types/app';
 import {
   API_REQUEST_TIMEOUT_MS,
-  INSUMOS_INICIALES,
-  INVENTARIO_ACTIVOS_INICIAL,
   NORMALIZED_API_BASE_URL,
   REPORT_FILTER_PRESETS_STORAGE_PREFIX,
   SESSION_STORAGE_KEY,
-  TICKETS_INICIALES,
   THEME_STORAGE_KEY,
   TICKET_STATES,
   TRAVEL_DESTINATION_PRESETS,
-  AUDITORIA_INICIAL,
 } from '../constants/app';
 export function createEmptyInsumoTouched(): InsumoTouchedState {
   return {
@@ -47,26 +39,6 @@ export class ApiError extends Error {
     this.status = status;
     this.name = 'ApiError';
   }
-}
-
-export function cloneInitialActivos(): Activo[] {
-  return INVENTARIO_ACTIVOS_INICIAL.map((item) => ({ ...item }));
-}
-
-export function cloneInitialInsumos(): Insumo[] {
-  return INSUMOS_INICIALES.map((item) => ({ ...item }));
-}
-
-export function cloneInitialTickets(): TicketItem[] {
-  return TICKETS_INICIALES.map((item) => ({
-    ...item,
-    historial: item.historial ? item.historial.map((entry) => ({ ...entry })) : undefined,
-    attachments: item.attachments ? item.attachments.map((attachment) => ({ ...attachment })) : undefined,
-  }));
-}
-
-export function cloneInitialAuditoria(): RegistroAuditoria[] {
-  return AUDITORIA_INICIAL.map((item) => ({ ...item }));
 }
 
 export function readStoredSession(): StoredSession | null {

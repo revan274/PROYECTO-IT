@@ -1,27 +1,12 @@
-import { SLA_POLICY } from '../constants/app';
 import type {
-  PrioridadTicket,
   TicketAttentionType,
   TicketEstado,
   TicketItem,
 } from '../types/app';
 import { parseDateToTimestamp } from './format';
 
-export function calculateSlaDeadline(prioridad: PrioridadTicket): string {
-  const hours = SLA_POLICY[prioridad] || SLA_POLICY.MEDIA;
-  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-}
-
 export function isTicketClosed(ticket: Pick<TicketItem, 'estado'>): boolean {
   return ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado';
-}
-
-export function ticketAuditActionLabel(estado: TicketEstado): string {
-  if (estado === 'Resuelto') return 'Ticket Resuelto';
-  if (estado === 'Cerrado') return 'Ticket Cerrado';
-  if (estado === 'En Proceso') return 'Ticket En Proceso';
-  if (estado === 'En Espera') return 'Ticket En Espera';
-  return 'Ticket Actualizado';
 }
 
 export function buildTicketHistoryEntry(
