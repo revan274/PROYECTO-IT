@@ -4046,12 +4046,14 @@ export default function App() {
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">
           {isSyncing && (
-            <div className="sync-banner max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[10px] sm:text-[11px] font-black uppercase tracking-wider flex items-center gap-2">
-              <span className="status-dot-online" />
+            <div className="max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
               Sincronizando datos con backend...
             </div>
           )}
           <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
+
+
+
             <Routes>
               <Route path="/" element={<Navigate to={defaultViewPath} replace />} />
               <Route
