@@ -33,6 +33,13 @@ interface TicketFormModalConfig {
   ticketAssetOptions: Array<{ tag: string; label: string }>;
   selectedIssueArea: string;
   issueOptionsForSelectedArea: string[];
+  selectedTicketAssetContext: {
+    branchCode: string;
+    locationLabel: string;
+    locationTokens: string[];
+    typeCode: string;
+    suggestedArea: string | null;
+  } | null;
   sessionUser: UserSession | null;
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -491,6 +498,7 @@ export function TicketsView({
         ticketAssetOptions={ticketFormModal.ticketAssetOptions}
         selectedIssueArea={ticketFormModal.selectedIssueArea}
         issueOptionsForSelectedArea={ticketFormModal.issueOptionsForSelectedArea}
+        selectedTicketAssetContext={ticketFormModal.selectedTicketAssetContext}
         users={technicians}
         sessionUser={ticketFormModal.sessionUser}
         onClose={ticketFormModal.onClose}

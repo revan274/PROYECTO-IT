@@ -27,8 +27,6 @@ import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
   CATEGORIAS_INSUMO,
-  COMMON_TICKET_ISSUES,
-
   DEFAULT_CATALOGS,
   NAV_ITEMS,
   TICKET_ATTENTION_TYPES,
@@ -113,6 +111,8 @@ import {
   tokenizeSearchQuery,
 } from './utils/format';
 import {
+  buildSuggestedTicketIssues,
+  buildTicketAssetContextSummary,
   formatTicketAttentionType,
   getSlaStatus,
   isTicketSlaExpired,
@@ -586,6 +586,20 @@ export default function App() {
       })
       .filter((item): item is { tag: string; label: string } => !!item);
   }, [activos, activeTicketBranchCodes, formData.sucursal]);
+  const selectedTicketAsset = useMemo(() => {
+    const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();
+    const selectedTag = String(formData.activoTag || '').trim().toUpperCase();
+    if (!selectedBranch || !selectedTag) return null;
+
+    return activos.find((asset) => {
+      const assetTag = String(asset.tag || '').trim().toUpperCase();
+      return assetTag === selectedTag && resolveAssetBranchCode(asset, activeTicketBranchCodes) === selectedBranch;
+    }) || null;
+  }, [activos, activeTicketBranchCodes, formData.activoTag, formData.sucursal]);
+  const selectedTicketAssetContext = useMemo(
+    () => buildTicketAssetContextSummary(selectedTicketAsset, activeTicketBranchCodes),
+    [activeTicketBranchCodes, selectedTicketAsset],
+  );
   const userCargoOptions = useMemo(
     () =>
       catalogos.cargos
@@ -3970,10 +3984,22 @@ export default function App() {
   };
   const selectedIssueArea = String(formData.areaAfectada || '').trim();
   const issueOptionsForSelectedArea = useMemo(() => {
-    if (!selectedIssueArea) return [] as string[];
-    const match = COMMON_TICKET_ISSUES.find((group) => group.area === selectedIssueArea);
-    return match ? [...match.issues] : [];
-  }, [selectedIssueArea]);
+    return buildSuggestedTicketIssues(selectedIssueArea, selectedTicketAsset, activeTicketBranchCodes);
+  }, [activeTicketBranchCodes, selectedIssueArea, selectedTicketAsset]);
+
+  useEffect(() => {
+    if (showModal !== 'ticket') return;
+    const currentIssue = String(formData.fallaComun || '').trim();
+    if (!currentIssue) return;
+    const stillValid = issueOptionsForSelectedArea.some((issue) => issue === currentIssue);
+    if (stillValid) return;
+
+    setFormData((prev) => {
+      const prevIssue = String(prev.fallaComun || '').trim();
+      if (!prevIssue || prevIssue !== currentIssue) return prev;
+      return { ...prev, fallaComun: '' };
+    });
+  }, [formData.fallaComun, issueOptionsForSelectedArea, setFormData, showModal]);
 
   const systemHealth = activos.length > 0 ? Math.round((activos.filter(a => a.estado === 'Operativo').length / activos.length) * 100) : 100;
   const defaultViewPath = getViewPath(defaultView);
@@ -4531,6 +4557,7 @@ export default function App() {
                       ticketAssetOptions,
                       selectedIssueArea,
                       issueOptionsForSelectedArea,
+                      selectedTicketAssetContext,
                       sessionUser,
                       onClose: closeModal,
                       onSubmit: handleSave,

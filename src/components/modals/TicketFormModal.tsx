@@ -22,6 +22,14 @@ interface AssignableUser {
   activo?: boolean;
 }
 
+interface TicketAssetContext {
+  branchCode: string;
+  locationLabel: string;
+  locationTokens: string[];
+  typeCode: string;
+  suggestedArea: string | null;
+}
+
 interface TicketFormModalProps {
   isOpen: boolean;
   title: string;
@@ -34,6 +42,7 @@ interface TicketFormModalProps {
   ticketAssetOptions: TicketAssetOption[];
   selectedIssueArea: string;
   issueOptionsForSelectedArea: string[];
+  selectedTicketAssetContext: TicketAssetContext | null;
   users: AssignableUser[];
   sessionUser: UserSession | null;
   onClose: () => void;
@@ -57,6 +66,7 @@ export function TicketFormModal({
   ticketAssetOptions,
   selectedIssueArea,
   issueOptionsForSelectedArea,
+  selectedTicketAssetContext,
   users,
   sessionUser,
   onClose,
@@ -112,6 +122,21 @@ export function TicketFormModal({
         <p className="text-[10px] text-slate-400 font-black uppercase">
           Activos en sucursal seleccionada: {ticketAssetOptions.length}
         </p>
+        {selectedTicketAssetContext && (
+          <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Contexto detectado
+            </p>
+            <p className="text-xs font-black uppercase text-slate-700">
+              Sucursal: {selectedTicketAssetContext.branchCode || 'N/D'} | Lugar: {selectedTicketAssetContext.locationLabel || 'SIN UBICACION'} | Equipo: {selectedTicketAssetContext.typeCode || 'EQUIPO'}
+            </p>
+            {selectedTicketAssetContext.suggestedArea && !selectedIssueArea && (
+              <p className="text-[10px] font-black uppercase tracking-wider text-amber-600">
+                Area sugerida: {selectedTicketAssetContext.suggestedArea}
+              </p>
+            )}
+          </div>
+        )}
         <select
           required
           value={formData.areaAfectada || ''}
@@ -146,11 +171,11 @@ export function TicketFormModal({
         />
         <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Falla comun por area
+            Falla sugerida por sucursal y lugar
           </p>
           <select
             value={formData.fallaComun || ''}
-            disabled={!selectedIssueArea || issueOptionsForSelectedArea.length === 0}
+            disabled={issueOptionsForSelectedArea.length === 0}
             onChange={(e) =>
               onChange({
                 fallaComun: e.target.value,
@@ -160,11 +185,13 @@ export function TicketFormModal({
             className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
           >
             <option value="">
-              {!selectedIssueArea
-                ? 'Primero selecciona area afectada'
-                : issueOptionsForSelectedArea.length === 0
-                  ? 'Sin fallas configuradas para esta area'
-                  : 'Selecciona una falla comun...'}
+              {issueOptionsForSelectedArea.length === 0
+                ? selectedTicketAssetContext
+                  ? 'Sin fallas sugeridas para este contexto'
+                  : !selectedIssueArea
+                    ? 'Selecciona area o TAG primero'
+                    : 'Sin fallas configuradas para esta area'
+                : 'Selecciona una falla sugerida...'}
             </option>
             {issueOptionsForSelectedArea.map((issue) => (
               <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>

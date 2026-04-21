@@ -1,11 +1,242 @@
-import { SLA_POLICY } from '../constants/app';
+import { COMMON_TICKET_ISSUES, SLA_POLICY } from '../constants/app';
 import type {
+  Activo,
   PrioridadTicket,
   TicketAttentionType,
   TicketEstado,
   TicketItem,
 } from '../types/app';
-import { parseDateToTimestamp } from './format';
+import { resolveAssetBranchCode } from './assets';
+import { normalizeForCompare, parseDateToTimestamp } from './format';
+
+type TicketAreaLabel = typeof COMMON_TICKET_ISSUES[number]['area'];
+
+export interface TicketAssetContextSummary {
+  branchCode: string;
+  locationLabel: string;
+  locationTokens: string[];
+  typeCode: string;
+  suggestedArea: TicketAreaLabel | null;
+}
+
+interface TicketIssueSuggestionTemplate {
+  matchers: string[];
+  preferredArea: TicketAreaLabel;
+  areas: TicketAreaLabel[];
+  extraIssues: string[];
+}
+
+const ISSUE_GROUP_BY_AREA = new Map<TicketAreaLabel, readonly string[]>(
+  COMMON_TICKET_ISSUES.map((group) => [group.area, group.issues]),
+);
+
+const ASSET_TYPE_TEMPLATES: TicketIssueSuggestionTemplate[] = [
+  {
+    matchers: ['IMP', 'EPSON', 'PRN', 'TCK'],
+    preferredArea: 'Recibos',
+    areas: ['Recibos'],
+    extraIssues: [
+      'Impresora fuera de linea',
+      'No corta ticket',
+      'Error de comunicacion USB o red',
+    ],
+  },
+  {
+    matchers: ['POS', 'BSC', 'BAS', 'SCN', 'VDP', 'VPR', 'AUD'],
+    preferredArea: 'Línea de cajas',
+    areas: ['Línea de cajas', 'Tienda'],
+    extraIssues: [
+      'Caja sin comunicacion con perifericos',
+      'No lee articulos o codigos',
+      'No registra peso o venta correctamente',
+    ],
+  },
+  {
+    matchers: ['DSK', 'LPT', 'AIO', 'MON', 'EQUIPO'],
+    preferredArea: 'Gerencia',
+    areas: ['Gerencia', 'Tienda'],
+    extraIssues: [
+      'Equipo no enciende',
+      'Pantalla sin imagen',
+      'No inicia sesion o perfil',
+      'Sin acceso a red o recursos compartidos',
+    ],
+  },
+  {
+    matchers: ['SVR', 'SVR0', 'SWT', 'TEL', 'NVR', 'DVR', 'ROU', 'RTR', 'AP', 'CAM'],
+    preferredArea: 'Mantenimiento',
+    areas: ['Mantenimiento', 'Tienda'],
+    extraIssues: [
+      'Servidor sin respuesta',
+      'Switch o enlace de red caido',
+      'Telefonia IP sin registro',
+      'Camara o grabador sin video',
+    ],
+  },
+];
+
+const LOCATION_TEMPLATES: TicketIssueSuggestionTemplate[] = [
+  {
+    matchers: ['SITE', 'SIS', 'BSIS'],
+    preferredArea: 'Mantenimiento',
+    areas: ['Mantenimiento', 'Tienda'],
+    extraIssues: [
+      'Sin internet o enlace principal',
+      'Servidor o servicio detenido',
+      'Cableado o patch panel con falla',
+    ],
+  },
+  {
+    matchers: ['CARN', 'DELI', 'PASI', 'CMP', 'CAJA', 'TJ01', 'TJ02', 'TJ03', 'TC01', 'CEDIS'],
+    preferredArea: 'Línea de cajas',
+    areas: ['Línea de cajas', 'Tienda'],
+    extraIssues: [
+      'Caja o piso sin operar',
+      'Periferico de piso sin comunicacion',
+      'Lentitud en operacion de tienda',
+    ],
+  },
+  {
+    matchers: ['AYF', 'GER', 'DIR', 'RRHH', 'MERC', 'CAT', 'CORP', 'OPER', 'CD1'],
+    preferredArea: 'Gerencia',
+    areas: ['Gerencia', 'Tienda'],
+    extraIssues: [
+      'No abre sistema administrativo',
+      'No acceso a carpetas o servidor remoto',
+      'Permisos o credenciales incorrectas',
+    ],
+  },
+];
+
+function buildUniqueStrings(values: readonly string[]): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  values.forEach((value) => {
+    const text = String(value || '').trim();
+    if (!text) return;
+    const key = normalizeForCompare(text);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(text);
+  });
+
+  return output;
+}
+
+function getLocationSegments(ubicacion?: string): string[] {
+  const raw = String(ubicacion || '').trim().toUpperCase();
+  if (!raw || raw === 'SIN UBICACION') return [];
+  return raw
+    .split('|')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function getLocationTokens(ubicacion?: string): string[] {
+  const segments = getLocationSegments(ubicacion);
+  return buildUniqueStrings(
+    segments.flatMap((segment) => segment.split(/[\s/-]+/).map((token) => token.trim().toUpperCase())),
+  );
+}
+
+function findIssueTemplate(
+  templates: readonly TicketIssueSuggestionTemplate[],
+  values: readonly string[],
+): TicketIssueSuggestionTemplate | null {
+  const normalized = values
+    .map((value) => normalizeForCompare(value))
+    .filter(Boolean);
+  if (normalized.length === 0) return null;
+
+  return templates.find((template) =>
+    template.matchers.some((matcher) => {
+      const key = normalizeForCompare(matcher);
+      return normalized.some((value) => value === key || value.includes(key) || key.includes(value));
+    }),
+  ) || null;
+}
+
+function inferTicketSuggestedArea(
+  locationTemplate: TicketIssueSuggestionTemplate | null,
+  typeTemplate: TicketIssueSuggestionTemplate | null,
+  locationLabel: string,
+  branchCode: string,
+): TicketAreaLabel | null {
+  const normalizedLocation = normalizeForCompare(locationLabel);
+  const normalizedBranch = normalizeForCompare(branchCode);
+  const hasSpecificLocation = !!normalizedLocation && normalizedLocation !== normalizedBranch && normalizedLocation !== 'sinubicacion';
+  if (hasSpecificLocation && locationTemplate?.preferredArea) return locationTemplate.preferredArea;
+  if (typeTemplate?.preferredArea) return typeTemplate.preferredArea;
+  if (locationTemplate?.preferredArea) return locationTemplate.preferredArea;
+  return null;
+}
+
+function appendIssueGroup(target: string[], area: TicketAreaLabel | undefined) {
+  if (!area) return;
+  const issues = ISSUE_GROUP_BY_AREA.get(area);
+  if (!issues) return;
+  target.push(...issues);
+}
+
+function normalizeAssetType(asset?: Pick<Activo, 'tipo' | 'equipo'> | null): string {
+  return String(asset?.tipo || asset?.equipo || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+export function buildTicketAssetContextSummary(
+  asset: Pick<Activo, 'tipo' | 'equipo' | 'ubicacion' | 'departamento'> | null | undefined,
+  validBranchCodes: ReadonlySet<string>,
+): TicketAssetContextSummary | null {
+  if (!asset) return null;
+
+  const branchCode = resolveAssetBranchCode(asset, validBranchCodes);
+  const locationSegments = getLocationSegments(asset.ubicacion);
+  const locationLabel = locationSegments.find((segment) => normalizeForCompare(segment) !== normalizeForCompare(branchCode))
+    || locationSegments[0]
+    || 'SIN UBICACION';
+  const locationTokens = getLocationTokens(asset.ubicacion);
+  const typeCode = normalizeAssetType(asset);
+  const typeTemplate = findIssueTemplate(ASSET_TYPE_TEMPLATES, [typeCode]);
+  const locationTemplate = findIssueTemplate(LOCATION_TEMPLATES, [locationLabel, ...locationTokens, branchCode]);
+
+  return {
+    branchCode,
+    locationLabel,
+    locationTokens,
+    typeCode,
+    suggestedArea: inferTicketSuggestedArea(locationTemplate, typeTemplate, locationLabel, branchCode),
+  };
+}
+
+export function buildSuggestedTicketIssues(
+  selectedArea: string,
+  asset: Pick<Activo, 'tipo' | 'equipo' | 'ubicacion' | 'departamento'> | null | undefined,
+  validBranchCodes: ReadonlySet<string>,
+): string[] {
+  const output: string[] = [];
+  const area = String(selectedArea || '').trim() as TicketAreaLabel;
+  const context = buildTicketAssetContextSummary(asset, validBranchCodes);
+  const typeTemplate = context?.typeCode
+    ? findIssueTemplate(ASSET_TYPE_TEMPLATES, [context.typeCode])
+    : null;
+  const locationTemplate = context
+    ? findIssueTemplate(LOCATION_TEMPLATES, [context.locationLabel, ...context.locationTokens, context.branchCode])
+    : null;
+
+  if (area) appendIssueGroup(output, area);
+  if (context?.suggestedArea && context.suggestedArea !== area) appendIssueGroup(output, context.suggestedArea);
+
+  typeTemplate?.areas.forEach((groupArea) => appendIssueGroup(output, groupArea));
+  locationTemplate?.areas.forEach((groupArea) => appendIssueGroup(output, groupArea));
+
+  if (typeTemplate) output.push(...typeTemplate.extraIssues);
+  if (locationTemplate) output.push(...locationTemplate.extraIssues);
+
+  return buildUniqueStrings(output);
+}
 
 export function calculateSlaDeadline(prioridad: PrioridadTicket): string {
   const hours = SLA_POLICY[prioridad] || SLA_POLICY.MEDIA;
