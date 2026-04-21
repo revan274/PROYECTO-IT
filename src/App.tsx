@@ -3978,12 +3978,7 @@ export default function App() {
   const systemHealth = activos.length > 0 ? Math.round((activos.filter(a => a.estado === 'Operativo').length / activos.length) * 100) : 100;
   const defaultViewPath = getViewPath(defaultView);
   const renderLazyView = (loadingLabel: string, content: React.ReactNode) => (
-    <React.Suspense fallback={(
-      <div className="premium-panel rounded-[2rem] px-6 py-12 text-center text-xs font-black uppercase tracking-[0.24em] text-slate-400">
-        {loadingLabel}
-      </div>
-    )}
-    >
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">{loadingLabel}</div>}>
       {content}
     </React.Suspense>
   );
@@ -4023,7 +4018,7 @@ export default function App() {
 
 
   return (
-    <div className="app-shell flex min-h-screen overflow-x-hidden font-sans text-slate-700">
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-700 overflow-x-hidden">
       <AppSidebar
         navItems={visibleNavItems}
         sidebarOpen={sidebarOpen}
@@ -4035,7 +4030,7 @@ export default function App() {
         }}
       />
 
-      <main className="app-main flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
         <AppHeader
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -4049,15 +4044,16 @@ export default function App() {
           sessionUser={sessionUser}
         />
 
-        <div className="flex-1 overflow-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 lg:px-8 lg:pb-10">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">
           {isSyncing && (
-            <div className="premium-panel max-w-7xl xl:max-w-[88rem] mx-auto mb-4 flex items-center gap-3 rounded-[1.6rem] border border-[#d8f5a2]/60 bg-[#f4fce3]/90 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#4a7f10] sm:text-[11px]">
-              <span className="sync-indicator inline-flex items-center gap-2">
-                <span>Sincronizando datos con backend...</span>
-              </span>
+            <div className="max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
+              Sincronizando datos con backend...
             </div>
           )}
-          <div key={location.pathname} className="page-transition-stage max-w-7xl xl:max-w-[88rem] mx-auto w-full space-y-6 sm:space-y-8">
+          <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
+
+
+
             <Routes>
               <Route path="/" element={<Navigate to={defaultViewPath} replace />} />
               <Route
