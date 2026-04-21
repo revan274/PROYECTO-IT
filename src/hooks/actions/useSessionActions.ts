@@ -81,7 +81,52 @@ interface UseSessionActionsOptions {
   setTravelSavingCode: Dispatch<SetStateAction<string | null>>;
 }
 
-export function useSessionActions(options: UseSessionActionsOptions) {
+export function useSessionActions({
+  setView,
+  applyReportFilterSnapshot,
+  setAuditRemoteRows,
+  setReportAuditRowsRemote,
+  setAuditFilters,
+  setAuditPage,
+  setAuditPageSize,
+  setAuditPagination,
+  setAuditSummary,
+  setAuditIntegrity,
+  setAuditAlerts,
+  setIsAuditLoading,
+  setAssetRiskSummary,
+  setImportDraft,
+  setIsApplyingImport,
+  setSupplyStockDrafts,
+  setSelectedAsset,
+  setSelectedSupplyHistoryItem,
+  setSelectedSupplyHistoryRemoteMovements,
+  setEditingAssetId,
+  setEditingInsumoId,
+  setFormData,
+  setInsumoTouched,
+  setShowModal,
+  setShowQrScanner,
+  setQrManualInput,
+  setQrScannerStatus,
+  setIsQrScannerActive,
+  setIsResolvingQr,
+  setTicketCommentDrafts,
+  setTicketAttachmentLoadingId,
+  setReportPresetName,
+  setReportFilterPresets,
+  setTravelReportMonth,
+  setTravelReportTechnician,
+  setTravelReportName,
+  setTravelReportDepartment,
+  setTravelReportFuelEfficiency,
+  setTravelReportAuthorizer,
+  setTravelReportFinance,
+  setTravelKmsByBranch,
+  setTravelAdjustments,
+  setTravelTripDrafts,
+  setTravelSavingCode,
+}: UseSessionActionsOptions) {
   const logout = useAppStore((state) => state.logout);
   const resetCoreData = useAppStore((state) => state.resetCoreData);
   const resetSyncStatus = useAppStore((state) => state.resetSyncStatus);
@@ -90,61 +135,104 @@ export function useSessionActions(options: UseSessionActionsOptions) {
 
   const clearSession = useCallback(() => {
     logout();
-    options.setView('dashboard');
+    setView('dashboard');
     resetCoreData();
-    options.setAuditRemoteRows(null);
-    options.setReportAuditRowsRemote(null);
-    options.setAuditFilters(buildDefaultAuditFilters());
-    options.setAuditPage(1);
-    options.setAuditPageSize(25);
-    options.setAuditPagination(buildDefaultAuditPagination(25));
-    options.setAuditSummary(null);
-    options.setAuditIntegrity(null);
-    options.setAuditAlerts(null);
-    options.setIsAuditLoading(false);
+    setAuditRemoteRows(null);
+    setReportAuditRowsRemote(null);
+    setAuditFilters(buildDefaultAuditFilters());
+    setAuditPage(1);
+    setAuditPageSize(25);
+    setAuditPagination(buildDefaultAuditPagination(25));
+    setAuditSummary(null);
+    setAuditIntegrity(null);
+    setAuditAlerts(null);
+    setIsAuditLoading(false);
     resetSyncStatus();
-    options.setAssetRiskSummary(null);
-    options.setImportDraft(null);
-    options.setIsApplyingImport(false);
-    options.setSupplyStockDrafts({});
+    setAssetRiskSummary(null);
+    setImportDraft(null);
+    setIsApplyingImport(false);
+    setSupplyStockDrafts({});
     clearToast();
     clearGlobalSearchTerm();
-    options.applyReportFilterSnapshot(buildDefaultReportFilterSnapshot());
-    options.setReportPresetName('');
-    options.setReportFilterPresets([]);
-    options.setTravelReportMonth(buildCurrentMonthInputValue());
-    options.setTravelReportTechnician('TODOS');
-    options.setTravelReportName('');
-    options.setTravelReportDepartment(TRAVEL_DEFAULT_DEPARTMENT);
-    options.setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
-    options.setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
-    options.setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
-    options.setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
-    options.setTravelAdjustments([]);
-    options.setTravelTripDrafts({});
-    options.setTravelSavingCode(null);
-    options.setSelectedAsset(null);
-    options.setSelectedSupplyHistoryItem(null);
-    options.setSelectedSupplyHistoryRemoteMovements(null);
-    options.setEditingAssetId(null);
-    options.setEditingInsumoId(null);
-    options.setFormData({});
-    options.setInsumoTouched(createEmptyInsumoTouched());
-    options.setTicketCommentDrafts({});
-    options.setTicketAttachmentLoadingId(null);
-    options.setShowModal(null);
-    options.setShowQrScanner(false);
-    options.setQrManualInput('');
-    options.setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
-    options.setIsQrScannerActive(false);
-    options.setIsResolvingQr(false);
+    applyReportFilterSnapshot(buildDefaultReportFilterSnapshot());
+    setReportPresetName('');
+    setReportFilterPresets([]);
+    setTravelReportMonth(buildCurrentMonthInputValue());
+    setTravelReportTechnician('TODOS');
+    setTravelReportName('');
+    setTravelReportDepartment(TRAVEL_DEFAULT_DEPARTMENT);
+    setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
+    setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
+    setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
+    setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
+    setTravelAdjustments([]);
+    setTravelTripDrafts({});
+    setTravelSavingCode(null);
+    setSelectedAsset(null);
+    setSelectedSupplyHistoryItem(null);
+    setSelectedSupplyHistoryRemoteMovements(null);
+    setEditingAssetId(null);
+    setEditingInsumoId(null);
+    setFormData({});
+    setInsumoTouched(createEmptyInsumoTouched());
+    setTicketCommentDrafts({});
+    setTicketAttachmentLoadingId(null);
+    setShowModal(null);
+    setShowQrScanner(false);
+    setQrManualInput('');
+    setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
+    setIsQrScannerActive(false);
+    setIsResolvingQr(false);
   }, [
+    applyReportFilterSnapshot,
     clearGlobalSearchTerm,
     clearToast,
     logout,
-    options,
     resetCoreData,
     resetSyncStatus,
+    setAssetRiskSummary,
+    setAuditAlerts,
+    setAuditFilters,
+    setAuditIntegrity,
+    setAuditPage,
+    setAuditPageSize,
+    setAuditPagination,
+    setAuditRemoteRows,
+    setAuditSummary,
+    setEditingAssetId,
+    setEditingInsumoId,
+    setFormData,
+    setImportDraft,
+    setInsumoTouched,
+    setIsApplyingImport,
+    setIsAuditLoading,
+    setIsQrScannerActive,
+    setIsResolvingQr,
+    setQrManualInput,
+    setQrScannerStatus,
+    setReportAuditRowsRemote,
+    setReportFilterPresets,
+    setReportPresetName,
+    setSelectedAsset,
+    setSelectedSupplyHistoryItem,
+    setSelectedSupplyHistoryRemoteMovements,
+    setShowModal,
+    setShowQrScanner,
+    setSupplyStockDrafts,
+    setTicketAttachmentLoadingId,
+    setTicketCommentDrafts,
+    setTravelAdjustments,
+    setTravelKmsByBranch,
+    setTravelReportAuthorizer,
+    setTravelReportDepartment,
+    setTravelReportFinance,
+    setTravelReportFuelEfficiency,
+    setTravelReportMonth,
+    setTravelReportName,
+    setTravelReportTechnician,
+    setTravelSavingCode,
+    setTravelTripDrafts,
+    setView,
   ]);
 
   return { clearSession };
