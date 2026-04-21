@@ -32,42 +32,64 @@ export function AppSidebar<TView extends string>({
         type="button"
         aria-label="Cerrar menu"
         onClick={onCloseSidebar}
-        className={`fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-30 bg-slate-950/55 backdrop-blur-md transition-opacity lg:hidden ${
           sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
       />
-      <aside className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-72 bg-white flex flex-col border-r border-slate-100 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:w-72 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-6 py-6 sm:px-8 sm:py-8 flex items-center gap-3">
-          <LogoGigantes className="w-10 h-10 shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-black text-[#F58220] truncate">GIGANTES</h1>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Mesa IT</p>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-[88vw] max-w-80 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:w-80 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="premium-panel flex h-full flex-col rounded-none border-l-0 border-y-0 px-5 py-5 sm:px-6 sm:py-6 lg:rounded-r-[2.4rem] lg:border-y lg:border-r">
+          <div className="flex items-center gap-3 rounded-[1.8rem] border border-white/15 bg-slate-950/[0.03] px-4 py-4 sm:px-5">
+            <div className="premium-panel-soft flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem]">
+              <LogoGigantes className="h-9 w-9 shrink-0" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Mesa IT</p>
+              <h1 className="truncate text-lg font-black tracking-tight text-slate-900">GIGANTES</h1>
+              <p className="truncate text-[11px] font-semibold text-slate-500">Operations console</p>
+            </div>
           </div>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4 space-y-2">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.id}
-              to={getItemHref(item.id)}
-              onClick={onCloseSidebar}
-              className={({ isActive }) =>
-                `w-full flex items-center gap-4 px-4 py-3 sm:px-5 sm:py-4 rounded-[1.5rem] text-xs font-black transition-all uppercase tracking-wider ${
-                  isActive ? 'bg-[#F58220] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
-                }`
-              }
+          <div className="mt-5 px-1">
+            <span className="premium-chip">Luxury Glass Operations</span>
+          </div>
+
+          <nav className="mt-6 flex-1 space-y-2 overflow-y-auto px-1 pb-4">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.id}
+                to={getItemHref(item.id)}
+                onClick={onCloseSidebar}
+                className={({ isActive }) =>
+                  `premium-nav-link flex w-full items-center gap-3 rounded-[1.45rem] px-3 py-3.5 text-left text-[11px] font-black uppercase tracking-[0.18em] ${
+                    isActive
+                      ? 'premium-nav-link-active'
+                      : 'text-slate-500 hover:bg-white/35 hover:text-slate-800'
+                  }`
+                }
+              >
+                <span className="premium-nav-icon">
+                  <item.icon className="h-5 w-5 shrink-0" />
+                </span>
+                <span className="relative z-10 truncate">{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="mt-auto border-t border-white/10 pt-6">
+            <p className="mb-4 break-words text-[10px] font-semibold tracking-[0.12em] text-slate-400">
+              {authorBrand}
+            </p>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="premium-button flex w-full items-center justify-between rounded-[1.35rem] border border-red-200/50 bg-red-50/80 px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.18em] text-red-500 hover:border-red-300 hover:bg-red-50"
             >
-              <item.icon className="w-5 h-5 shrink-0" />
-              <span className="truncate">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="px-6 py-6 sm:p-8 border-t border-slate-100">
-          <p className="mb-4 text-[9px] font-semibold tracking-[0.08em] text-slate-300 break-words">
-            {authorBrand}
-          </p>
-          <button onClick={onLogout} className="flex items-center gap-2 text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">
-            <LogOut size={14} /> Cerrar Sistema
-          </button>
+              <span className="flex items-center gap-2">
+                <LogOut size={14} />
+                Cerrar Sistema
+              </span>
+              <span className="text-[11px]">01</span>
+            </button>
+          </div>
         </div>
       </aside>
     </>
