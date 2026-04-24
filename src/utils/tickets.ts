@@ -108,6 +108,22 @@ const LOCATION_TEMPLATES: TicketIssueSuggestionTemplate[] = [
   },
 ];
 
+const TICKET_ATTENTION_TYPE_ALIASES: Record<string, TicketAttentionType> = {
+  PRESENCIAL: 'PRESENCIAL',
+  PRESENCIAL_FUERA_DE_HORARIO: 'PRESENCIAL_FUERA_DE_HORARIO',
+  PRESENCIAL_FUERA_HORARIO: 'PRESENCIAL_FUERA_DE_HORARIO',
+  REMOTO: 'REMOTO',
+  REMOTO_FUERA_DE_HORARIO: 'REMOTO_FUERA_DE_HORARIO',
+  REMOTO_FUERA_HORARIO: 'REMOTO_FUERA_DE_HORARIO',
+};
+
+const TICKET_ATTENTION_TYPE_LABELS: Record<TicketAttentionType, string> = {
+  PRESENCIAL: 'Presencial',
+  PRESENCIAL_FUERA_DE_HORARIO: 'Presencial fuera de horario',
+  REMOTO: 'Remoto',
+  REMOTO_FUERA_DE_HORARIO: 'Remoto fuera de horario',
+};
+
 function buildUniqueStrings(values: readonly string[]): string[] {
   const output: string[] = [];
   const seen = new Set<string>();
@@ -312,15 +328,51 @@ export function getSlaStatus(ticket: TicketItem, nowMs = Date.now()): { label: s
 }
 
 export function normalizeTicketAttentionType(value: unknown): TicketAttentionType | null {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (normalized === 'PRESENCIAL' || normalized === 'REMOTO') return normalized as TicketAttentionType;
-  return null;
+  const normalized = String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  return TICKET_ATTENTION_TYPE_ALIASES[normalized] || null;
 }
 
 export function formatTicketAttentionType(value: unknown): string {
   const normalized = normalizeTicketAttentionType(value);
   if (!normalized) return 'Sin definir';
-  return normalized === 'PRESENCIAL' ? 'Presencial' : 'Remoto';
+  return TICKET_ATTENTION_TYPE_LABELS[normalized];
+}
+
+export function normalizeTicketTravelRequired(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
+  const normalized = String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (!normalized) return null;
+  if (['1', 'true', 'si', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return null;
+}
+
+export function formatTicketTravelRequired(value: unknown): string {
+  return normalizeTicketTravelRequired(value) ? 'Si' : 'No';
+}
+
+export function ticketRequiresTravel(
+  ticket: Pick<TicketItem, 'atencionTipo' | 'trasladoRequerido'>,
+): boolean {
+  const explicitValue = normalizeTicketTravelRequired(ticket.trasladoRequerido);
+  if (explicitValue !== null) return explicitValue;
+
+  const attentionType = normalizeTicketAttentionType(ticket.atencionTipo);
+  return attentionType === 'PRESENCIAL' || attentionType === 'PRESENCIAL_FUERA_DE_HORARIO';
 }
 
 export function buildTicketDescription(areaAfectada: string, descripcion: string): string {

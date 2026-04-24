@@ -50,7 +50,7 @@ interface TicketFormModalProps {
   onChange: (updates: Partial<FormDataState>) => void;
   formatTicketBranchFromCatalog: (value?: string) => string;
   formatCargoFromCatalog: (value?: string) => string;
-  normalizeTicketAttentionType: (value: unknown) => string | null;
+  normalizeTicketAttentionType: (value: unknown) => TicketAttentionType | null;
   formatTicketAttentionType: (value: unknown) => string;
 }
 
@@ -148,20 +148,42 @@ export function TicketFormModal({
             <option key={`afe-${area}`} value={area}>{area}</option>
           ))}
         </select>
-        <select
-          required
-          value={formData.atencionTipo || ''}
-          onChange={(e) => {
-            const value = normalizeTicketAttentionType(e.target.value);
-            onChange({ atencionTipo: (value as TicketAttentionType | null) || undefined });
-          }}
-          className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-        >
-          <option value="">Tipo de atencion...</option>
-          {TICKET_ATTENTION_TYPES.map((type) => (
-            <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
+          <select
+            required
+            value={formData.atencionTipo || ''}
+            onChange={(e) => {
+              const value = normalizeTicketAttentionType(e.target.value);
+              onChange({ atencionTipo: value || undefined });
+            }}
+            className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+          >
+            <option value="">Tipo de atencion...</option>
+            {TICKET_ATTENTION_TYPES.map((type) => (
+              <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
+            ))}
+          </select>
+          <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Traslado
+              </p>
+              <p className="text-xs font-black uppercase text-slate-700">
+                {formData.trasladoRequerido ? 'Si' : 'No'}
+              </p>
+            </div>
+            <span className="relative inline-flex h-7 w-12 shrink-0">
+              <input
+                type="checkbox"
+                checked={!!formData.trasladoRequerido}
+                onChange={(e) => onChange({ trasladoRequerido: e.target.checked })}
+                className="peer sr-only"
+              />
+              <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500" />
+              <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+            </span>
+          </label>
+        </div>
         <textarea
           required
           placeholder="DESCRIPCION DE LA FALLA"

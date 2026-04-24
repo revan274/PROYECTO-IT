@@ -3,7 +3,11 @@
 export type EstadoActivo = 'Operativo' | 'Falla';
 export type PrioridadTicket = 'MEDIA' | 'ALTA' | 'CRITICA';
 export type TicketEstado = 'Abierto' | 'En Proceso' | 'En Espera' | 'Resuelto' | 'Cerrado';
-export type TicketAttentionType = 'PRESENCIAL' | 'REMOTO';
+export type TicketAttentionType =
+  | 'PRESENCIAL'
+  | 'PRESENCIAL_FUERA_DE_HORARIO'
+  | 'REMOTO'
+  | 'REMOTO_FUERA_DE_HORARIO';
 export type UserRole = 'admin' | 'tecnico' | 'consulta' | 'solicitante';
 export type ToastType = 'success' | 'error' | 'warning';
 export type ModalType = 'activo' | 'insumo' | 'ticket' | null;
@@ -189,6 +193,7 @@ export interface TicketItem {
   prioridad: PrioridadTicket;
   estado: TicketEstado;
   atencionTipo?: TicketAttentionType;
+  trasladoRequerido?: boolean;
   fecha: string;
   asignadoA?: string;
   fechaCreacion?: string;
@@ -361,6 +366,7 @@ export interface FormDataState {
   fallaComun?: string;
   prioridad?: PrioridadTicket;
   atencionTipo?: TicketAttentionType;
+  trasladoRequerido?: boolean;
   asignadoA?: string;
   comentario?: string;
 }

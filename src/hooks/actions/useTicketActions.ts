@@ -12,7 +12,12 @@ import { useAppStore } from '../../store/useAppStore';
 import { ApiError, apiRequest, getApiErrorMessage } from '../../utils/api';
 import { buildApiUrl, getStoredSessionToken } from '../../utils/app';
 import { ticketBelongsToSessionUser } from '../../utils/appHelpers';
-import { buildTicketDescription, buildTicketHistoryEntry, normalizeTicketAttentionType } from '../../utils/tickets';
+import {
+  buildTicketDescription,
+  buildTicketHistoryEntry,
+  normalizeTicketAttentionType,
+  normalizeTicketTravelRequired,
+} from '../../utils/tickets';
 
 interface UseTicketActionsProps {
   canEdit: boolean;
@@ -100,6 +105,7 @@ export function useTicketActions({
     const sucursal = String(formData.sucursal || '').trim().toUpperCase();
     const areaAfectada = String(formData.areaAfectada || '').trim();
     const atencionTipo = normalizeTicketAttentionType(formData.atencionTipo);
+    const trasladoRequerido = normalizeTicketTravelRequired(formData.trasladoRequerido) === true;
     const descripcionBase = String(formData.descripcion || '').trim();
     const prioridad = formData.prioridad || 'MEDIA';
 
@@ -114,7 +120,7 @@ export function useTicketActions({
             : !areaAfectada
               ? 'Selecciona area afectada'
               : !atencionTipo
-                ? 'Selecciona si la atencion fue presencial o remota'
+                ? 'Selecciona el tipo de atencion del ticket'
                 : !descripcionBase
                   ? 'Agrega la descripcion de la falla'
                   : '';
@@ -136,6 +142,7 @@ export function useTicketActions({
           sucursal,
           prioridad,
           atencionTipo,
+          trasladoRequerido,
           asignadoA: canEdit ? (formData.asignadoA || '') : '',
           usuario: sessionUser?.nombre || 'Admin IT',
           rol: sessionUser?.rol || 'admin',
@@ -153,7 +160,13 @@ export function useTicketActions({
 
   const actualizarTicket = async (
     ticketId: number,
-    updates: { estado?: TicketEstado; asignadoA?: string; comentario?: string; atencionTipo?: TicketAttentionType },
+    updates: {
+      estado?: TicketEstado;
+      asignadoA?: string;
+      comentario?: string;
+      atencionTipo?: TicketAttentionType;
+      trasladoRequerido?: boolean;
+    },
   ): Promise<boolean> => {
     if (!canEdit) {
       showToast('Tu rol no permite editar tickets', 'warning');

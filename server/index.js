@@ -192,9 +192,36 @@ function normalizeTicketBranch(value, allowedBranchCodes = DEFAULT_BRANCH_CODES)
 }
 
 function normalizeTicketAttentionType(value) {
-  const type = asNonEmptyString(value).toUpperCase();
-  if (type === 'PRESENCIAL' || type === 'REMOTO') return type;
+  const type = asNonEmptyString(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (type === 'PRESENCIAL') return 'PRESENCIAL';
+  if (type === 'PRESENCIAL_FUERA_DE_HORARIO' || type === 'PRESENCIAL_FUERA_HORARIO') {
+    return 'PRESENCIAL_FUERA_DE_HORARIO';
+  }
+  if (type === 'REMOTO') return 'REMOTO';
+  if (type === 'REMOTO_FUERA_DE_HORARIO' || type === 'REMOTO_FUERA_HORARIO') {
+    return 'REMOTO_FUERA_DE_HORARIO';
+  }
   return '';
+}
+
+function normalizeTicketTravelRequired(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  const normalized = asNonEmptyString(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (!normalized) return undefined;
+  if (['1', 'true', 'si', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return undefined;
 }
 
 function normalizeTravelAdjustmentMonth(value) {
@@ -1929,6 +1956,7 @@ const ticketRouteDeps = {
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
+  normalizeTicketTravelRequired,
   canEditByRole,
   getRequestActor,
   getBranchCodesFromCatalog,

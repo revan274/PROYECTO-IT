@@ -552,6 +552,7 @@ export function buildInitialFormDataForModal(
     return {
       prioridad: 'MEDIA',
       atencionTipo: undefined,
+      trasladoRequerido: false,
       asignadoA: '',
       sucursal: defaultBranchCode,
       areaAfectada: '',

@@ -25,6 +25,7 @@ import {
   SESSION_STORAGE_KEY,
   TICKETS_INICIALES,
   THEME_STORAGE_KEY,
+  TICKET_ATTENTION_TYPES,
   TICKET_STATES,
   TRAVEL_DESTINATION_PRESETS,
   AUDITORIA_INICIAL,
@@ -198,7 +199,8 @@ export function normalizeReportFilterSnapshot(value: Partial<ReportFilterSnapsho
     ? (priorityRaw as ReportPriorityFilter)
     : defaults.priority;
   const attentionRaw = String(value?.attention || '').trim().toUpperCase();
-  const attention = (attentionRaw === 'TODAS' || attentionRaw === 'PRESENCIAL' || attentionRaw === 'REMOTO')
+  const isKnownAttention = TICKET_ATTENTION_TYPES.some((type) => type === attentionRaw);
+  const attention = (attentionRaw === 'TODAS' || isKnownAttention)
     ? (attentionRaw as ReportAttentionFilter)
     : defaults.attention;
   const technician = String(value?.technician || '').trim() || defaults.technician;

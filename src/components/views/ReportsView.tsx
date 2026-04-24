@@ -162,6 +162,9 @@ interface ReportsViewProps {
   reportIncidentCauseBars: readonly IncidentCauseBarItem[];
   applyReportIncidentCauseDrillDown: (area: string, cause: string) => void;
   reportIncidentCauseMax: number;
+  reportTravelCount: number;
+  reportAttentionBars: readonly CountBarItem[];
+  reportAttentionMax: number;
   reportInventorySnapshot: InventorySnapshot;
   reportSupplySnapshot: SupplySnapshot;
 }
@@ -266,6 +269,9 @@ export function ReportsView({
   reportIncidentCauseBars,
   applyReportIncidentCauseDrillDown,
   reportIncidentCauseMax,
+  reportTravelCount,
+  reportAttentionBars,
+  reportAttentionMax,
   reportInventorySnapshot,
   reportSupplySnapshot,
 }: ReportsViewProps) {
@@ -638,7 +644,7 @@ export function ReportsView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tickets</p>
           <p className="text-3xl font-black text-slate-800">{reportTicketsCount}</p>
@@ -672,6 +678,10 @@ export function ReportsView({
         <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Vencido</p>
           <p className="text-3xl font-black text-red-600">{reportSlaExpiredCount}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Traslados Req.</p>
+          <p className="text-3xl font-black text-amber-600">{reportTravelCount}</p>
         </div>
       </div>
 
@@ -848,6 +858,7 @@ export function ReportsView({
         </div>
       </div>
 
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <h4 className="text-base font-black uppercase text-slate-800">Top Causas Recurrentes</h4>
@@ -878,6 +889,30 @@ export function ReportsView({
           </div>
         )}
       </div>
+
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
+        <h4 className="text-base font-black uppercase text-slate-800">Tipos de Atencion</h4>
+        {reportAttentionBars.map((item) => (
+          <div key={`report-attention-${item.label}`} className="w-full text-left space-y-1">
+            <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <span>{item.label}</span>
+              <span>{item.count}</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full bg-blue-500"
+                style={{ width: `${Math.round((item.count / reportAttentionMax) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {reportAttentionBars.length === 0 && (
+          <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+            Sin datos de atencion para este periodo.
+          </div>
+        )}
+      </div>
+    </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white border border-slate-100 rounded-2xl p-4">

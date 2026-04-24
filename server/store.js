@@ -178,6 +178,7 @@ const DEFAULT_DB = {
       prioridad: 'CRITICA',
       estado: 'Abierto',
       atencionTipo: 'PRESENCIAL',
+      trasladoRequerido: true,
       fecha: '2023-10-24 09:00',
       fechaCreacion: '2023-10-24T09:00:00.000Z',
       fechaLimite: '2023-10-24T11:00:00.000Z',
@@ -246,9 +247,36 @@ function normalizeTicketAttachment(attachment) {
 }
 
 function normalizeTicketAttentionType(value) {
-  const type = text(value).toUpperCase();
-  if (type === 'PRESENCIAL' || type === 'REMOTO') return type;
+  const type = text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+  if (type === 'PRESENCIAL') return 'PRESENCIAL';
+  if (type === 'PRESENCIAL_FUERA_DE_HORARIO' || type === 'PRESENCIAL_FUERA_HORARIO') {
+    return 'PRESENCIAL_FUERA_DE_HORARIO';
+  }
+  if (type === 'REMOTO') return 'REMOTO';
+  if (type === 'REMOTO_FUERA_DE_HORARIO' || type === 'REMOTO_FUERA_HORARIO') {
+    return 'REMOTO_FUERA_DE_HORARIO';
+  }
   return '';
+}
+
+function normalizeTicketTravelRequired(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  const normalized = text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (!normalized) return undefined;
+  if (['1', 'true', 'si', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return undefined;
 }
 
 function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
@@ -274,6 +302,12 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
   if (!copy.prioridad) copy.prioridad = 'MEDIA';
   if (!copy.asignadoA) copy.asignadoA = '';
   copy.atencionTipo = normalizeTicketAttentionType(copy.atencionTipo);
+  const normalizedTravelRequired = normalizeTicketTravelRequired(copy.trasladoRequerido);
+  if (normalizedTravelRequired === undefined) {
+    delete copy.trasladoRequerido;
+  } else {
+    copy.trasladoRequerido = normalizedTravelRequired;
+  }
   copy.attachments = Array.isArray(copy.attachments)
     ? copy.attachments.map(normalizeTicketAttachment).filter(Boolean)
     : [];

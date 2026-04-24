@@ -43,6 +43,7 @@ export const TICKETS_INICIALES: TicketItem[] = [
     prioridad: 'CRITICA',
     estado: 'Abierto',
     atencionTipo: 'PRESENCIAL',
+    trasladoRequerido: true,
     fecha: '2023-10-24 09:00',
     asignadoA: 'Técnico 1',
     fechaCreacion: '2023-10-24T09:00:00.000Z',
@@ -66,7 +67,12 @@ export const NAV_ITEMS: NavItem[] = [
 export const CATEGORIAS_INSUMO = ['REDES', 'CONSUMIBLES', 'HARDWARE', 'PERIFERICOS'] as const;
 export const SUPPLY_UNIT_OPTIONS = ['Piezas', 'Rollos', 'Metros', 'Cajas', 'Litros'] as const;
 export const TICKET_STATES: TicketEstado[] = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
-export const TICKET_ATTENTION_TYPES: TicketAttentionType[] = ['PRESENCIAL', 'REMOTO'];
+export const TICKET_ATTENTION_TYPES: TicketAttentionType[] = [
+  'PRESENCIAL',
+  'PRESENCIAL_FUERA_DE_HORARIO',
+  'REMOTO',
+  'REMOTO_FUERA_DE_HORARIO',
+];
 export const DASHBOARD_RANGES: Array<{ value: DashboardRange; label: string; days: number }> = [
   { value: 'TODAY', label: 'Hoy', days: 1 },
   { value: '7D', label: '7 dias', days: 7 },

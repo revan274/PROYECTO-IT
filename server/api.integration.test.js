@@ -63,6 +63,7 @@ function createTicket({
   prioridad,
   estado,
   atencionTipo,
+  trasladoRequerido,
   fecha,
   fechaCreacion,
   fechaLimite,
@@ -80,6 +81,7 @@ function createTicket({
     prioridad,
     estado,
     atencionTipo,
+    ...(trasladoRequerido !== undefined ? { trasladoRequerido } : {}),
     fecha,
     fechaCreacion,
     fechaLimite,
@@ -170,6 +172,7 @@ function buildFixtureDb() {
         prioridad: 'ALTA',
         estado: 'En Proceso',
         atencionTipo: 'PRESENCIAL',
+        trasladoRequerido: true,
         fecha: '2026-03-30 12:00',
         fechaCreacion: '2026-03-30T12:00:00.000Z',
         fechaLimite: '2026-03-30T20:00:00.000Z',
@@ -686,6 +689,46 @@ test('resolver un ticket mantiene el activo en falla si existe otro ticket abier
   const storedAsset = persisted.activos.find((item) => item.tag === 'BAS-010');
   assert.ok(storedAsset);
   assert.equal(storedAsset.estado, 'Falla');
+});
+
+test('POST/PATCH /api/tickets persiste traslado y nuevos tipos de atencion', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Atencion fuera de horario en sucursal',
+      sucursal: 'TJ01',
+      prioridad: 'ALTA',
+      atencionTipo: 'PRESENCIAL_FUERA_DE_HORARIO',
+      trasladoRequerido: true,
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.atencionTipo, 'PRESENCIAL_FUERA_DE_HORARIO');
+  assert.equal(created.data.trasladoRequerido, true);
+
+  const updated = await requestJson(`/api/tickets/${created.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      atencionTipo: 'REMOTO_FUERA_DE_HORARIO',
+      trasladoRequerido: false,
+    },
+  });
+
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.atencionTipo, 'REMOTO_FUERA_DE_HORARIO');
+  assert.equal(updated.data.trasladoRequerido, false);
+
+  const persisted = await readPersistedDb();
+  const storedTicket = persisted.tickets.find((item) => item.id === created.data.id);
+  assert.ok(storedTicket);
+  assert.equal(storedTicket.atencionTipo, 'REMOTO_FUERA_DE_HORARIO');
+  assert.equal(storedTicket.trasladoRequerido, false);
 });
 
 test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { concurrency: false }, async () => {

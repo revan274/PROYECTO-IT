@@ -2,6 +2,7 @@ import React from 'react';
 import { Ticket, Trash2 } from 'lucide-react';
 import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
+import { ticketRequiresTravel } from '../../utils/tickets';
 import type {
   CatalogBranch,
   FormDataState,
@@ -84,6 +85,7 @@ interface TicketsViewProps {
   onResetFilters: () => void;
   onStatusChange: (ticketId: number, estado: TicketEstado) => void;
   onAttentionChange: (ticketId: number, atencionTipo: TicketAttentionType) => void;
+  onTravelChange: (ticketId: number, trasladoRequerido: boolean) => void;
   onAssigneeChange: (ticketId: number, asignadoA: string) => void;
   onViewAsset: (tag: string) => void;
   onResolveTicket: (ticketId: number) => void;
@@ -134,6 +136,7 @@ export function TicketsView({
   onResetFilters,
   onStatusChange,
   onAttentionChange,
+  onTravelChange,
   onAssigneeChange,
   onViewAsset,
   onResolveTicket,
@@ -279,6 +282,9 @@ export function TicketsView({
                     <Badge variant={normalizeTicketAttentionType(ticket.atencionTipo) || 'sin definir'}>
                       {formatTicketAttentionType(ticket.atencionTipo)}
                     </Badge>
+                    {ticketRequiresTravel(ticket) && (
+                      <Badge variant="traslado">Traslado</Badge>
+                    )}
                     <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${getSlaStatus(ticket).className}`}>
                       {getSlaStatus(ticket).label}
                     </span>
@@ -303,7 +309,7 @@ export function TicketsView({
                   )}
                 </div>
               </div>
-              <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center xl:w-auto">
+              <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto">
                 <select
                   disabled={!canEdit}
                   value={ticket.estado}
@@ -322,13 +328,29 @@ export function TicketsView({
                     if (!value) return;
                     onAttentionChange(ticket.id, value);
                   }}
-                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50 sm:min-w-[15rem]"
                 >
                   <option value="">Sin definir</option>
                   {ticketAttentionTypes.map((type) => (
                     <option key={type} value={type}>{formatTicketAttentionType(type)}</option>
                   ))}
                 </select>
+                <label className="flex min-w-[12rem] items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                  <span className="text-[10px] font-black uppercase text-slate-500">
+                    Se ocupo traslado
+                  </span>
+                  <span className="relative inline-flex h-6 w-11 shrink-0">
+                    <input
+                      type="checkbox"
+                      disabled={!canEdit}
+                      checked={ticketRequiresTravel(ticket)}
+                      onChange={(event) => onTravelChange(ticket.id, event.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500 peer-disabled:opacity-50" />
+                    <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                  </span>
+                </label>
                 <select
                   disabled={!canEdit}
                   value={ticket.asignadoA || ''}

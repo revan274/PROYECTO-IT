@@ -7,6 +7,7 @@ import {
   normalizeTicketAttentionType,
   formatTicketAttentionType,
   getSlaStatus,
+  ticketRequiresTravel,
 } from '../../utils/tickets';
 import { formatDateTime } from '../../utils/format';
 
@@ -183,6 +184,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <Badge variant={normalizeTicketAttentionType(ticket.atencionTipo) || 'sin definir'}>
                     {formatTicketAttentionType(ticket.atencionTipo)}
                   </Badge>
+                  {ticketRequiresTravel(ticket) && (
+                    <Badge variant="traslado">Traslado</Badge>
+                  )}
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getSlaStatus(ticket).className}`}>
                     {getSlaStatus(ticket).label}
                   </span>

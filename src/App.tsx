@@ -3041,6 +3041,16 @@ export default function App() {
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count);
   }, [reportTickets]);
+  const reportAttentionBars = useMemo(() => {
+    const counts = new Map<string, number>();
+    reportTickets.forEach((ticket) => {
+      const type = formatTicketAttentionType(ticket.atencionTipo) || 'NO ESPECIFICADO';
+      counts.set(type, (counts.get(type) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [reportTickets]);
   const reportIncidentCauseBars = useMemo(() => {
     const grouped = new Map<string, { key: string; area: string; cause: string; count: number }>();
     reportTickets.forEach((ticket) => {
@@ -3074,7 +3084,9 @@ export default function App() {
   const reportBranchMax = Math.max(1, ...reportBranchBars.map((item) => item.count));
   const reportAreaMax = Math.max(1, ...reportAreaBars.map((item) => item.count));
   const reportTechMax = Math.max(1, ...reportTechBars.map((item) => item.count));
+  const reportAttentionMax = Math.max(1, ...reportAttentionBars.map((item) => item.count));
   const reportIncidentCauseMax = Math.max(1, ...reportIncidentCauseBars.map((item) => item.count));
+  const reportTravelCount = useMemo(() => reportTickets.filter(t => t.trasladoRequerido).length, [reportTickets]);
   const effectiveReportAuditRows = useMemo(
     () => (view === 'reports' && reportAuditRowsRemote !== null ? reportAuditRowsRemote : normalizedAuditRows),
     [normalizedAuditRows, reportAuditRowsRemote, view],
@@ -4234,6 +4246,9 @@ export default function App() {
                       reportIncidentCauseBars={reportIncidentCauseBars}
                       applyReportIncidentCauseDrillDown={applyReportIncidentCauseDrillDown}
                       reportIncidentCauseMax={reportIncidentCauseMax}
+                      reportTravelCount={reportTravelCount}
+                      reportAttentionBars={reportAttentionBars}
+                      reportAttentionMax={reportAttentionMax}
                       reportInventorySnapshot={reportInventorySnapshot}
                       reportSupplySnapshot={reportSupplySnapshot}
                     />,
@@ -4514,6 +4529,9 @@ export default function App() {
                       const value = normalizeTicketAttentionType(atencionTipo);
                       if (!value) return;
                       void actualizarTicket(ticketId, { atencionTipo: value });
+                    }}
+                    onTravelChange={(ticketId, trasladoRequerido) => {
+                      void actualizarTicket(ticketId, { trasladoRequerido });
                     }}
                     onAssigneeChange={(ticketId, asignadoA) => {
                       void actualizarTicket(ticketId, { asignadoA });

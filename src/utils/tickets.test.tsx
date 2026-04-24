@@ -4,6 +4,10 @@ import type { Activo } from '../types/app';
 import {
   buildSuggestedTicketIssues,
   buildTicketAssetContextSummary,
+  formatTicketAttentionType,
+  normalizeTicketAttentionType,
+  normalizeTicketTravelRequired,
+  ticketRequiresTravel,
 } from './tickets';
 
 const VALID_BRANCH_CODES = new Set(['TJ01', 'TJ02', 'TJ03', 'TC01', 'CEDIS']);
@@ -84,5 +88,26 @@ describe('buildSuggestedTicketIssues', () => {
     expect(issues[0]).toBe('No se genera reporte diario');
     expect(issues).toContain('Equipo no enciende');
     expect(issues).toContain('No acceso a carpetas o servidor remoto');
+  });
+});
+
+describe('ticket attention helpers', () => {
+  test('normaliza y formatea nuevas atenciones fuera de horario', () => {
+    expect(normalizeTicketAttentionType('presencial fuera de horario')).toBe('PRESENCIAL_FUERA_DE_HORARIO');
+    expect(normalizeTicketAttentionType('REMOTO_FUERA_HORARIO')).toBe('REMOTO_FUERA_DE_HORARIO');
+    expect(formatTicketAttentionType('REMOTO_FUERA_DE_HORARIO')).toBe('Remoto fuera de horario');
+  });
+
+  test('normaliza el indicador de traslado con entradas comunes', () => {
+    expect(normalizeTicketTravelRequired(true)).toBe(true);
+    expect(normalizeTicketTravelRequired('si')).toBe(true);
+    expect(normalizeTicketTravelRequired('no')).toBe(false);
+    expect(normalizeTicketTravelRequired(undefined)).toBeNull();
+  });
+
+  test('mantiene compatibilidad con tickets presenciales legacy para traslados', () => {
+    expect(ticketRequiresTravel({ atencionTipo: 'PRESENCIAL' })).toBe(true);
+    expect(ticketRequiresTravel({ atencionTipo: 'PRESENCIAL', trasladoRequerido: false })).toBe(false);
+    expect(ticketRequiresTravel({ atencionTipo: 'REMOTO_FUERA_DE_HORARIO', trasladoRequerido: true })).toBe(true);
   });
 });

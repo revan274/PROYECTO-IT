@@ -10,6 +10,7 @@ export function createTicketsRouter({
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
+  normalizeTicketTravelRequired,
   canEditByRole,
   getRequestActor,
   getBranchCodesFromCatalog,
@@ -62,11 +63,16 @@ router.post('/', requireAuth, async (req, res, next) => {
     const sucursalInput = req.body?.sucursal;
     const prioridad = normalizePrioridad(req.body?.prioridad);
     const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
+    const hasTrasladoField = req.body?.trasladoRequerido !== undefined;
+    const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
     const asignadoA = canEditByRole(req.authUser?.rol) ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
     if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || !atencionTipo) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
+    }
+    if (hasTrasladoField && trasladoRequerido === undefined) {
+      return res.status(400).json({ error: 'Indicador de traslado no valido.' });
     }
 
     const created = await updateDb((db) => {
@@ -87,6 +93,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         sucursal,
         prioridad,
         atencionTipo,
+        ...(trasladoRequerido !== undefined ? { trasladoRequerido } : {}),
         estado: 'Abierto',
         fecha: now(),
         fechaCreacion: createdAtIso,
@@ -116,7 +123,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
       pushAuditWithContext(db, req, {
         accion: 'Nuevo Ticket',
-        item: `${activoTag} | ${sucursal} | ${atencionTipo}`,
+        item: `${activoTag} | ${sucursal} | ${atencionTipo}${trasladoRequerido ? ' | TRASLADO' : ''}`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
@@ -151,11 +158,13 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const asignadoA = req.body?.asignadoA !== undefined ? asNonEmptyString(req.body?.asignadoA) : undefined;
     const hasAtencionTipoUpdate = req.body?.atencionTipo !== undefined;
     const atencionTipo = hasAtencionTipoUpdate ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
+    const hasTrasladoUpdate = req.body?.trasladoRequerido !== undefined;
+    const trasladoRequerido = hasTrasladoUpdate ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
 
     if (id === null) return res.status(400).json({ error: 'ID invalido.' });
-    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate) {
+    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
     if (req.body?.estado && !estado) {
@@ -163,6 +172,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
     if (hasAtencionTipoUpdate && !atencionTipo) {
       return res.status(400).json({ error: 'Tipo de atencion no valido.' });
+    }
+    if (hasTrasladoUpdate && trasladoRequerido === undefined) {
+      return res.status(400).json({ error: 'Indicador de traslado no valido.' });
     }
 
     const updated = await updateDb((db) => {
@@ -182,10 +194,13 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
       const previousState = ticket.estado;
       const previousAttentionType = normalizeTicketAttentionType(ticket.atencionTipo);
+      const previousTravelRequired = ticket.trasladoRequerido === true;
       if (estado) ticket.estado = estado;
       if (nextAssignee !== undefined) ticket.asignadoA = nextAssignee;
       if (hasAtencionTipoUpdate) ticket.atencionTipo = atencionTipo;
+      if (hasTrasladoUpdate) ticket.trasladoRequerido = trasladoRequerido;
       const attentionChanged = hasAtencionTipoUpdate && atencionTipo !== previousAttentionType;
+      const travelChanged = hasTrasladoUpdate && trasladoRequerido !== previousTravelRequired;
 
       const stateChanged = !!estado && estado !== previousState;
       if (CLOSED_STATES.has(ticket.estado)) {
@@ -204,7 +219,13 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       ticket.historial.unshift({
         fecha: now(),
         usuario,
-        accion: estado ? ticketAuditAction(ticket.estado) : attentionChanged ? 'Tipo Atencion Ticket' : 'Ticket Actualizado',
+        accion: estado
+          ? ticketAuditAction(ticket.estado)
+          : attentionChanged
+            ? 'Tipo Atencion Ticket'
+            : travelChanged
+              ? 'Traslado Ticket'
+              : 'Ticket Actualizado',
         estado: ticket.estado,
         comentario: comentario || '',
       });
@@ -237,6 +258,18 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         pushAuditWithContext(db, req, {
           accion: 'Tipo Atencion Ticket',
           item: `${ticket.activoTag} | ${atencionTipo}`,
+          cantidad: 1,
+          usuario,
+          modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          after: ticket,
+        });
+      }
+      if (travelChanged) {
+        pushAuditWithContext(db, req, {
+          accion: 'Traslado Ticket',
+          item: `${ticket.activoTag} | ${trasladoRequerido ? 'SI' : 'NO'}`,
           cantidad: 1,
           usuario,
           modulo: 'tickets',
@@ -683,6 +716,7 @@ router.get('/', requireAuth, async (req, res, next) => {
           ticket.solicitadoPor,
           ticket.departamento,
           ticket.atencionTipo,
+          ticket.trasladoRequerido ? 'traslado' : '',
           String(ticket.id),
         ];
         return fields.some((value) => normalizeTextKey(value || '').includes(search));
