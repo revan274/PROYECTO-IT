@@ -56,6 +56,14 @@ export function useAppBootstrap({
         setLastSync(new Date().toLocaleTimeString());
         onRefreshSuccess?.();
       } catch (error) {
+        setCoreData({
+          activos: [],
+          insumos: [],
+          tickets: [],
+          users: [],
+          catalogos: normalizeCatalogState(),
+          auditoria: [],
+        });
         if (isSessionRejectedApiError(error)) {
           onSessionRejected();
           if (!silent) {
