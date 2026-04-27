@@ -232,6 +232,13 @@ html.dark .text-orange-700  { color: #fb923c !important; }
 html.dark [class*="bg-[#f4fce3]"]    { background-color: rgba(20, 83, 45, 0.3) !important; }
 html.dark [class*="border-[#d8f5a2]"] { border-color: rgba(74, 127, 16, 0.35) !important; }
 
+/* ── Toggle switch thumb — must stay light in dark mode ── */
+html.dark .toggle-thumb { background-color: #e2e8f0 !important; }
+
+/* ── Disabled state variants ── */
+html.dark .disabled\:bg-slate-100:disabled { background-color: #1e293b !important; }
+html.dark .disabled\:text-slate-400:disabled { color: #64748b !important; }
+
 /* Modal Animations */
 @keyframes modalFadeIn {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }

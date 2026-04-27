@@ -348,7 +348,7 @@ export function TicketsView({
                       className="peer sr-only"
                     />
                     <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500 peer-disabled:opacity-50" />
-                    <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                    <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white toggle-thumb shadow-sm transition-transform peer-checked:translate-x-5" />
                   </span>
                 </label>
                 <select
