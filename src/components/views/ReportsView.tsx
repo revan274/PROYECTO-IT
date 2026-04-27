@@ -106,6 +106,8 @@ interface ReportsViewProps {
   setTravelReportAuthorizer: React.Dispatch<React.SetStateAction<string>>;
   travelReportFinance: string;
   setTravelReportFinance: React.Dispatch<React.SetStateAction<string>>;
+  travelDestinationRules: readonly TravelDestinationRule[];
+  travelSuggestedTripsByCode: ReadonlyMap<string, number>;
   travelMonthLabel: string;
   effectiveTravelReporterName: string;
   travelTotalTrips: number;
@@ -209,6 +211,8 @@ export function ReportsView({
   setTravelReportAuthorizer,
   travelReportFinance,
   setTravelReportFinance,
+  travelDestinationRules,
+  travelSuggestedTripsByCode,
   travelMonthLabel,
   effectiveTravelReporterName,
   travelTotalTrips,
@@ -503,37 +507,57 @@ export function ReportsView({
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-100 bg-amber-50/50 p-5 space-y-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Resumen del formato</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Mes</p>
-                <p className="text-sm font-black uppercase text-slate-800">{travelMonthLabel}</p>
-              </div>
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Reporta</p>
-                <p className="text-sm font-black uppercase text-slate-800">{effectiveTravelReporterName}</p>
-              </div>
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total viajes</p>
-                <p className="text-2xl font-black text-slate-800">{travelTotalTrips}</p>
-              </div>
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total kms</p>
-                <p className="text-2xl font-black text-slate-800">{formatTravelNumber(travelTotalKms)}</p>
-              </div>
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Rendimiento</p>
-                <p className="text-sm font-black uppercase text-slate-800">{travelFuelEfficiencyValue} km/l</p>
-              </div>
-              <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Litros</p>
-                <p className="text-2xl font-black text-slate-800">{travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D'}</p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Tabla de rutas / kms base
+              </p>
+              <div className="space-y-2">
+                {travelDestinationRules.map((row) => (
+                  <div key={`travel-kms-${row.code}`} className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-[42px_minmax(0,1fr)_88px_76px] sm:items-center">
+                    <div className="text-xs font-black uppercase text-slate-500 text-center">#{row.index}</div>
+                    <div className="text-xs font-black uppercase text-slate-700">{row.label}</div>
+                    <div className="px-3 py-2 text-xs font-black uppercase text-slate-700 text-center">{row.kms} km</div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 text-left sm:text-right">
+                      {travelSuggestedTripsByCode.get(row.code) || 0} viajes
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Los viajes se calculan automaticamente a partir de tickets con traslado requerido en el mes seleccionado.
-            </p>
+
+            <div className="rounded-2xl border border-slate-100 bg-amber-50/50 p-5 space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Resumen del formato</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Mes</p>
+                  <p className="text-sm font-black uppercase text-slate-800">{travelMonthLabel}</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Reporta</p>
+                  <p className="text-sm font-black uppercase text-slate-800">{effectiveTravelReporterName}</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total viajes</p>
+                  <p className="text-2xl font-black text-slate-800">{travelTotalTrips}</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total kms</p>
+                  <p className="text-2xl font-black text-slate-800">{formatTravelNumber(travelTotalKms)}</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Rendimiento</p>
+                  <p className="text-sm font-black uppercase text-slate-800">{travelFuelEfficiencyValue} km/l</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Litros</p>
+                  <p className="text-2xl font-black text-slate-800">{travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D'}</p>
+                </div>
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                El formato toma tickets del mes seleccionado y respeta filtros de sucursal, area, estado y prioridad.
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -4058,6 +4058,8 @@ export default function App() {
                       setTravelReportAuthorizer={setTravelReportAuthorizer}
                       travelReportFinance={travelReportFinance}
                       setTravelReportFinance={setTravelReportFinance}
+                      travelDestinationRules={travelDestinationRules}
+                      travelSuggestedTripsByCode={travelSuggestedTripsByCode}
                       travelMonthLabel={travelMonthLabel}
                       effectiveTravelReporterName={effectiveTravelReporterName}
                       travelTotalTrips={travelTotalTrips}
