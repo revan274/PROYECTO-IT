@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Activo,
   AuditFiltersState,
   AuditPaginationState,
@@ -30,6 +30,7 @@ import {
   TRAVEL_DESTINATION_PRESETS,
   AUDITORIA_INICIAL,
 } from '../constants/app';
+
 export function createEmptyInsumoTouched(): InsumoTouchedState {
   return {
     nombre: false,
@@ -37,6 +38,8 @@ export function createEmptyInsumoTouched(): InsumoTouchedState {
     stock: false,
     min: false,
     categoria: false,
+    ubicacion: false,
+    proveedor: false,
   };
 }
 
