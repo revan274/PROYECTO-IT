@@ -8,6 +8,7 @@ import { createInsumosRouter } from './routes/insumos.js';
 import { createActivosRouter } from './routes/activos.js';
 import { createTicketsRouter } from './routes/tickets.js';
 import { createUsersRouter } from './routes/users.js';
+import { startKeepAlive } from './utils/keepAlive.js';
 import {
   buildAssetQrLookupResponse,
   buildSignedAssetQrToken,
@@ -1307,6 +1308,8 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
+    const publicUrl = process.env.PUBLIC_URL || 'https://proyecto-it.onrender.com';
+    startKeepAlive(`${publicUrl}/api/health`);
   });
 }
 
