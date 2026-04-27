@@ -16,7 +16,6 @@ import type {
   ReportFilterPreset,
   ReportFilterSnapshot,
   SupplyAuditMovement,
-  TravelTripAdjustment,
   ViewType,
 } from '../../types/app';
 import {
@@ -24,7 +23,6 @@ import {
   buildDefaultAuditFilters,
   buildDefaultAuditPagination,
   buildDefaultReportFilterSnapshot,
-  buildDefaultTravelKmsByBranch,
   createEmptyInsumoTouched,
 } from '../../utils/app';
 import {
@@ -75,10 +73,6 @@ interface UseSessionActionsOptions {
   setTravelReportFuelEfficiency: Dispatch<SetStateAction<string>>;
   setTravelReportAuthorizer: Dispatch<SetStateAction<string>>;
   setTravelReportFinance: Dispatch<SetStateAction<string>>;
-  setTravelKmsByBranch: Dispatch<SetStateAction<Record<string, string>>>;
-  setTravelAdjustments: Dispatch<SetStateAction<TravelTripAdjustment[]>>;
-  setTravelTripDrafts: Dispatch<SetStateAction<Record<string, string>>>;
-  setTravelSavingCode: Dispatch<SetStateAction<string | null>>;
 }
 
 export function useSessionActions({
@@ -122,10 +116,6 @@ export function useSessionActions({
   setTravelReportFuelEfficiency,
   setTravelReportAuthorizer,
   setTravelReportFinance,
-  setTravelKmsByBranch,
-  setTravelAdjustments,
-  setTravelTripDrafts,
-  setTravelSavingCode,
 }: UseSessionActionsOptions) {
   const logout = useAppStore((state) => state.logout);
   const resetCoreData = useAppStore((state) => state.resetCoreData);
@@ -164,10 +154,6 @@ export function useSessionActions({
     setTravelReportFuelEfficiency(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
     setTravelReportAuthorizer(TRAVEL_DEFAULT_AUTHORIZER);
     setTravelReportFinance(TRAVEL_DEFAULT_FINANCE);
-    setTravelKmsByBranch(buildDefaultTravelKmsByBranch());
-    setTravelAdjustments([]);
-    setTravelTripDrafts({});
-    setTravelSavingCode(null);
     setSelectedAsset(null);
     setSelectedSupplyHistoryItem(null);
     setSelectedSupplyHistoryRemoteMovements(null);
@@ -221,8 +207,6 @@ export function useSessionActions({
     setSupplyStockDrafts,
     setTicketAttachmentLoadingId,
     setTicketCommentDrafts,
-    setTravelAdjustments,
-    setTravelKmsByBranch,
     setTravelReportAuthorizer,
     setTravelReportDepartment,
     setTravelReportFinance,
@@ -230,8 +214,6 @@ export function useSessionActions({
     setTravelReportMonth,
     setTravelReportName,
     setTravelReportTechnician,
-    setTravelSavingCode,
-    setTravelTripDrafts,
     setView,
   ]);
 

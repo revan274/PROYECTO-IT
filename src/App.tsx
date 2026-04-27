@@ -62,8 +62,6 @@ import type {
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
-  TravelTripAdjustment,
-  TravelTripAdjustmentResponse,
   ViewType,
   TravelReportRow,
   UserRole,
@@ -303,14 +301,6 @@ export default function App() {
     setTravelReportAuthorizer,
     travelReportFinance,
     setTravelReportFinance,
-    travelKmsByBranch,
-    setTravelKmsByBranch,
-    travelAdjustments,
-    setTravelAdjustments,
-    travelTripDrafts,
-    setTravelTripDrafts,
-    travelSavingCode,
-    setTravelSavingCode,
   } = useReportState();
   const {
     showModal,
@@ -726,10 +716,6 @@ export default function App() {
     setTravelReportFuelEfficiency,
     setTravelReportAuthorizer,
     setTravelReportFinance,
-    setTravelKmsByBranch,
-    setTravelAdjustments,
-    setTravelTripDrafts,
-    setTravelSavingCode,
   });
 
   const {
@@ -743,7 +729,6 @@ export default function App() {
     setAuditIntegrity,
     setAuditAlerts,
     setAuditPagination,
-    setTravelAdjustments,
     setSelectedSupplyHistoryRemoteMovements,
     setAssetRiskSummary,
   });
@@ -2550,7 +2535,7 @@ export default function App() {
         code,
         index: preset.index,
         label,
-        kms: parseNonNegativeNumber(travelKmsByBranch[code], preset.defaultKms),
+        kms: preset.defaultKms,
       });
       usedCodes.add(code);
     });
@@ -2567,20 +2552,16 @@ export default function App() {
           code,
           index: nextIndex,
           label: compactBranchLabel(branch?.name) || code,
-          kms: parseNonNegativeNumber(travelKmsByBranch[code], 0),
+          kms: 0,
         });
         usedCodes.add(code);
         nextIndex += 1;
       });
 
     return rows.sort((a, b) => a.index - b.index);
-  }, [activeTicketBranches, travelKmsByBranch]);
+  }, [activeTicketBranches]);
   const travelDestinationRuleByCode = useMemo(
     () => new Map(travelDestinationRules.map((row) => [row.code, row])),
-    [travelDestinationRules],
-  );
-  const travelDestinationCodesKey = useMemo(
-    () => travelDestinationRules.map((row) => row.code).join('|'),
     [travelDestinationRules],
   );
   const travelMonthRange = useMemo(
@@ -2653,42 +2634,10 @@ export default function App() {
     });
     return counts;
   }, [travelTicketRows]);
-  const travelCurrentAdjustmentByCode = useMemo(() => {
-    const map = new Map<string, TravelTripAdjustment>();
-    travelAdjustments.forEach((adjustment) => {
-      if (adjustment.month !== travelReportMonth) return;
-      if (adjustment.technicianScopeKey !== currentTravelScope.key) return;
-      map.set(adjustment.destinationCode, adjustment);
-    });
-    return map;
-  }, [currentTravelScope.key, travelAdjustments, travelReportMonth]);
-  useEffect(() => {
-    const nextDrafts: Record<string, string> = {};
-    const destinationCodes = travelDestinationCodesKey ? travelDestinationCodesKey.split('|') : [];
-    destinationCodes.forEach((destinationCode) => {
-      const adjustment = travelCurrentAdjustmentByCode.get(destinationCode);
-      nextDrafts[destinationCode] = adjustment ? String(adjustment.trips) : '';
-    });
-    setTravelTripDrafts(nextDrafts);
-  }, [setTravelTripDrafts, travelCurrentAdjustmentByCode, travelDestinationCodesKey]);
-  const travelTripsByCode = useMemo(() => {
-    const counts = new Map<string, number>();
-    const destinationCodes = new Set<string>([
-      ...travelDestinationRules.map((row) => row.code),
-      ...travelSuggestedTripsByCode.keys(),
-      ...travelCurrentAdjustmentByCode.keys(),
-    ]);
-    destinationCodes.forEach((destinationCode) => {
-      const adjustment = travelCurrentAdjustmentByCode.get(destinationCode);
-      const suggested = travelSuggestedTripsByCode.get(destinationCode) || 0;
-      counts.set(destinationCode, adjustment ? adjustment.trips : suggested);
-    });
-    return counts;
-  }, [travelCurrentAdjustmentByCode, travelDestinationRules, travelSuggestedTripsByCode]);
   const travelReportRows = useMemo(
     () => buildTravelReportRowsFromActualTrips(
       travelTicketRows,
-      travelTripsByCode,
+      travelSuggestedTripsByCode,
       travelDestinationRuleByCode,
       effectiveTravelReporterName,
       travelMonthRange,
@@ -2698,19 +2647,19 @@ export default function App() {
       travelDestinationRuleByCode,
       travelMonthRange,
       travelTicketRows,
-      travelTripsByCode,
+      travelSuggestedTripsByCode,
     ],
   );
   const travelTotalTrips = useMemo(
-    () => Array.from(travelTripsByCode.values()).reduce((sum, trips) => sum + trips, 0),
-    [travelTripsByCode],
+    () => Array.from(travelSuggestedTripsByCode.values()).reduce((sum, trips) => sum + trips, 0),
+    [travelSuggestedTripsByCode],
   );
   const travelTotalKms = useMemo(
-    () => Array.from(travelTripsByCode.entries()).reduce((sum, [destinationCode, trips]) => {
+    () => Array.from(travelSuggestedTripsByCode.entries()).reduce((sum, [destinationCode, trips]) => {
       const destinationRule = travelDestinationRuleByCode.get(destinationCode);
       return sum + ((destinationRule?.kms || 0) * trips);
     }, 0),
-    [travelDestinationRuleByCode, travelTripsByCode],
+    [travelDestinationRuleByCode, travelSuggestedTripsByCode],
   );
   const travelFuelEfficiencyValue = useMemo(
     () => parseNonNegativeNumber(travelReportFuelEfficiency, TRAVEL_DEFAULT_FUEL_EFFICIENCY),
@@ -2723,70 +2672,6 @@ export default function App() {
     () => formatMonthInputLabel(travelReportMonth),
     [travelReportMonth],
   );
-  const saveTravelTripAdjustment = useCallback(async (destinationCode: string, rawValue?: string) => {
-    if (!canEdit) {
-      showToast('Solo administradores y tecnicos pueden guardar viajes reales.', 'warning');
-      return;
-    }
-    if (!ensureBackendConnected('Guardar viajes reales')) return;
-    if (!travelMonthRange) {
-      showToast('Selecciona un mes valido para registrar viajes reales.', 'warning');
-      return;
-    }
-
-    const draftValue = String(rawValue ?? travelTripDrafts[destinationCode] ?? '').trim();
-    let trips: number | null = null;
-    if (draftValue) {
-      if (!/^\d+$/.test(draftValue)) {
-        showToast('Los viajes reales deben capturarse como enteros mayores o iguales a cero.', 'warning');
-        return;
-      }
-      trips = Math.max(0, Math.trunc(Number(draftValue)));
-    }
-
-    setTravelSavingCode(destinationCode);
-    try {
-      const response = await apiRequest<TravelTripAdjustmentResponse>('/travel-adjustments', {
-        method: 'PUT',
-        body: JSON.stringify({
-          month: travelReportMonth,
-          technicianScopeKey: currentTravelScope.key,
-          technicianScopeLabel: currentTravelScope.label,
-          destinationCode,
-          trips,
-        }),
-      });
-      setTravelAdjustments((prev) => {
-        const filtered = prev.filter((item) => !(
-          item.month === travelReportMonth
-          && item.technicianScopeKey === currentTravelScope.key
-          && item.destinationCode === destinationCode
-        ));
-        return response.adjustment ? [...filtered, response.adjustment] : filtered;
-      });
-      showToast(
-        trips === null
-          ? 'Viajes reales restablecidos al conteo sugerido por tickets.'
-          : 'Viajes reales guardados para control de gasolina.',
-        'success',
-      );
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudieron guardar los viajes reales.', 'error');
-    } finally {
-      setTravelSavingCode((current) => (current === destinationCode ? null : current));
-    }
-  }, [
-    canEdit,
-    currentTravelScope.key,
-    currentTravelScope.label,
-    ensureBackendConnected,
-    setTravelAdjustments,
-    setTravelSavingCode,
-    showToast,
-    travelMonthRange,
-    travelReportMonth,
-    travelTripDrafts,
-  ]);
   const reportScopedTicketsByFilters = useMemo(
     () =>
       !isReportsView
@@ -3134,20 +3019,6 @@ export default function App() {
     const exists = reportTechnicianOptions.some((name) => normalizeForCompare(name) === normalizeForCompare(reportTechnicianFilter));
     if (!exists) setReportTechnicianFilter('TODOS');
   }, [reportTechnicianFilter, reportTechnicianOptions, setReportTechnicianFilter]);
-  useEffect(() => {
-    setTravelKmsByBranch((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      activeTicketBranches.forEach((branch) => {
-        const code = String(branch.code || '').trim().toUpperCase();
-        if (!code || Object.prototype.hasOwnProperty.call(next, code)) return;
-        const preset = TRAVEL_DESTINATION_PRESETS.find((item) => item.code === code);
-        next[code] = String(preset?.defaultKms ?? 0);
-        changed = true;
-      });
-      return changed ? next : prev;
-    });
-  }, [activeTicketBranches, setTravelKmsByBranch]);
   useEffect(() => {
     if (travelReportTechnician === 'TODOS' || travelReportTechnician === 'SIN_ASIGNAR') return;
     const exists = travelTechnicianOptions.some((name) => normalizeForCompare(name) === normalizeForCompare(travelReportTechnician));
@@ -3676,7 +3547,7 @@ export default function App() {
         <td class="center">${row.index}</td>
         <td>${escapeHtml(row.label)}</td>
         <td class="center">${formatTravelNumber(row.kms)}</td>
-        <td class="center">${travelTripsByCode.get(row.code) || 0}</td>
+        <td class="center">${travelSuggestedTripsByCode.get(row.code) || 0}</td>
       </tr>
     `).join('');
 
@@ -4133,7 +4004,6 @@ export default function App() {
                   renderLazyView(
                     'Cargando Reporteria...',
                     <LazyReportsView
-                      canEditTravelTrips={canEdit}
                       openReportExecutivePresentation={openReportExecutivePresentation}
                       exportReportExcel={() => {
                         void exportReportExcel();
@@ -4188,15 +4058,6 @@ export default function App() {
                       setTravelReportAuthorizer={setTravelReportAuthorizer}
                       travelReportFinance={travelReportFinance}
                       setTravelReportFinance={setTravelReportFinance}
-                      travelDestinationRules={travelDestinationRules}
-                      travelKmsByBranch={travelKmsByBranch}
-                      setTravelKmsByBranch={setTravelKmsByBranch}
-                      travelSuggestedTripsByCode={travelSuggestedTripsByCode}
-                      travelTripsByCode={travelTripsByCode}
-                      travelTripDrafts={travelTripDrafts}
-                      setTravelTripDrafts={setTravelTripDrafts}
-                      travelSavingCode={travelSavingCode}
-                      saveTravelTripAdjustment={saveTravelTripAdjustment}
                       travelMonthLabel={travelMonthLabel}
                       effectiveTravelReporterName={effectiveTravelReporterName}
                       travelTotalTrips={travelTotalTrips}

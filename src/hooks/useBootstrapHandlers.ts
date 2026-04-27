@@ -9,7 +9,6 @@ import type {
   BootstrapResponse,
   RegistroAuditoria,
   SupplyAuditMovement,
-  TravelTripAdjustment,
 } from '../types/app';
 import { buildDefaultAuditPagination } from '../utils/app';
 import { calculateAssetRiskSummary } from '../utils/assets';
@@ -22,7 +21,6 @@ interface UseBootstrapHandlersOptions {
   setAuditIntegrity: Dispatch<SetStateAction<AuditIntegrityState | null>>;
   setAuditAlerts: Dispatch<SetStateAction<AuditAlertsState | null>>;
   setAuditPagination: Dispatch<SetStateAction<AuditPaginationState>>;
-  setTravelAdjustments: Dispatch<SetStateAction<TravelTripAdjustment[]>>;
   setSelectedSupplyHistoryRemoteMovements: Dispatch<SetStateAction<SupplyAuditMovement[] | null>>;
   setAssetRiskSummary: Dispatch<SetStateAction<AssetRiskSummary | null>>;
 }
@@ -35,7 +33,6 @@ export function useBootstrapHandlers({
   setAuditIntegrity,
   setAuditAlerts,
   setAuditPagination,
-  setTravelAdjustments,
   setSelectedSupplyHistoryRemoteMovements,
   setAssetRiskSummary,
 }: UseBootstrapHandlersOptions) {
@@ -44,7 +41,6 @@ export function useBootstrapHandlers({
     setAuditIntegrity(null);
     setAuditAlerts(null);
     setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-    setTravelAdjustments(data.travelAdjustments || []);
     if (data.riskSummary) {
       setAssetRiskSummary(data.riskSummary);
     } else {
@@ -57,7 +53,6 @@ export function useBootstrapHandlers({
     setAuditIntegrity,
     setAuditPagination,
     setAuditSummary,
-    setTravelAdjustments,
   ]);
 
   const handleBootstrapFailure = useCallback(() => {
@@ -67,7 +62,6 @@ export function useBootstrapHandlers({
     setAuditIntegrity(null);
     setAuditAlerts(null);
     setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-    setTravelAdjustments([]);
     setSelectedSupplyHistoryRemoteMovements(null);
   }, [
     auditPageSize,
@@ -78,7 +72,6 @@ export function useBootstrapHandlers({
     setAuditSummary,
     setReportAuditRowsRemote,
     setSelectedSupplyHistoryRemoteMovements,
-    setTravelAdjustments,
   ]);
 
   return {

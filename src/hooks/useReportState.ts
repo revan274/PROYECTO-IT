@@ -1,15 +1,13 @@
 import { useState } from 'react';
-import type { 
-  ReportAttentionFilter, 
-  ReportFilterPreset, 
-  ReportPriorityFilter, 
-  ReportStateFilter, 
-  TravelTripAdjustment 
+import type {
+  ReportAttentionFilter,
+  ReportFilterPreset,
+  ReportPriorityFilter,
+  ReportStateFilter,
 } from '../types/app';
-import { 
-  buildCurrentMonthInputValue, 
-  buildDefaultReportFilterSnapshot, 
-  buildDefaultTravelKmsByBranch 
+import {
+  buildCurrentMonthInputValue,
+  buildDefaultReportFilterSnapshot,
 } from '../utils/app';
 import { 
   TRAVEL_DEFAULT_AUTHORIZER, 
@@ -37,11 +35,6 @@ export function useReportState() {
   const [travelReportFuelEfficiency, setTravelReportFuelEfficiency] = useState(String(TRAVEL_DEFAULT_FUEL_EFFICIENCY));
   const [travelReportAuthorizer, setTravelReportAuthorizer] = useState(TRAVEL_DEFAULT_AUTHORIZER);
   const [travelReportFinance, setTravelReportFinance] = useState(TRAVEL_DEFAULT_FINANCE);
-  const [travelKmsByBranch, setTravelKmsByBranch] = useState<Record<string, string>>(() => buildDefaultTravelKmsByBranch());
-  const [travelAdjustments, setTravelAdjustments] = useState<TravelTripAdjustment[]>([]);
-  const [travelTripDrafts, setTravelTripDrafts] = useState<Record<string, string>>({});
-  const [travelSavingCode, setTravelSavingCode] = useState<string | null>(null);
-
   return {
     reportDateFrom, setReportDateFrom,
     reportDateTo, setReportDateTo,
@@ -60,9 +53,5 @@ export function useReportState() {
     travelReportFuelEfficiency, setTravelReportFuelEfficiency,
     travelReportAuthorizer, setTravelReportAuthorizer,
     travelReportFinance, setTravelReportFinance,
-    travelKmsByBranch, setTravelKmsByBranch,
-    travelAdjustments, setTravelAdjustments,
-    travelTripDrafts, setTravelTripDrafts,
-    travelSavingCode, setTravelSavingCode,
   };
 }
