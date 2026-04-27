@@ -134,6 +134,8 @@ export function useModalState({
       stock: String(insumo.stock),
       min: String(insumo.min),
       categoria: insumo.categoria || '',
+      ubicacionInsumo: insumo.ubicacion || '',
+      proveedor: insumo.proveedor || '',
     });
     setShowModal('insumo');
   }, [

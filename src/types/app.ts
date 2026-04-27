@@ -1,4 +1,4 @@
-﻿import type { ComponentType } from 'react';
+import type { ComponentType } from 'react';
 
 export type EstadoActivo = 'Operativo' | 'Falla';
 export type PrioridadTicket = 'MEDIA' | 'ALTA' | 'CRITICA';
@@ -22,7 +22,7 @@ export type DashboardRange = 'TODAY' | '7D' | '30D' | '90D';
 export type ReportStateFilter = TicketEstado | 'TODOS';
 export type ReportPriorityFilter = PrioridadTicket | 'TODAS';
 export type ReportAttentionFilter = TicketAttentionType | 'TODAS';
-export type InsumoField = 'nombre' | 'unidad' | 'stock' | 'min' | 'categoria';
+export type InsumoField = 'nombre' | 'unidad' | 'stock' | 'min' | 'categoria' | 'ubicacion' | 'proveedor';
 export type InsumoTouchedState = Record<InsumoField, boolean>;
 export type InsumoErrors = Partial<Record<InsumoField, string>>;
 
@@ -171,6 +171,8 @@ export interface Insumo {
   stock: number;
   min: number;
   categoria: string;
+  ubicacion?: string;
+  proveedor?: string;
   activo?: boolean;
 }
 
@@ -211,6 +213,11 @@ export interface TicketItem {
     accion: string;
     estado: TicketEstado;
     comentario?: string;
+  }>;
+  insumosUsados?: Array<{
+    insumoId: number;
+    cantidad: number;
+    nombre: string;
   }>;
   attachments?: TicketAttachment[];
 }
@@ -369,6 +376,8 @@ export interface FormDataState {
   trasladoRequerido?: boolean;
   asignadoA?: string;
   comentario?: string;
+  ubicacionInsumo?: string;
+  proveedor?: string;
 }
 
 export interface UserItem {

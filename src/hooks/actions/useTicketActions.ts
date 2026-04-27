@@ -144,9 +144,6 @@ export function useTicketActions({
           atencionTipo,
           trasladoRequerido,
           asignadoA: canEdit ? (formData.asignadoA || '') : '',
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-          departamento: sessionUser?.departamento || '',
         }),
       });
       await refreshData();
@@ -177,11 +174,7 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${ticketId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          ...updates,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
+        body: JSON.stringify(updates),
       });
       await refreshData();
       showToast('Ticket actualizado', 'success');
@@ -202,10 +195,6 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${id}/resolve`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
       });
       await refreshData();
       showToast('Ticket cerrado', 'success');
@@ -239,11 +228,7 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${id}/comments`, {
         method: 'POST',
-        body: JSON.stringify({
-          comentario,
-          usuario: sessionUser?.nombre || 'Sistema',
-          rol: sessionUser?.rol || 'consulta',
-        }),
+        body: JSON.stringify({ comentario }),
       });
       await refreshData();
       setTicketCommentDrafts((prev) => ({
@@ -322,8 +307,6 @@ export function useTicketActions({
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
           contentBase64,
-          usuario: sessionUser?.nombre || 'Sistema',
-          rol: sessionUser?.rol || 'consulta',
         }),
       });
       await refreshData();
@@ -420,10 +403,6 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${ticketId}/attachments/${attachment.id}`, {
         method: 'DELETE',
-        body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Sistema',
-          rol: sessionUser?.rol || 'tecnico',
-        }),
       });
       await refreshData();
       showToast('Adjunto eliminado', 'success');

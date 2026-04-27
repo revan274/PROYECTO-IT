@@ -21,6 +21,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     const categoria = (asNonEmptyString(req.body?.categoria) || 'HARDWARE').toUpperCase();
     const stock = toInt(req.body?.stock);
     const min = toInt(req.body?.min);
+    const ubicacion = asNonEmptyString(req.body?.ubicacion);
+    const proveedor = asNonEmptyString(req.body?.proveedor);
     const { usuario } = getRequestActor(req);
 
     if (!nombre || stock === null || min === null) {
@@ -51,6 +53,8 @@ router.post('/', requireAuth, async (req, res, next) => {
         stock,
         min,
         categoria,
+        ubicacion,
+        proveedor,
         activo: true,
       };
       db.insumos.push(nuevo);
@@ -88,6 +92,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const categoria = (asNonEmptyString(req.body?.categoria) || 'HARDWARE').toUpperCase();
     const stock = toInt(req.body?.stock);
     const min = toInt(req.body?.min);
+    const ubicacion = asNonEmptyString(req.body?.ubicacion);
+    const proveedor = asNonEmptyString(req.body?.proveedor);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID invalido.' });
 
@@ -125,6 +131,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         stock,
         min,
         categoria,
+        ubicacion,
+        proveedor,
       };
       db.insumos[idx] = nextItem;
       pushAuditWithContext(db, req, {
@@ -168,6 +176,7 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
 
     const delta = toInt(req.body?.delta);
     const stockInput = toInt(req.body?.stock);
+    const motivo = asNonEmptyString(req.body?.motivo);
     if (delta === null && stockInput === null) {
       return res.status(400).json({ error: 'Debes enviar delta o stock.' });
     }
@@ -186,9 +195,10 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
       if (diff === 0) return { ok: true, item };
 
       item.stock = nextStock;
-      const accion = stockInput !== null
+      let accion = stockInput !== null
         ? diff > 0 ? 'Ajuste Entrada' : 'Ajuste Salida'
         : diff > 0 ? 'Entrada' : 'Salida';
+      if (motivo) accion += ` (${motivo})`;
       pushAuditWithContext(db, req, {
         accion,
         item: item.nombre,

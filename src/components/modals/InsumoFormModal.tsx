@@ -157,6 +157,32 @@ export function InsumoFormModal({
             </p>
           )}
         </div>
+        <div className="space-y-1">
+          <input
+            placeholder="UBICACION (Opcional)"
+            value={formData.ubicacionInsumo || ''}
+            onBlur={() => onTouchField('ubicacion')}
+            onChange={(e) => onChange({ ubicacionInsumo: e.target.value })}
+            className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none bg-slate-50 border border-slate-100 ${
+              insumoTouched.ubicacion && validationErrors.ubicacion
+                ? 'border-red-200 text-red-700 placeholder:text-red-300'
+                : ''
+            }`}
+          />
+        </div>
+        <div className="space-y-1">
+          <input
+            placeholder="PROVEEDOR / MARCA (Opcional)"
+            value={formData.proveedor || ''}
+            onBlur={() => onTouchField('proveedor')}
+            onChange={(e) => onChange({ proveedor: e.target.value })}
+            className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none bg-slate-50 border border-slate-100 ${
+              insumoTouched.proveedor && validationErrors.proveedor
+                ? 'border-red-200 text-red-700 placeholder:text-red-300'
+                : ''
+            }`}
+          />
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           <button

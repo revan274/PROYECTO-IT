@@ -142,11 +142,14 @@ export function useSupplyActions({
     }
     if (!ensureBackendConnected('Actualizar stock')) return;
 
+    const motivo = window.prompt(`Motivo del ajuste ${cantidad > 0 ? '+' : ''}${cantidad} (Opcional):`);
+
     try {
       await apiRequest(`/insumos/${id}/stock`, {
         method: 'PATCH',
         body: JSON.stringify({
           delta: cantidad,
+          motivo: motivo || undefined,
           usuario: sessionUser?.nombre || 'Admin IT',
           rol: sessionUser?.rol || 'admin',
         }),
@@ -203,11 +206,14 @@ export function useSupplyActions({
     }
     if (!ensureBackendConnected('Actualizar stock manual')) return false;
 
+    const motivo = window.prompt(`Motivo de ajuste manual a ${value} (Opcional):`);
+
     try {
-      await apiRequest(`/insumos/${id}/stock-manual`, {
+      await apiRequest(`/insumos/${id}/stock`, {
         method: 'PATCH',
         body: JSON.stringify({
           stock: value,
+          motivo: motivo || undefined,
           usuario: sessionUser?.nombre || 'Admin IT',
           rol: sessionUser?.rol || 'admin',
         }),

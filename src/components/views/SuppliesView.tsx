@@ -1,5 +1,6 @@
 import React from 'react';
-import { PlusCircle, Search, MinusCircle, History, Trash2 } from 'lucide-react';
+import { PlusCircle, Search, MinusCircle, History, Trash2, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { InsumoFormModal } from '../modals/InsumoFormModal';
 import { SupplyHistoryModal } from '../modals/SupplyHistoryModal';
 import type { FormDataState, Insumo, InsumoErrors, InsumoField, InsumoTouchedState, SupplyAuditMovement } from '../../types/app';
@@ -86,18 +87,43 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
   confirmarStockManual,
   insumoFormModal,
 }) => {
+  const handleExportExcel = () => {
+    const data = filteredSupplies.map(item => ({
+      ID: item.id,
+      Nombre: item.nombre,
+      Unidad: item.unidad,
+      Categoria: item.categoria,
+      Stock: item.stock,
+      Minimo: item.min,
+      Ubicacion: item.ubicacion || '',
+      Proveedor: item.proveedor || '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Insumos');
+    XLSX.writeFile(workbook, `Insumos_MesaIT_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <>
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-          <h3 className="font-black text-slate-800 uppercase text-xl">GestiÃ³n de Stock</h3>
-          <button
-            disabled={!canEdit}
-            onClick={() => openModal('insumo')}
-            className="bg-[#8CC63F] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
-          >
-            <PlusCircle size={18} /> Registrar Insumo
-          </button>
+          <h3 className="font-black text-slate-800 uppercase text-xl">Gestión de Stock</h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportExcel}
+              className="px-4 py-4 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
+            >
+              <Download size={18} /> Exportar
+            </button>
+            <button
+              disabled={!canEdit}
+              onClick={() => openModal('insumo')}
+              className="bg-[#8CC63F] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
+            >
+              <PlusCircle size={18} /> Registrar Insumo
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -260,7 +286,20 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                   </div>
                 </div>
 
-                <h4 className="font-black text-slate-800 uppercase text-sm mb-4 h-10">{item.nombre}</h4>
+                <h4 className="font-black text-slate-800 uppercase text-sm mb-2 line-clamp-2 h-10">{item.nombre}</h4>
+                <div className="flex flex-col gap-1 mb-4 h-8">
+                  {item.ubicacion && (
+                    <p className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                      Ubic: {item.ubicacion}
+                    </p>
+                  )}
+                  {item.proveedor && (
+                    <p className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                      Prov: {item.proveedor}
+                    </p>
+                  )}
+                </div>
+
                 <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Ãšltimo movimiento

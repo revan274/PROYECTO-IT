@@ -1,4 +1,5 @@
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from './store/useAppStore';
 import { AppHeader } from './components/layout/AppHeader';
@@ -200,17 +201,6 @@ const LazyQRCodeCanvas = lazy(async () => {
   const module = await import('qrcode.react');
   return { default: module.QRCodeCanvas };
 });
-
-function useDebouncedValue<T>(value: T, delayMs = 220): T {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
-    return () => window.clearTimeout(timeoutId);
-  }, [delayMs, value]);
-
-  return debouncedValue;
-}
 
 // --- APP PRINCIPAL ---
 

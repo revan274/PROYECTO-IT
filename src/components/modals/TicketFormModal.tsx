@@ -154,7 +154,16 @@ export function TicketFormModal({
             value={formData.atencionTipo || ''}
             onChange={(e) => {
               const value = normalizeTicketAttentionType(e.target.value);
-              onChange({ atencionTipo: value || undefined });
+              const traslado =
+                value === 'PRESENCIAL' || value === 'PRESENCIAL_FUERA_DE_HORARIO'
+                  ? true
+                  : value === 'REMOTO' || value === 'REMOTO_FUERA_DE_HORARIO'
+                    ? false
+                    : undefined;
+              onChange({
+                atencionTipo: value || undefined,
+                ...(traslado !== undefined ? { trasladoRequerido: traslado } : {}),
+              });
             }}
             className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
           >

@@ -65,6 +65,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
     const hasTrasladoField = req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
+    const insumosUsados = Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
     const asignadoA = canEditByRole(req.authUser?.rol) ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
@@ -73,6 +74,13 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     if (hasTrasladoField && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no valido.' });
+    }
+    for (const item of insumosUsados) {
+      const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
+      const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
+      if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad <= 0) {
+        return res.status(400).json({ error: 'Insumo invalido en insumosUsados.' });
+      }
     }
 
     const created = await updateDb((db) => {
@@ -103,6 +111,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         solicitadoPorId: Number(req.authUser?.id) || null,
         solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
         departamento,
+        insumosUsados,
         attachments: [],
         historial: [
           {
@@ -115,6 +124,26 @@ router.post('/', requireAuth, async (req, res, next) => {
         ],
       };
       db.tickets.push(ticket);
+
+      if (Array.isArray(insumosUsados) && insumosUsados.length > 0) {
+        for (const item of insumosUsados) {
+          const supply = db.insumos.find(s => s.id === item.insumoId);
+          if (supply && supply.activo) {
+            supply.stock = Math.max(0, supply.stock - item.cantidad);
+            pushAuditWithContext(db, req, {
+              accion: 'Salida (Ticket)',
+              item: supply.nombre,
+              cantidad: item.cantidad,
+              usuario,
+              modulo: 'insumos',
+              entidad: 'insumo',
+              entidadId: supply.id,
+              after: supply,
+              meta: { ticketId: ticket.id }
+            });
+          }
+        }
+      }
 
       if (prioridad === 'CRITICA') {
         const activo = db.activos.find((a) => a.tag.toUpperCase() === activoTag.toUpperCase());
@@ -160,11 +189,13 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const atencionTipo = hasAtencionTipoUpdate ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const hasTrasladoUpdate = req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoUpdate ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
+    const hasInsumosUpdate = req.body?.insumosUsados !== undefined;
+    const insumosUsados = Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
 
     if (id === null) return res.status(400).json({ error: 'ID invalido.' });
-    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate) {
+    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate && !hasInsumosUpdate) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
     if (req.body?.estado && !estado) {
@@ -175,6 +206,15 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
     if (hasTrasladoUpdate && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no valido.' });
+    }
+    if (hasInsumosUpdate) {
+      for (const item of insumosUsados) {
+        const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
+        const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
+        if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad < 0) {
+          return res.status(400).json({ error: 'Insumo invalido en insumosUsados.' });
+        }
+      }
     }
 
     const updated = await updateDb((db) => {
@@ -277,6 +317,52 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           entidadId: ticket.id,
           after: ticket,
         });
+      }
+
+      if (hasInsumosUpdate) {
+        const currentInsumos = Array.isArray(ticket.insumosUsados) ? ticket.insumosUsados : [];
+        for (const item of insumosUsados) {
+          const exists = currentInsumos.find(i => i.insumoId === item.insumoId);
+          if (!exists) {
+            currentInsumos.push(item);
+            const supply = db.insumos.find(s => s.id === item.insumoId);
+            if (supply && supply.activo) {
+              supply.stock = Math.max(0, supply.stock - item.cantidad);
+              pushAuditWithContext(db, req, {
+                accion: 'Salida (Ticket)',
+                item: supply.nombre,
+                cantidad: item.cantidad,
+                usuario,
+                modulo: 'insumos',
+                entidad: 'insumo',
+                entidadId: supply.id,
+                after: supply,
+                meta: { ticketId: ticket.id }
+              });
+            }
+          } else {
+            const diff = item.cantidad - exists.cantidad;
+            exists.cantidad = item.cantidad;
+            if (diff !== 0) {
+              const supply = db.insumos.find(s => s.id === item.insumoId);
+              if (supply && supply.activo) {
+                supply.stock = Math.max(0, supply.stock - diff);
+                pushAuditWithContext(db, req, {
+                  accion: diff > 0 ? 'Salida (Ticket)' : 'Ajuste Entrada (Ticket)',
+                  item: supply.nombre,
+                  cantidad: Math.abs(diff),
+                  usuario,
+                  modulo: 'insumos',
+                  entidad: 'insumo',
+                  entidadId: supply.id,
+                  after: supply,
+                  meta: { ticketId: ticket.id }
+                });
+              }
+            }
+          }
+        }
+        ticket.insumosUsados = currentInsumos;
       }
 
       return { ok: true, ticket };
