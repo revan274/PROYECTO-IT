@@ -7,6 +7,7 @@ import type {
   ReportStateFilter,
   TicketAttentionType,
   TicketEstado,
+  TravelDestinationRule,
 } from '../../types/app';
 
 type Trend = {
