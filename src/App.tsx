@@ -2597,6 +2597,8 @@ export default function App() {
         if (normalizeForCompare(assigned) !== normalizedTechnician) return;
       }
 
+      if (!ticket.trasladoRequerido) return;
+
       const destinationCode = resolveTicketTravelDestinationCode(ticket, activeTicketBranchCodes);
       if (!destinationCode) return;
 
