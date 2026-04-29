@@ -173,23 +173,30 @@ export function useSupplyActions({
     }
     if (!ensureBackendConnected('Reponer insumos')) return;
 
-    try {
-      await Promise.all(
-        target.map((item) =>
-          apiRequest(`/insumos/${item.id}/stock`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              delta: cantidad,
-              usuario: sessionUser?.nombre || 'Admin IT',
-              rol: sessionUser?.rol || 'admin',
-            }),
+    const results = await Promise.allSettled(
+      target.map((item) =>
+        apiRequest(`/insumos/${item.id}/stock`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            delta: cantidad,
+            usuario: sessionUser?.nombre || 'Admin IT',
+            rol: sessionUser?.rol || 'admin',
           }),
-        ),
-      );
-      await refreshData();
-      showToast(`Reposicion aplicada a ${target.length} insumos criticos`, 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo ejecutar la reposicion masiva', 'error');
+        }),
+      ),
+    );
+
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+
+    await refreshData();
+
+    if (failed === 0) {
+      showToast(`Reposicion aplicada a ${succeeded} insumos criticos`, 'success');
+    } else if (succeeded === 0) {
+      showToast('No se pudo reponer ningún insumo critico', 'error');
+    } else {
+      showToast(`Reposicion parcial: ${succeeded} ok, ${failed} fallaron`, 'warning');
     }
   };
 
@@ -272,7 +279,6 @@ export function useSupplyActions({
     eliminarInsumo,
     ajustarStock,
     reponerCriticos,
-    establecerStockManual,
     confirmarStockManual,
   };
 }

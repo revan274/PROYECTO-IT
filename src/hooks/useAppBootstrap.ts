@@ -1,8 +1,9 @@
 import { useCallback, useEffect } from 'react';
 import type { BootstrapResponse } from '../types/app';
 import { useAppStore } from '../store/useAppStore';
-import { ApiError, apiRequest, getApiErrorMessage } from '../utils/api';
+import { apiRequest, getApiErrorMessage } from '../utils/api';
 import { normalizeCatalogState } from '../utils/assets';
+import { isSessionRejectedApiError } from '../utils/format';
 
 interface UseAppBootstrapOptions {
   pollingMs?: number;
@@ -10,11 +11,6 @@ interface UseAppBootstrapOptions {
   onRefreshSuccess?: () => void;
   onRefreshFailure?: () => void;
   onSessionRejected: () => void;
-}
-
-function isSessionRejectedApiError(error: unknown): boolean {
-  if (!(error instanceof ApiError)) return false;
-  return error.status === 401 || error.status === 403;
 }
 
 export function useAppBootstrap({

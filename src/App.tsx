@@ -200,6 +200,33 @@ const LazyQRCodeCanvas = lazy(async () => {
   return { default: module.QRCodeCanvas };
 });
 
+function renderLazyView(loadingLabel: string, content: React.ReactNode) {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">{loadingLabel}</div>}>
+      {content}
+    </React.Suspense>
+  );
+}
+
+function renderProtectedView(
+  content: React.ReactNode,
+  options: {
+    canManageUsers: boolean;
+    isRequesterOnlyUser: boolean;
+    defaultViewPath: string;
+    allowRequester?: boolean;
+    requiresUserManagement?: boolean;
+  },
+) {
+  if (options.requiresUserManagement && !options.canManageUsers) {
+    return <Navigate to={options.defaultViewPath} replace />;
+  }
+  if (!options.allowRequester && options.isRequesterOnlyUser) {
+    return <Navigate to={options.defaultViewPath} replace />;
+  }
+  return content;
+}
+
 // --- APP PRINCIPAL ---
 
 export default function App() {
@@ -221,16 +248,6 @@ export default function App() {
     clearToast,
   } = useAppStore();
   const searchTerm = globalSearchTerm;
-  const setSearchTerm = setGlobalSearchTerm;
-  const clearSearchTerm = clearGlobalSearchTerm;
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
 
   const {
     activos,
@@ -422,8 +439,6 @@ export default function App() {
     () => tokenizeSearchQuery(debouncedUserSearchTerm),
     [debouncedUserSearchTerm],
   );
-  const effectiveSelectedAssetQrValue = selectedAssetQrValue;
-
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
@@ -472,7 +487,7 @@ export default function App() {
         if (cancelled) return;
 
         const token = String(response?.token || '').trim();
-        if (!token) throw new Error('QR token vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o');
+        if (!token) throw new Error('QR token vacío');
 
         setSelectedAssetQrValue(token);
         setSelectedAssetQrMode('signed');
@@ -815,9 +830,9 @@ export default function App() {
 
   const handleQrAssetResolved = useCallback((asset: Activo) => {
     setView('inventory');
-    setSearchTerm(asset.tag);
+    setGlobalSearchTerm(asset.tag);
     setSelectedAsset(asset);
-  }, [setSearchTerm, setSelectedAsset, setView]);
+  }, [setGlobalSearchTerm, setSelectedAsset, setView]);
 
   const {
     qrScannerVideoRef,
@@ -861,7 +876,7 @@ export default function App() {
 
   const descargarQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
-    if (selectedAssetQrMode !== 'signed' || !effectiveSelectedAssetQrValue) {
+    if (selectedAssetQrMode !== 'signed' || !selectedAssetQrValue) {
       showToast('El QR firmado no esta disponible para descargar.', 'warning');
       return;
     }
@@ -876,11 +891,11 @@ export default function App() {
     link.download = `qr_${fileToken}.png`;
     link.click();
     showToast('QR descargado', 'success');
-  }, [effectiveSelectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
+  }, [selectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
   const imprimirEtiquetaQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
-    if (selectedAssetQrMode !== 'signed' || !effectiveSelectedAssetQrValue) {
+    if (selectedAssetQrMode !== 'signed' || !selectedAssetQrValue) {
       showToast('El QR firmado no esta disponible para imprimir.', 'warning');
       return;
     }
@@ -1259,7 +1274,7 @@ export default function App() {
 
     printWindow.onload = triggerPrint;
     window.setTimeout(triggerPrint, 450);
-  }, [activeTicketBranchCodes, effectiveSelectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
+  }, [activeTicketBranchCodes, selectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
   const fetchAllAuditRows = useCallback(async (filters: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams();
@@ -1308,11 +1323,11 @@ export default function App() {
     } catch (error) {
       if (isSessionRejectedApiError(error)) {
         clearSession();
-        showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
+        showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
         return;
       }
       if (!isRouteNotFoundApiError(error)) {
-        showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a', 'warning');
+        showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría', 'warning');
       }
       setAuditRemoteRows(null);
       setAuditPagination(buildDefaultAuditPagination(auditPageSize));
@@ -1378,11 +1393,11 @@ export default function App() {
         if (cancelled) return;
         if (isSessionRejectedApiError(error)) {
           clearSession();
-          showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
+          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
           return;
         }
         if (!isRouteNotFoundApiError(error)) {
-          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a para reportes', 'warning');
+          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría', 'warning');
         }
         setReportAuditRowsRemote(null);
       }
@@ -1440,7 +1455,7 @@ export default function App() {
         if (cancelled) return;
         if (isSessionRejectedApiError(error)) {
           clearSession();
-          showToast('La sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n ya no es vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Inicia sesiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n nuevamente.', 'warning');
+          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
           return;
         }
         setSelectedSupplyHistoryRemoteMovements(null);
@@ -1485,7 +1500,7 @@ export default function App() {
   }, [newUserForm.rol, roleCatalogOptions, setNewUserForm]);
 
 
-  const resetNewUserForm = () => {
+  const resetNewUserForm = useCallback(() => {
     const fallbackRoleRaw = roleCatalogOptions[0]?.value;
     const fallbackRole = fallbackRoleRaw && isUserRole(fallbackRoleRaw) ? fallbackRoleRaw : 'solicitante';
     setNewUserForm({
@@ -1496,7 +1511,7 @@ export default function App() {
       rol: fallbackRole,
     });
     setEditingUserId(null);
-  };
+  }, [roleCatalogOptions, setEditingUserId, setNewUserForm]);
 
   const {
     handleCreateUser,
@@ -1514,7 +1529,7 @@ export default function App() {
     resetNewUserForm,
   });
 
-  const handleImportInventory = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportInventory = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly) {
       showToast('Tu rol es solo consulta', 'warning');
       return;
@@ -1541,7 +1556,7 @@ export default function App() {
       const sheet = workbook.Sheets[firstSheetName];
       const rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(sheet, { defval: '' });
       if (rows.length === 0) {
-        showToast('El archivo estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o', 'warning');
+        showToast('El archivo está vacío', 'warning');
         return;
       }
 
@@ -1557,7 +1572,7 @@ export default function App() {
           localInvalidDetails.push({
             rowNumber,
             status: 'invalid',
-            reason: 'Fila invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida o sin identificador utilizable.',
+            reason: 'Fila inválida o sin identificador utilizable.',
           });
           return;
         }
@@ -1627,9 +1642,9 @@ export default function App() {
     } finally {
       setIsImportingInventory(false);
     }
-  };
+  }, [ensureBackendConnected, isReadOnly, sessionUser, setImportDraft, setIsImportingInventory, showToast]);
 
-  const exportImportIssuesCsv = () => {
+  const exportImportIssuesCsv = useCallback(() => {
     if (!importDraft) return;
 
     const issues = [
@@ -1661,9 +1676,9 @@ export default function App() {
     link.download = `import_issues_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
+  }, [importDraft, showToast]);
 
-  const applyImportDraft = async () => {
+  const applyImportDraft = useCallback(async () => {
     if (!importDraft || isApplyingImport) return;
     const draft = importDraft;
     setIsApplyingImport(true);
@@ -1691,14 +1706,14 @@ export default function App() {
       showToast(parts.join(' | '), invalidTotal > 0 ? 'warning' : 'success');
       setImportDraft(null);
     } catch (error) {
-      const message = getApiErrorMessage(error) || 'No se pudo confirmar la importaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n';
+      const message = getApiErrorMessage(error) || 'No se pudo confirmar la importación';
       showToast(message, 'error');
     } finally {
       setIsApplyingImport(false);
     }
-  };
+  }, [importDraft, isApplyingImport, refreshData, sessionUser, setImportDraft, setIsApplyingImport, showToast]);
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isModalSaving) return;
 
@@ -1737,17 +1752,17 @@ export default function App() {
     } finally {
       setIsModalSaving(false);
     }
-  };
+  }, [canCreateTickets, canEdit, closeModal, editingAssetId, editingInsumoId, ensureBackendConnected, formData, handleCreateTicket, handleSaveActivo, handleSaveInsumo, insumoFormValidation, isModalSaving, setIsModalSaving, showModal, showToast]);
 
-  const updateAuditFilters = (updates: Partial<AuditFiltersState>) => {
+  const updateAuditFilters = useCallback((updates: Partial<AuditFiltersState>) => {
     setAuditFilters((prev) => ({ ...prev, ...updates }));
     setAuditPage(1);
-  };
+  }, [setAuditFilters, setAuditPage]);
 
-  const resetAuditFilters = () => {
+  const resetAuditFilters = useCallback(() => {
     setAuditFilters(buildDefaultAuditFilters());
     setAuditPage(1);
-  };
+  }, [setAuditFilters, setAuditPage]);
 
   const descargarAuditoria = (module?: AuditModule) => {
     const sourceBase = view === 'history' ? auditRowsForHistory : normalizedAuditRows;
@@ -1755,12 +1770,12 @@ export default function App() {
       ? sourceBase.filter((log) => log.modulo === module)
       : sourceBase;
     if (rowsSource.length === 0) {
-      const label = module ? auditModuleLabel(module) : 'auditorÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a';
+      const label = module ? auditModuleLabel(module) : 'auditoría';
       showToast(`No hay registros para exportar en ${label}`, 'warning');
       return;
     }
 
-    const headers = ['MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³dulo', 'Fecha', 'Usuario', 'AcciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
+    const headers = ['Módulo', 'Fecha', 'Usuario', 'Acción', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
     const rows = rowsSource.map((log) => [
       auditModuleLabel(log.modulo || 'otros'),
       log.fecha,
@@ -1845,10 +1860,10 @@ export default function App() {
     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  const applyInventoryFocus = (focus: 'FALLA' | InventoryRiskFilter) => {
+  const applyInventoryFocus = useCallback((focus: 'FALLA' | InventoryRiskFilter) => {
     setInventoryDepartmentFilter('TODOS');
     setInventoryEquipmentFilter('TODOS');
-    clearSearchTerm();
+    clearGlobalSearchTerm();
     if (focus === 'FALLA') {
       setInventoryStatusFilter('Falla');
       setInventoryRiskFilter('TODOS');
@@ -1856,21 +1871,21 @@ export default function App() {
     }
     setInventoryStatusFilter('TODOS');
     setInventoryRiskFilter(focus);
-  };
+  }, [clearGlobalSearchTerm, setInventoryDepartmentFilter, setInventoryEquipmentFilter, setInventoryRiskFilter, setInventoryStatusFilter]);
 
-  const updateInventorySort = (field: InventorySortField) => {
+  const updateInventorySort = useCallback((field: InventorySortField) => {
     if (inventorySortField === field) {
       setInventorySortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
       return;
     }
     setInventorySortField(field);
     setInventorySortDirection('asc');
-  };
+  }, [inventorySortField, setInventorySortDirection, setInventorySortField]);
 
-  const getInventorySortIndicator = (field: InventorySortField) => {
+  const getInventorySortIndicator = useCallback((field: InventorySortField) => {
     if (inventorySortField !== field) return '<>';
     return inventorySortDirection === 'asc' ? '^' : 'v';
-  };
+  }, [inventorySortField, inventorySortDirection]);
 
   const networkIpCounts = useMemo(
     () =>
@@ -1896,9 +1911,8 @@ export default function App() {
     return (ip ? (networkIpCounts[ip] || 0) > 1 : false) || (mac ? (networkMacCounts[mac] || 0) > 1 : false);
   }, [networkIpCounts, networkMacCounts]);
   const localRiskSummary = useMemo(() => calculateAssetRiskSummary(activos), [activos]);
-  const effectiveRiskSummary = localRiskSummary;
-  const duplicateIpEntries = effectiveRiskSummary.duplicateIpEntries;
-  const duplicateMacEntries = effectiveRiskSummary.duplicateMacEntries;
+  const duplicateIpEntries = localRiskSummary.duplicateIpEntries;
+  const duplicateMacEntries = localRiskSummary.duplicateMacEntries;
 
   const departamentoOptions = useMemo(
     () =>
@@ -1974,14 +1988,14 @@ export default function App() {
     [users],
   );
 
-  const activosConIp = effectiveRiskSummary.activosConIp;
-  const activosEvaluablesIp = effectiveRiskSummary.activosEvaluablesIp;
-  const activosConMac = effectiveRiskSummary.activosConMac;
-  const activosEvaluablesMac = effectiveRiskSummary.activosEvaluablesMac;
-  const activosEvaluablesResponsable = effectiveRiskSummary.activosEvaluablesResponsable;
-  const activosSinResponsable = effectiveRiskSummary.activosSinResponsable;
-  const activosVidaAlta = effectiveRiskSummary.activosVidaAlta;
-  const activosEnFalla = effectiveRiskSummary.activosEnFalla;
+  const activosConIp = localRiskSummary.activosConIp;
+  const activosEvaluablesIp = localRiskSummary.activosEvaluablesIp;
+  const activosConMac = localRiskSummary.activosConMac;
+  const activosEvaluablesMac = localRiskSummary.activosEvaluablesMac;
+  const activosEvaluablesResponsable = localRiskSummary.activosEvaluablesResponsable;
+  const activosSinResponsable = localRiskSummary.activosSinResponsable;
+  const activosVidaAlta = localRiskSummary.activosVidaAlta;
+  const activosEnFalla = localRiskSummary.activosEnFalla;
 
   const filteredActivos = useMemo(
     () =>
@@ -2136,11 +2150,15 @@ export default function App() {
     return rows;
   }, [insumos, supplyCategoryFilter, supplySearchTokens, supplyStatusFilter]);
 
-  const importIssueRows = importDraft
-    ? [...(importDraft.preview.details || []), ...importDraft.localInvalidDetails].filter(
-      (detail) => detail.status === 'invalid' || detail.status === 'skipped',
-    )
-    : [];
+  const importIssueRows = useMemo(
+    () =>
+      importDraft
+        ? [...(importDraft.preview.details || []), ...importDraft.localInvalidDetails].filter(
+          (detail) => detail.status === 'invalid' || detail.status === 'skipped',
+        )
+        : [],
+    [importDraft],
+  );
 
   const effectiveAuditRows = useMemo(
     () => (view === 'history' && auditRemoteRows !== null ? auditRemoteRows : auditoria),
@@ -2173,7 +2191,10 @@ export default function App() {
     normalizedAuditRows,
     view,
   ]);
-  const auditRowsForGrouping = view === 'history' ? auditRowsForHistory : normalizedAuditRows;
+  const auditRowsForGrouping = useMemo(
+    () => (view === 'history' ? auditRowsForHistory : normalizedAuditRows),
+    [view, auditRowsForHistory, normalizedAuditRows],
+  );
   const auditByModule = useMemo(() => {
     const grouped: Record<AuditModule, RegistroAuditoria[]> = {
       activos: [],
@@ -2228,12 +2249,24 @@ export default function App() {
     [canAccessTicketBySession, isRequesterOnlyUser, tickets],
   );
 
-  const isTicketOpen = (ticket: TicketItem): boolean => !isTicketClosed(ticket);
-  const openTickets = scopedTickets.filter(isTicketOpen);
+  const isTicketOpen = useCallback((ticket: TicketItem): boolean => !isTicketClosed(ticket), []);
+  const openTickets = useMemo(
+    () => scopedTickets.filter(isTicketOpen),
+    [scopedTickets, isTicketOpen],
+  );
   const openTicketsCount = openTickets.length;
-  const slaExpiredCount = openTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
-  const criticalTicketsCount = openTickets.filter((t) => t.prioridad === 'CRITICA').length;
-  const unassignedTicketsCount = openTickets.filter((t) => !(t.asignadoA || '').trim()).length;
+  const slaExpiredCount = useMemo(
+    () => openTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length,
+    [openTickets, liveNow],
+  );
+  const criticalTicketsCount = useMemo(
+    () => openTickets.filter((t) => t.prioridad === 'CRITICA').length,
+    [openTickets],
+  );
+  const unassignedTicketsCount = useMemo(
+    () => openTickets.filter((t) => !(t.asignadoA || '').trim()).length,
+    [openTickets],
+  );
 
   const dashboardWindow = useMemo(
     () => resolveDashboardRangeWindow(dashboardRange, liveNow),
@@ -2263,11 +2296,11 @@ export default function App() {
   );
   const dashboardOpenTicketsCurrent = useMemo(
     () => dashboardTicketsCurrent.filter(isTicketOpen),
-    [dashboardTicketsCurrent],
+    [dashboardTicketsCurrent, isTicketOpen],
   );
   const dashboardOpenTicketsPrevious = useMemo(
     () => dashboardTicketsPrevious.filter(isTicketOpen),
-    [dashboardTicketsPrevious],
+    [dashboardTicketsPrevious, isTicketOpen],
   );
   const dashboardCriticalTicketsCurrent = useMemo(
     () => dashboardOpenTicketsCurrent.filter((ticket) => ticket.prioridad === 'CRITICA'),
@@ -2343,10 +2376,13 @@ export default function App() {
   }, [dashboardOpenTicketsCurrent, liveNow]);
   const dashboardSlaTotalCount = dashboardTicketsCurrent.length;
   const dashboardSlaExpiredCount = dashboardSlaExpiredCurrent.length;
-  const dashboardSlaCompliantCount = Math.max(0, dashboardSlaTotalCount - dashboardSlaExpiredCount);
-  const dashboardSlaCompliancePct = dashboardSlaTotalCount > 0
-    ? Math.round((dashboardSlaCompliantCount / dashboardSlaTotalCount) * 100)
-    : 100;
+  const { dashboardSlaCompliantCount, dashboardSlaCompliancePct } = useMemo(() => {
+    const compliant = Math.max(0, dashboardSlaTotalCount - dashboardSlaExpiredCount);
+    const pct = dashboardSlaTotalCount > 0
+      ? Math.round((compliant / dashboardSlaTotalCount) * 100)
+      : 100;
+    return { dashboardSlaCompliantCount: compliant, dashboardSlaCompliancePct: pct };
+  }, [dashboardSlaTotalCount, dashboardSlaExpiredCount]);
   const dashboardOpenTrend = useMemo(
     () => formatDashboardTrend(dashboardOpenTicketsCurrent.length, dashboardOpenTicketsPrevious.length, false),
     [dashboardOpenTicketsCurrent.length, dashboardOpenTicketsPrevious.length],
@@ -2409,6 +2445,7 @@ export default function App() {
     headerSearchTokens,
     liveNow,
     scopedTickets,
+    isTicketOpen,
     ticketAssignmentFilter,
     ticketLifecycleFilter,
     ticketPriorityFilter,
@@ -3027,36 +3064,25 @@ export default function App() {
     if (!exists) setTravelReportTechnician('TODOS');
   }, [setTravelReportTechnician, travelReportTechnician, travelTechnicianOptions]);
 
-  const applyTicketFocus = (focus: 'ABIERTOS' | 'SLA' | 'CRITICA' | 'SIN_ASIGNAR' | 'EN_PROCESO') => {
+  const applyTicketFocus = useCallback((focus: 'ABIERTOS' | 'SLA' | 'CRITICA' | 'SIN_ASIGNAR' | 'EN_PROCESO') => {
     setView('tickets');
-    clearSearchTerm();
+    clearGlobalSearchTerm();
     setTicketLifecycleFilter('TODOS');
     setTicketStateFilter('TODOS');
     setTicketPriorityFilter('TODAS');
     setTicketAssignmentFilter('TODOS');
     setTicketSlaFilter('TODOS');
-    if (focus === 'ABIERTOS') {
-      setTicketLifecycleFilter('ABIERTOS');
-      return;
-    }
-    if (focus === 'SLA') {
-      setTicketLifecycleFilter('ABIERTOS');
-      setTicketSlaFilter('VENCIDO');
-      return;
-    }
-    if (focus === 'CRITICA') {
-      setTicketPriorityFilter('CRITICA');
-      return;
-    }
-    if (focus === 'SIN_ASIGNAR') {
-      setTicketLifecycleFilter('ABIERTOS');
-      setTicketAssignmentFilter('SIN_ASIGNAR');
-      return;
-    }
+    if (focus === 'ABIERTOS') { setTicketLifecycleFilter('ABIERTOS'); return; }
+    if (focus === 'SLA') { setTicketLifecycleFilter('ABIERTOS'); setTicketSlaFilter('VENCIDO'); return; }
+    if (focus === 'CRITICA') { setTicketPriorityFilter('CRITICA'); return; }
+    if (focus === 'SIN_ASIGNAR') { setTicketLifecycleFilter('ABIERTOS'); setTicketAssignmentFilter('SIN_ASIGNAR'); return; }
     setTicketLifecycleFilter('ABIERTOS');
     setTicketStateFilter('En Proceso');
-  };
-  const applyReportDrillDown = (filters: {
+  }, [
+    clearGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter,
+    setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter, setView,
+  ]);
+  const applyReportDrillDown = useCallback((filters: {
     estado?: TicketEstado;
     prioridad?: PrioridadTicket;
     sucursalCode?: string;
@@ -3069,31 +3095,30 @@ export default function App() {
     setTicketPriorityFilter('TODAS');
     setTicketAssignmentFilter('TODOS');
     setTicketSlaFilter('TODOS');
-    clearSearchTerm();
-
+    clearGlobalSearchTerm();
     if (filters.estado) setTicketStateFilter(filters.estado);
     if (filters.prioridad) setTicketPriorityFilter(filters.prioridad);
-    if (filters.asignadoA) {
-      setTicketAssignmentFilter('ASIGNADOS');
-      setSearchTerm(filters.asignadoA);
-    }
-    if (filters.sucursalCode) {
-      setSearchTerm(formatTicketBranchFromCatalog(filters.sucursalCode));
-    }
-    if (filters.area) {
-      setSearchTerm(filters.area);
-    }
-  };
-  const applyReportIncidentCauseDrillDown = (area: string, cause: string) => {
+    if (filters.asignadoA) { setTicketAssignmentFilter('ASIGNADOS'); setGlobalSearchTerm(filters.asignadoA); }
+    if (filters.sucursalCode) setGlobalSearchTerm(formatTicketBranchFromCatalog(filters.sucursalCode));
+    if (filters.area) setGlobalSearchTerm(filters.area);
+  }, [
+    clearGlobalSearchTerm, formatTicketBranchFromCatalog, setGlobalSearchTerm,
+    setTicketAssignmentFilter, setTicketLifecycleFilter, setTicketPriorityFilter,
+    setTicketSlaFilter, setTicketStateFilter, setView,
+  ]);
+
+  const applyReportIncidentCauseDrillDown = useCallback((area: string, cause: string) => {
     setView('tickets');
     setTicketLifecycleFilter('TODOS');
     setTicketStateFilter('TODOS');
     setTicketPriorityFilter('TODAS');
     setTicketAssignmentFilter('TODOS');
     setTicketSlaFilter('TODOS');
-    const composed = `${area} ${cause}`.trim();
-    setSearchTerm(composed || area || cause);
-  };
+    setGlobalSearchTerm(`${area} ${cause}`.trim() || area || cause);
+  }, [
+    setGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter,
+    setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter, setView,
+  ]);
   const reportCurrentFilterSnapshot = useMemo<ReportFilterSnapshot>(
     () => ({
       dateFrom: reportDateFrom,
@@ -3876,25 +3901,14 @@ export default function App() {
     });
   }, [formData.fallaComun, issueOptionsForSelectedArea, setFormData, showModal]);
 
-  const systemHealth = activos.length > 0 ? Math.round((activos.filter(a => a.estado === 'Operativo').length / activos.length) * 100) : 100;
-  const defaultViewPath = getViewPath(defaultView);
-  const renderLazyView = (loadingLabel: string, content: React.ReactNode) => (
-    <React.Suspense fallback={<div className="p-8 text-center text-slate-400 font-black uppercase text-xs">{loadingLabel}</div>}>
-      {content}
-    </React.Suspense>
+  const systemHealth = useMemo(
+    () => activos.length > 0
+      ? Math.round((activos.filter((a) => a.estado === 'Operativo').length / activos.length) * 100)
+      : 100,
+    [activos],
   );
-  const renderProtectedView = (
-    content: React.ReactNode,
-    options?: { allowRequester?: boolean; requiresUserManagement?: boolean },
-  ) => {
-    if (options?.requiresUserManagement && !canManageUsers) {
-      return <Navigate to={defaultViewPath} replace />;
-    }
-    if (!options?.allowRequester && isRequesterOnlyUser) {
-      return <Navigate to={defaultViewPath} replace />;
-    }
-    return content;
-  };
+  const defaultViewPath = getViewPath(defaultView);
+  const protectedViewOptions = { canManageUsers, isRequesterOnlyUser, defaultViewPath };
 
 
   if (!sessionUser) {
@@ -3934,7 +3948,7 @@ export default function App() {
       <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
         <AppHeader
           searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchChange={setGlobalSearchTerm}
           onOpenSidebar={() => setSidebarOpen(true)}
           authorBrand={AUTHOR_BRAND}
           theme={theme}
@@ -3979,14 +3993,14 @@ export default function App() {
                       setView={setView}
                       applyTicketFocus={applyTicketFocus}
                       dashboardRecentTickets={dashboardRecentTickets}
-                      setSearchTerm={setSearchTerm}
+                      setSearchTerm={setGlobalSearchTerm}
                       dashboardTopOwners={dashboardTopOwners}
                       dashboardOwnerMax={dashboardOwnerMax}
                       dashboardInProcessCount={dashboardInProcessCount}
                       applyInventoryFocus={applyInventoryFocus}
                       activosSinResponsable={activosSinResponsable}
                       activosVidaAlta={activosVidaAlta}
-                      effectiveRiskSummary={effectiveRiskSummary}
+                      effectiveRiskSummary={localRiskSummary}
                       dashboardStateBars={dashboardStateBars}
                       dashboardStateMax={dashboardStateMax}
                       dashboardBranchBars={dashboardBranchBars}
@@ -3998,6 +4012,7 @@ export default function App() {
                       dashboardAgingMax={dashboardAgingMax}
                     />,
                   ),
+                  protectedViewOptions,
                 )}
               />
               <Route
@@ -4108,6 +4123,7 @@ export default function App() {
                       reportSupplySnapshot={reportSupplySnapshot}
                     />,
                   ),
+                  protectedViewOptions,
                 )}
               />
               <Route
@@ -4149,7 +4165,7 @@ export default function App() {
                       setInventorySortField={setInventorySortField}
                       inventorySortDirection={inventorySortDirection}
                       setInventorySortDirection={setInventorySortDirection}
-                      setSearchTerm={setSearchTerm}
+                      setSearchTerm={setGlobalSearchTerm}
                       applyInventoryFocus={applyInventoryFocus}
                       activosEnFalla={activosEnFalla}
                       duplicateIpEntries={duplicateIpEntries}
@@ -4162,7 +4178,7 @@ export default function App() {
                       selectedAssetQrLoading={selectedAssetQrLoading}
                       selectedAssetQrMode={selectedAssetQrMode}
                       selectedAssetQrIssuedAt={selectedAssetQrIssuedAt}
-                      effectiveSelectedAssetQrValue={effectiveSelectedAssetQrValue}
+                      effectiveSelectedAssetQrValue={selectedAssetQrValue}
                       LazyQRCodeCanvas={LazyQRCodeCanvas}
                       buildAssetQrCanvasId={buildAssetQrCanvasId}
                       formatDateTime={formatDateTime}
@@ -4208,6 +4224,7 @@ export default function App() {
                       }}
                     />,
                   ),
+                  protectedViewOptions,
                 )}
               />
               <Route
@@ -4257,6 +4274,7 @@ export default function App() {
                       }}
                     />,
                   ),
+                  protectedViewOptions,
                 )}
               />
               <Route
@@ -4285,6 +4303,7 @@ export default function App() {
                       setAuditPageSize={setAuditPageSize}
                     />,
                   ),
+                  protectedViewOptions,
                 )}
               />
               <Route
@@ -4328,7 +4347,7 @@ export default function App() {
                       }}
                     />,
                   ),
-                  { requiresUserManagement: true },
+                  { ...protectedViewOptions, requiresUserManagement: true },
                 )}
               />
               <Route
@@ -4375,7 +4394,7 @@ export default function App() {
                       setTicketPriorityFilter('TODAS');
                       setTicketAssignmentFilter('TODOS');
                       setTicketSlaFilter('TODOS');
-                      clearSearchTerm();
+                      clearGlobalSearchTerm();
                     }}
                     onStatusChange={(ticketId, estado) => {
                       void actualizarTicket(ticketId, { estado: estado as TicketEstado });
@@ -4393,7 +4412,7 @@ export default function App() {
                     }}
                     onViewAsset={(tag) => {
                       setView('inventory');
-                      setSearchTerm(tag);
+                      setGlobalSearchTerm(tag);
                     }}
                     onResolveTicket={(ticketId) => {
                       void resolverTicket(ticketId);
