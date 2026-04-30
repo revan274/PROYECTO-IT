@@ -40,6 +40,7 @@ export function useUserActions({
   const backendConnected = useAppStore((state) => state.backendConnected);
   const refreshAppData = useAppStore((state) => state.refreshAppData);
   const showToast = useAppStore((state) => state.showToast);
+  const showConfirm = useAppStore((state) => state.showConfirm);
 
   const ensureBackendConnected = useCallback(
     (action: string) => {
@@ -171,7 +172,9 @@ export function useUserActions({
       return false;
     }
 
-    const confirmacion = window.confirm(`Eliminar usuario ${user.username}?`);
+    const confirmacion = showConfirm
+      ? await showConfirm(`Eliminar usuario ${user.username}?`)
+      : window.confirm(`Eliminar usuario ${user.username}?`);
     if (!confirmacion) return false;
     if (!ensureBackendConnected('Eliminar usuarios')) return false;
 

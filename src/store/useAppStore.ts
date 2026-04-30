@@ -22,6 +22,8 @@ import {
 
 type StoreUpdater<T> = T | ((prev: T) => T);
 type RefreshAppDataFn = (options?: boolean | { silent?: boolean; force?: boolean }) => Promise<void>;
+export type ShowConfirmFn = (message: string, options?: { title?: string; confirmLabel?: string }) => Promise<boolean>;
+export type ShowPromptFn = (message: string, options?: { title?: string; defaultValue?: string }) => Promise<string | null>;
 
 const resolveUpdater = <T>(value: StoreUpdater<T>, prev: T): T =>
   typeof value === 'function' ? (value as (prev: T) => T)(prev) : value;
@@ -70,6 +72,10 @@ interface AppStore {
   resetSyncStatus: () => void;
   refreshAppData: RefreshAppDataFn | null;
   setRefreshAppData: (handler: RefreshAppDataFn | null) => void;
+  showConfirm: ShowConfirmFn | null;
+  setShowConfirm: (handler: ShowConfirmFn | null) => void;
+  showPrompt: ShowPromptFn | null;
+  setShowPrompt: (handler: ShowPromptFn | null) => void;
   toast: ToastState | null;
   setToast: (toast: ToastState | null) => void;
   showToast: (message: string, type?: ToastState['type']) => void;
@@ -158,6 +164,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   resetSyncStatus: () => set({ isSyncing: false, backendConnected: false, lastSync: null }),
   refreshAppData: null,
   setRefreshAppData: (handler) => set({ refreshAppData: handler }),
+  showConfirm: null,
+  setShowConfirm: (handler) => set({ showConfirm: handler }),
+  showPrompt: null,
+  setShowPrompt: (handler) => set({ showPrompt: handler }),
   toast: null,
   setToast: (toast) => set({ toast }),
   showToast: (message, type = 'success') => set({ toast: { message, type } }),

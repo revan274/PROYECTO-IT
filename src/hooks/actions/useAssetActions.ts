@@ -13,6 +13,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
   const backendConnected = useAppStore((state) => state.backendConnected);
   const refreshAppData = useAppStore((state) => state.refreshAppData);
   const showToast = useAppStore((state) => state.showToast);
+  const showConfirm = useAppStore((state) => state.showConfirm);
 
   const canManageUsers = sessionUser?.rol === 'admin';
   const isReadOnly = sessionUser?.rol !== 'admin' && sessionUser?.rol !== 'tecnico';
@@ -94,7 +95,9 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
     const activoToDelete = activos.find((asset) => asset.id === id);
     if (!activoToDelete) return false;
 
-    const confirmacion = window.confirm(`Eliminar activo ${activoToDelete.tag}?`);
+    const confirmacion = showConfirm
+      ? await showConfirm(`Eliminar activo ${activoToDelete.tag}?`)
+      : window.confirm(`Eliminar activo ${activoToDelete.tag}?`);
     if (!confirmacion) return false;
     if (!ensureBackendConnected('Eliminar activos')) return false;
 
@@ -125,9 +128,13 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
       return false;
     }
 
-    const confirmacionInicial = window.confirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`);
+    const confirmacionInicial = showConfirm
+      ? await showConfirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`)
+      : window.confirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`);
     if (!confirmacionInicial) return false;
-    const confirmacionFinal = window.confirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
+    const confirmacionFinal = showConfirm
+      ? await showConfirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?', { confirmLabel: 'Borrar todo' })
+      : window.confirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
     if (!confirmacionFinal) return false;
     if (!ensureBackendConnected('Eliminar el inventario completo')) return false;
 

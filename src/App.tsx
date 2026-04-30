@@ -20,8 +20,11 @@ import { useSessionActions } from './hooks/actions/useSessionActions';
 import { useSupplyActions } from './hooks/actions/useSupplyActions';
 import { useTicketActions } from './hooks/actions/useTicketActions';
 import { useUserActions } from './hooks/actions/useUserActions';
+import { useDialogs } from './hooks/useDialogs';
 
 import { Toast } from './components/ui/Toast';
+import { ConfirmDialog } from './components/modals/ConfirmDialog';
+import { PromptDialog } from './components/modals/PromptDialog';
 import { LoginView } from './components/views/LoginView';
 import { TicketsView } from './components/views/TicketsView';
 import {
@@ -59,6 +62,7 @@ import type {
   ReportFilterPreset,
   ReportFilterSnapshot,
   SupplyAuditMovement,
+  TicketAttachment,
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
@@ -246,6 +250,7 @@ export default function App() {
     setToast,
     showToast,
     clearToast,
+    showConfirm,
   } = useAppStore();
   const searchTerm = globalSearchTerm;
 
@@ -445,7 +450,7 @@ export default function App() {
 
   useEffect(() => {
     setLiveNow(Date.now());
-    const intervalId = window.setInterval(() => setLiveNow(Date.now()), 60000);
+    const intervalId = window.setInterval(() => setLiveNow(Date.now()), 300_000);
     return () => window.clearInterval(intervalId);
   }, []);
 
@@ -763,6 +768,15 @@ export default function App() {
     onRefreshFailure: handleBootstrapFailure,
     onRefreshSuccess: handleBootstrapSuccess,
   });
+
+  const {
+    confirmState,
+    promptState,
+    onConfirmAccept,
+    onConfirmCancel,
+    onPromptAccept,
+    onPromptCancel,
+  } = useDialogs();
 
   const {
     loginForm,
@@ -1764,102 +1778,6 @@ export default function App() {
     setAuditPage(1);
   }, [setAuditFilters, setAuditPage]);
 
-  const descargarAuditoria = (module?: AuditModule) => {
-    const sourceBase = view === 'history' ? auditRowsForHistory : normalizedAuditRows;
-    const rowsSource = module
-      ? sourceBase.filter((log) => log.modulo === module)
-      : sourceBase;
-    if (rowsSource.length === 0) {
-      const label = module ? auditModuleLabel(module) : 'auditoría';
-      showToast(`No hay registros para exportar en ${label}`, 'warning');
-      return;
-    }
-
-    const headers = ['Módulo', 'Fecha', 'Usuario', 'Acción', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
-    const rows = rowsSource.map((log) => [
-      auditModuleLabel(log.modulo || 'otros'),
-      log.fecha,
-      log.usuario,
-      log.accion,
-      log.item,
-      String(log.cantidad),
-      log.resultado || 'ok',
-      log.entidad || '',
-      log.requestId || '',
-    ]);
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const suffix = module ? `_${module}` : '_general';
-    link.download = `auditoria_it${suffix}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
-  const exportarInventarioFiltrado = () => {
-    if (filteredActivos.length === 0) {
-      showToast('No hay activos para exportar', 'warning');
-      return;
-    }
-
-    const headers = [
-      'TAG',
-      'SERIAL',
-      'ID_INTERNO',
-      'TIPO',
-      'MARCA',
-      'MODELO',
-      'ESTADO',
-      'RESPONSABLE',
-      'DEPARTAMENTO',
-      'UBICACION',
-      'IP',
-      'MAC',
-      'CPU',
-      'RAM',
-      'DISCO',
-      'ANIOS_VIDA',
-      'COMENTARIOS',
-    ];
-    const rows = filteredActivos.map((asset) => [
-      asset.tag,
-      asset.serial,
-      asset.idInterno || '',
-      asset.tipo,
-      asset.marca,
-      asset.modelo || '',
-      asset.estado,
-      asset.responsable || '',
-      asset.departamento || '',
-      asset.ubicacion || '',
-      asset.ipAddress || '',
-      asset.macAddress || '',
-      asset.cpu || '',
-      asset.ram || '',
-      asset.disco || '',
-      asset.aniosVida || '',
-      asset.comentarios || '',
-    ]);
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `inventario_filtrado_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
   const applyInventoryFocus = useCallback((focus: 'FALLA' | InventoryRiskFilter) => {
     setInventoryDepartmentFilter('TODOS');
     setInventoryEquipmentFilter('TODOS');
@@ -2055,6 +1973,65 @@ export default function App() {
       inventoryStatusFilter,
     ],
   );
+
+  const exportarInventarioFiltrado = useCallback(() => {
+    if (filteredActivos.length === 0) {
+      showToast('No hay activos para exportar', 'warning');
+      return;
+    }
+
+    const headers = [
+      'TAG',
+      'SERIAL',
+      'ID_INTERNO',
+      'TIPO',
+      'MARCA',
+      'MODELO',
+      'ESTADO',
+      'RESPONSABLE',
+      'DEPARTAMENTO',
+      'UBICACION',
+      'IP',
+      'MAC',
+      'CPU',
+      'RAM',
+      'DISCO',
+      'ANIOS_VIDA',
+      'COMENTARIOS',
+    ];
+    const rows = filteredActivos.map((asset) => [
+      asset.tag,
+      asset.serial,
+      asset.idInterno || '',
+      asset.tipo,
+      asset.marca,
+      asset.modelo || '',
+      asset.estado,
+      asset.responsable || '',
+      asset.departamento || '',
+      asset.ubicacion || '',
+      asset.ipAddress || '',
+      asset.macAddress || '',
+      asset.cpu || '',
+      asset.ram || '',
+      asset.disco || '',
+      asset.aniosVida || '',
+      asset.comentarios || '',
+    ]);
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(escapeCsv).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventario_filtrado_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }, [filteredActivos, showToast]);
+
   const sortedFilteredActivos = useMemo(() => {
     const compareText = (left?: string, right?: string) => {
       const a = normalizeForCompare(left || '');
@@ -2191,6 +2168,45 @@ export default function App() {
     normalizedAuditRows,
     view,
   ]);
+
+  const descargarAuditoria = useCallback((module?: AuditModule) => {
+    const sourceBase = view === 'history' ? auditRowsForHistory : normalizedAuditRows;
+    const rowsSource = module
+      ? sourceBase.filter((log) => log.modulo === module)
+      : sourceBase;
+    if (rowsSource.length === 0) {
+      const label = module ? auditModuleLabel(module) : 'auditoría';
+      showToast(`No hay registros para exportar en ${label}`, 'warning');
+      return;
+    }
+
+    const headers = ['Módulo', 'Fecha', 'Usuario', 'Acción', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
+    const rows = rowsSource.map((log) => [
+      auditModuleLabel(log.modulo || 'otros'),
+      log.fecha,
+      log.usuario,
+      log.accion,
+      log.item,
+      String(log.cantidad),
+      log.resultado || 'ok',
+      log.entidad || '',
+      log.requestId || '',
+    ]);
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(escapeCsv).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const suffix = module ? `_${module}` : '_general';
+    link.download = `auditoria_it${suffix}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }, [auditRowsForHistory, normalizedAuditRows, showToast, view]);
+
   const auditRowsForGrouping = useMemo(
     () => (view === 'history' ? auditRowsForHistory : normalizedAuditRows),
     [view, auditRowsForHistory, normalizedAuditRows],
@@ -3164,9 +3180,11 @@ export default function App() {
     setReportPresetName('');
     showToast(existing ? 'Preset actualizado' : 'Preset guardado', 'success');
   }, [reportCurrentFilterSnapshot, reportFilterPresets, reportPresetName, sessionUser, setReportFilterPresets, setReportPresetName, showToast]);
-  const deleteReportFilterPreset = useCallback((preset: ReportFilterPreset) => {
+  const deleteReportFilterPreset = useCallback(async (preset: ReportFilterPreset) => {
     if (!sessionUser) return;
-    const confirmed = window.confirm(`Eliminar preset "${preset.name}"?`);
+    const confirmed = showConfirm
+      ? await showConfirm(`Eliminar preset "${preset.name}"?`)
+      : window.confirm(`Eliminar preset "${preset.name}"?`);
     if (!confirmed) return;
     setReportFilterPresets((prev) => {
       const next = prev.filter((item) => item.id !== preset.id);
@@ -3174,7 +3192,7 @@ export default function App() {
       return next;
     });
     showToast('Preset eliminado', 'success');
-  }, [sessionUser, setReportFilterPresets, showToast]);
+  }, [sessionUser, setReportFilterPresets, showConfirm, showToast]);
   const buildReportPresentationHtml = (): string => {
     const periodLabel = `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}`;
     const branchLabel = reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter);
@@ -3910,6 +3928,82 @@ export default function App() {
   const defaultViewPath = getViewPath(defaultView);
   const protectedViewOptions = { canManageUsers, isRequesterOnlyUser, defaultViewPath };
 
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
+  const openSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
+  const logoutHandler = useCallback(() => { void handleLogout(); }, [handleLogout]);
+  const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
+
+  const handleTicketStateFilterChange = useCallback(
+    (value: string) => setTicketStateFilter(value as TicketEstado | 'TODOS'),
+    [setTicketStateFilter],
+  );
+  const handleTicketPriorityFilterChange = useCallback(
+    (value: string) => setTicketPriorityFilter(value as PrioridadTicket | 'TODAS'),
+    [setTicketPriorityFilter],
+  );
+  const resetTicketFilters = useCallback(() => {
+    setTicketLifecycleFilter('TODOS');
+    setTicketStateFilter('TODOS');
+    setTicketPriorityFilter('TODAS');
+    setTicketAssignmentFilter('TODOS');
+    setTicketSlaFilter('TODOS');
+    clearGlobalSearchTerm();
+  }, [clearGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter, setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter]);
+
+  const handleStatusChange = useCallback(
+    (ticketId: number, estado: string) => { void actualizarTicket(ticketId, { estado: estado as TicketEstado }); },
+    [actualizarTicket],
+  );
+  const handleAttentionChange = useCallback(
+    (ticketId: number, atencionTipo: string) => {
+      const value = normalizeTicketAttentionType(atencionTipo);
+      if (!value) return;
+      void actualizarTicket(ticketId, { atencionTipo: value });
+    },
+    [actualizarTicket],
+  );
+  const handleTravelChange = useCallback(
+    (ticketId: number, trasladoRequerido: boolean) => { void actualizarTicket(ticketId, { trasladoRequerido }); },
+    [actualizarTicket],
+  );
+  const handleAssigneeChange = useCallback(
+    (ticketId: number, asignadoA: string) => { void actualizarTicket(ticketId, { asignadoA }); },
+    [actualizarTicket],
+  );
+  const handleViewAssetFromTicket = useCallback(
+    (tag: string) => { setView('inventory'); setGlobalSearchTerm(tag); },
+    [setGlobalSearchTerm, setView],
+  );
+  const handleResolveTicket = useCallback(
+    (ticketId: number) => { void resolverTicket(ticketId); },
+    [resolverTicket],
+  );
+  const handleDeleteTicket = useCallback(
+    (ticketId: number) => { void eliminarTicket(ticketId); },
+    [eliminarTicket],
+  );
+  const handleUploadAttachment = useCallback(
+    (ticketId: number, files: FileList | null) => { void cargarAdjuntoTicket(ticketId, files); },
+    [cargarAdjuntoTicket],
+  );
+  const handleDownloadAttachment = useCallback(
+    (ticketId: number, attachment: TicketAttachment) => { void descargarAdjuntoTicket(ticketId, attachment); },
+    [descargarAdjuntoTicket],
+  );
+  const handleDeleteAttachment = useCallback(
+    (ticketId: number, attachment: TicketAttachment) => { void eliminarAdjuntoTicket(ticketId, attachment); },
+    [eliminarAdjuntoTicket],
+  );
+  const handleCommentDraftChange = useCallback(
+    (ticketId: number, value: string) => {
+      setTicketCommentDrafts((prev) => ({ ...prev, [ticketId]: value }));
+    },
+    [setTicketCommentDrafts],
+  );
+  const handleSaveComment = useCallback(
+    (ticketId: number) => { void agregarComentarioTicket(ticketId); },
+    [agregarComentarioTicket],
+  );
 
   if (!sessionUser) {
     return (
@@ -3937,19 +4031,17 @@ export default function App() {
       <AppSidebar
         navItems={visibleNavItems}
         sidebarOpen={sidebarOpen}
-        onCloseSidebar={() => setSidebarOpen(false)}
+        onCloseSidebar={closeSidebar}
         authorBrand={AUTHOR_BRAND}
         getItemHref={getViewPath}
-        onLogout={() => {
-          void handleLogout();
-        }}
+        onLogout={logoutHandler}
       />
 
       <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
         <AppHeader
           searchTerm={searchTerm}
           onSearchChange={setGlobalSearchTerm}
-          onOpenSidebar={() => setSidebarOpen(true)}
+          onOpenSidebar={openSidebar}
           authorBrand={AUTHOR_BRAND}
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -4381,63 +4473,26 @@ export default function App() {
                     formatTicketAttentionType={formatTicketAttentionType}
                     getSlaStatus={getSlaStatusForCurrentTime}
                     canDeleteTicket={canDeleteTicket}
-                    onOpenTicketModal={() => openModal('ticket')}
+                    onOpenTicketModal={openTicketModal}
                     onApplyTicketFocus={applyTicketFocus}
                     onTicketLifecycleFilterChange={setTicketLifecycleFilter}
-                    onTicketStateFilterChange={(value) => setTicketStateFilter(value as TicketEstado | 'TODOS')}
-                    onTicketPriorityFilterChange={(value) => setTicketPriorityFilter(value as PrioridadTicket | 'TODAS')}
+                    onTicketStateFilterChange={handleTicketStateFilterChange}
+                    onTicketPriorityFilterChange={handleTicketPriorityFilterChange}
                     onTicketAssignmentFilterChange={setTicketAssignmentFilter}
                     onTicketSlaFilterChange={setTicketSlaFilter}
-                    onResetFilters={() => {
-                      setTicketLifecycleFilter('TODOS');
-                      setTicketStateFilter('TODOS');
-                      setTicketPriorityFilter('TODAS');
-                      setTicketAssignmentFilter('TODOS');
-                      setTicketSlaFilter('TODOS');
-                      clearGlobalSearchTerm();
-                    }}
-                    onStatusChange={(ticketId, estado) => {
-                      void actualizarTicket(ticketId, { estado: estado as TicketEstado });
-                    }}
-                    onAttentionChange={(ticketId, atencionTipo) => {
-                      const value = normalizeTicketAttentionType(atencionTipo);
-                      if (!value) return;
-                      void actualizarTicket(ticketId, { atencionTipo: value });
-                    }}
-                    onTravelChange={(ticketId, trasladoRequerido) => {
-                      void actualizarTicket(ticketId, { trasladoRequerido });
-                    }}
-                    onAssigneeChange={(ticketId, asignadoA) => {
-                      void actualizarTicket(ticketId, { asignadoA });
-                    }}
-                    onViewAsset={(tag) => {
-                      setView('inventory');
-                      setGlobalSearchTerm(tag);
-                    }}
-                    onResolveTicket={(ticketId) => {
-                      void resolverTicket(ticketId);
-                    }}
-                    onDeleteTicket={(ticketId) => {
-                      void eliminarTicket(ticketId);
-                    }}
-                    onUploadAttachment={(ticketId, files) => {
-                      void cargarAdjuntoTicket(ticketId, files);
-                    }}
-                    onDownloadAttachment={(ticketId, attachment) => {
-                      void descargarAdjuntoTicket(ticketId, attachment);
-                    }}
-                    onDeleteAttachment={(ticketId, attachment) => {
-                      void eliminarAdjuntoTicket(ticketId, attachment);
-                    }}
-                    onCommentDraftChange={(ticketId, value) => {
-                      setTicketCommentDrafts((prev) => ({
-                        ...prev,
-                        [ticketId]: value,
-                      }));
-                    }}
-                    onSaveComment={(ticketId) => {
-                      void agregarComentarioTicket(ticketId);
-                    }}
+                    onResetFilters={resetTicketFilters}
+                    onStatusChange={handleStatusChange}
+                    onAttentionChange={handleAttentionChange}
+                    onTravelChange={handleTravelChange}
+                    onAssigneeChange={handleAssigneeChange}
+                    onViewAsset={handleViewAssetFromTicket}
+                    onResolveTicket={handleResolveTicket}
+                    onDeleteTicket={handleDeleteTicket}
+                    onUploadAttachment={handleUploadAttachment}
+                    onDownloadAttachment={handleDownloadAttachment}
+                    onDeleteAttachment={handleDeleteAttachment}
+                    onCommentDraftChange={handleCommentDraftChange}
+                    onSaveComment={handleSaveComment}
                     ticketFormModal={{
                       isOpen: isTicketModalOpen,
                       title: getModalTitle('ticket', editingAssetId, editingInsumoId),
@@ -4465,6 +4520,25 @@ export default function App() {
       </main>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={clearToast} />}
+
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          title={confirmState.title}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={onConfirmAccept}
+          onCancel={onConfirmCancel}
+        />
+      )}
+      {promptState && (
+        <PromptDialog
+          message={promptState.message}
+          title={promptState.title}
+          defaultValue={promptState.defaultValue}
+          onConfirm={onPromptAccept}
+          onCancel={onPromptCancel}
+        />
+      )}
 
     </div>
   );

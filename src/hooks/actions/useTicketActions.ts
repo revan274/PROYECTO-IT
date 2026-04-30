@@ -63,6 +63,7 @@ export function useTicketActions({
   const backendConnected = useAppStore((state) => state.backendConnected);
   const refreshAppData = useAppStore((state) => state.refreshAppData);
   const showToast = useAppStore((state) => state.showToast);
+  const showConfirm = useAppStore((state) => state.showConfirm);
   const tickets = useAppStore((state) => state.tickets);
   const setTickets = useAppStore((state) => state.setTickets);
 
@@ -251,9 +252,9 @@ export function useTicketActions({
       return false;
     }
 
-    const confirmed = window.confirm(
-      `Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`,
-    );
+    const confirmed = showConfirm
+      ? await showConfirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`)
+      : window.confirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`);
     if (!confirmed) return false;
     if (!ensureBackendConnected('Eliminar tickets')) return false;
 
@@ -371,7 +372,9 @@ export function useTicketActions({
     const target = tickets.find((ticket) => ticket.id === ticketId);
     if (!target) return false;
 
-    const confirmacion = window.confirm(`Eliminar adjunto "${attachment.fileName}" del ticket #${ticketId}?`);
+    const confirmacion = showConfirm
+      ? await showConfirm(`Eliminar adjunto "${attachment.fileName}" del ticket #${ticketId}?`)
+      : window.confirm(`Eliminar adjunto "${attachment.fileName}" del ticket #${ticketId}?`);
     if (!confirmacion) return false;
 
     if (attachment.localOnly) {

@@ -32,6 +32,8 @@ export function useSupplyActions({
   const backendConnected = useAppStore((state) => state.backendConnected);
   const refreshAppData = useAppStore((state) => state.refreshAppData);
   const showToast = useAppStore((state) => state.showToast);
+  const showConfirm = useAppStore((state) => state.showConfirm);
+  const showPrompt = useAppStore((state) => state.showPrompt);
 
   const isReadOnly = sessionUser?.rol !== 'admin' && sessionUser?.rol !== 'tecnico';
 
@@ -106,7 +108,9 @@ export function useSupplyActions({
     const itemToDelete = insumos.find((item) => item.id === id);
     if (!itemToDelete) return false;
 
-    const confirmacion = window.confirm(`Estas seguro de eliminar "${itemToDelete.nombre}"?`);
+    const confirmacion = showConfirm
+      ? await showConfirm(`Estas seguro de eliminar "${itemToDelete.nombre}"?`)
+      : window.confirm(`Estas seguro de eliminar "${itemToDelete.nombre}"?`);
     if (!confirmacion) return false;
     if (!ensureBackendConnected('Eliminar insumos')) return false;
 
@@ -142,7 +146,9 @@ export function useSupplyActions({
     }
     if (!ensureBackendConnected('Actualizar stock')) return;
 
-    const motivo = window.prompt(`Motivo del ajuste ${cantidad > 0 ? '+' : ''}${cantidad} (Opcional):`);
+    const motivo = showPrompt
+      ? await showPrompt(`Motivo del ajuste ${cantidad > 0 ? '+' : ''}${cantidad}`, { title: 'Motivo (Opcional)' })
+      : window.prompt(`Motivo del ajuste ${cantidad > 0 ? '+' : ''}${cantidad} (Opcional):`);
 
     try {
       await apiRequest(`/insumos/${id}/stock`, {
@@ -213,7 +219,9 @@ export function useSupplyActions({
     }
     if (!ensureBackendConnected('Actualizar stock manual')) return false;
 
-    const motivo = window.prompt(`Motivo de ajuste manual a ${value} (Opcional):`);
+    const motivo = showPrompt
+      ? await showPrompt(`Ajuste manual a ${value}`, { title: 'Motivo (Opcional)' })
+      : window.prompt(`Motivo de ajuste manual a ${value} (Opcional):`);
 
     try {
       await apiRequest(`/insumos/${id}/stock`, {
