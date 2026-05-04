@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface PromptDialogProps {
   message: string;
@@ -26,7 +26,7 @@ export function PromptDialog({
     return () => window.removeEventListener('keydown', handler);
   }, [onCancel]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: { preventDefault(): void }) => {
     e.preventDefault();
     onConfirm(value);
   };
