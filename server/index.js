@@ -871,7 +871,9 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
     const visibleTickets = filterTicketsForUser(db.tickets, req.authUser);
 
     res.json({
-      activos: requesterOnly ? [] : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
+      activos: requesterOnly
+        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento }))
+        : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
       tickets: visibleTickets.map(serializeTicket),
       auditoria: requesterOnly ? [] : getBootstrapAuditRows(db.auditoria),
