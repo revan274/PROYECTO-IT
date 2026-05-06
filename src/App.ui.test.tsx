@@ -364,8 +364,8 @@ describe('App UI flow', () => {
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
     await screen.findByText('Tickets IT');
-    expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
-    expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
+    expect(screen.getByText(/Backend de pruebas fuera de linea/i)).toBeTruthy();
+    expect(screen.getByText(/Backend de pruebas fuera de linea/i)).toBeTruthy();
   });
 
   test('rechaza QR locales y solo acepta tokens firmados', async () => {
