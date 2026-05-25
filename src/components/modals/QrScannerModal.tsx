@@ -35,7 +35,7 @@ export function QrScannerModal({
       <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolucion Segura QR</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Segura QR</p>
             <h3 className="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
               <ScanLine size={18} /> Escanear Activo
             </h3>
@@ -47,7 +47,7 @@ export function QrScannerModal({
 
         <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5 space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Camara</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cámara</p>
             <div className="aspect-[4/3] bg-slate-900 rounded-2xl overflow-hidden border border-slate-200">
               <video
                 ref={videoRef}
@@ -63,7 +63,7 @@ export function QrScannerModal({
                   ? 'bg-green-50 text-green-700 border-green-200'
                   : 'bg-slate-100 text-slate-500 border-slate-200'
               }`}>
-                {isScannerActive ? 'Camara activa' : 'Camara inactiva'}
+                {isScannerActive ? 'Cámara activa' : 'Cámara inactiva'}
               </span>
               {!isCameraSupported && (
                 <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200">
@@ -75,11 +75,11 @@ export function QrScannerModal({
           </div>
 
           <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolucion Manual</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Manual</p>
             <textarea
               value={manualInput}
               onChange={(e) => onManualInputChange(e.target.value)}
-              placeholder="Pega aqui el token mtiqr1 del QR firmado"
+              placeholder="Pega aquí el token mtiqr1 del QR firmado"
               className="w-full h-56 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-mono text-slate-700 outline-none"
             />
             <div className="flex flex-wrap gap-2">

@@ -49,7 +49,7 @@ const DEFAULT_USER_CARGOS = [
 ];
 const DEFAULT_ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-  { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: true },
+  { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
   { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
   { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
@@ -95,7 +95,7 @@ const DEFAULT_USERS = [
   },
   {
     id: 502,
-    nombre: 'Tecnico 1',
+    nombre: 'Técnico 1',
     username: 'tecnico1',
     passwordHash: 'scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456',
     rol: 'tecnico',
@@ -127,7 +127,7 @@ const DEFAULT_DB = {
       tag: 'POS-001',
       tipo: 'POS',
       marca: 'IBM SurePOS',
-      ubicacion: 'Caja Rapida 1',
+      ubicacion: 'Caja Rápida 1',
       estado: 'Operativo',
       serial: 'SN-99201',
       fechaCompra: '2022-01-15',
@@ -137,7 +137,7 @@ const DEFAULT_DB = {
       tag: 'POS-002',
       tipo: 'POS',
       marca: 'IBM SurePOS',
-      ubicacion: 'Caja Rapida 2',
+      ubicacion: 'Caja Rápida 2',
       estado: 'Operativo',
       serial: 'SN-99202',
       fechaCompra: '2022-01-15',
@@ -145,7 +145,7 @@ const DEFAULT_DB = {
     {
       id: 3,
       tag: 'BAS-010',
-      tipo: 'Bascula',
+      tipo: 'Báscula',
       marca: 'Datalogic',
       ubicacion: 'Frutas y Verduras',
       estado: 'Falla',
@@ -165,7 +165,7 @@ const DEFAULT_DB = {
   ],
   insumos: [
     { id: 11, nombre: 'Cable Ethernet Cat6', unidad: 'Metros', stock: 150, min: 50, categoria: 'REDES', activo: true },
-    { id: 12, nombre: 'Papel Termico 80mm', unidad: 'Rollos', stock: 12, min: 20, categoria: 'CONSUMIBLES', activo: true },
+    { id: 12, nombre: 'Papel Térmico 80mm', unidad: 'Rollos', stock: 12, min: 20, categoria: 'CONSUMIBLES', activo: true },
     { id: 13, nombre: 'Conectores RJ45', unidad: 'Piezas', stock: 100, min: 30, categoria: 'REDES', activo: true },
     { id: 14, nombre: 'Teclado USB', unidad: 'Piezas', stock: 5, min: 5, categoria: 'HARDWARE', activo: true },
   ],
@@ -182,7 +182,7 @@ const DEFAULT_DB = {
       fecha: '2023-10-24 09:00',
       fechaCreacion: '2023-10-24T09:00:00.000Z',
       fechaLimite: '2023-10-24T11:00:00.000Z',
-      asignadoA: 'Tecnico 1',
+      asignadoA: 'Técnico 1',
       historial: [
         {
           fecha: '2023-10-24 09:00',
@@ -198,7 +198,7 @@ const DEFAULT_DB = {
     {
       id: 201,
       accion: 'Entrada',
-      item: 'Papel Termico',
+      item: 'Papel Térmico',
       cantidad: 50,
       fecha: '2024-05-20 10:30',
       usuario: 'Admin IT',
@@ -918,7 +918,7 @@ async function ensurePgState() {
 
       if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
         throw new Error(
-          'DATABASE_URL esta configurado pero la base de datos no tiene estado inicial. Habilita ALLOW_PRODUCTION_SEED=true temporalmente para sembrarla.',
+          'DATABASE_URL está configurado pero la base de datos no tiene estado inicial. Habilita ALLOW_PRODUCTION_SEED=true temporalmente para sembrarla.',
         );
       }
 
@@ -945,7 +945,7 @@ async function ensureDbFile() {
   } catch {
     if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
       throw new Error(
-        `DB_FILE no existe en produccion (${DB_FILE}). Provisiona el runtime DB o habilita ALLOW_PRODUCTION_SEED=true temporalmente.`,
+        `DB_FILE no existe en producción (${DB_FILE}). Provisiona el runtime DB o habilita ALLOW_PRODUCTION_SEED=true temporalmente.`,
       );
     }
     const seedDb = await loadSeedDb();
@@ -1106,7 +1106,7 @@ export function pushAudit(db, payload) {
   const prevHash = latestHash || AUDIT_GENESIS_HASH;
   const draftEntry = {
     id: nextId(db),
-    accion: payload.accion || 'Accion',
+    accion: payload.accion || 'Acción',
     item: payload.item || 'N/A',
     cantidad: payload.cantidad,
     fecha: now(),

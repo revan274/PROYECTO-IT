@@ -39,7 +39,7 @@ export function AssetFormModal({
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Datos Base</p>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Requeridos: Tag, Tipo, Marca, Serial, Ubicacion</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Requeridos: Tag, Tipo, Marca, Serial, Ubicación</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
@@ -88,7 +88,7 @@ export function AssetFormModal({
           </section>
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicacion y Estado</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
                 required

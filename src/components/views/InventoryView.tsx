@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, Download, ScanLine, Trash2, Plus, ChevronRight } from 'lucide-react';
+import { Upload, Download, ScanLine, Trash2, Plus, ChevronRight, Inbox } from 'lucide-react';
 import { AssetFormModal } from '../modals/AssetFormModal';
 import { AssetDetailModal } from '../modals/AssetDetailModal';
 import { ImportPreviewModal } from '../modals/ImportPreviewModal';
@@ -317,7 +317,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <option value="SIN_MAC">Sin MAC</option>
               <option value="SIN_RESP">Sin responsable</option>
               <option value="DUP_RED">Duplicado de red</option>
-              <option value="VIDA_ALTA">Vida Ãºtil &gt;= 4</option>
+              <option value="VIDA_ALTA">Vida útil &gt;= 4</option>
             </select>
             <select
               value={inventorySortField}
@@ -328,8 +328,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <option value="tipo">Orden: Equipo</option>
               <option value="estado">Orden: Estado</option>
               <option value="responsable">Orden: Responsable</option>
-              <option value="ubicacion">Orden: Ubicacion</option>
-              <option value="aniosVida">Orden: Vida Ãºtil</option>
+              <option value="ubicacion">Orden: Ubicación</option>
+              <option value="aniosVida">Orden: Vida útil</option>
             </select>
             <select
               value={inventorySortDirection}
@@ -433,7 +433,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     onClick={() => updateInventorySort('ubicacion')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
-                    Ubicacion <span>{getInventorySortIndicator('ubicacion')}</span>
+                    Ubicación <span>{getInventorySortIndicator('ubicacion')}</span>
                   </button>
                 </th>
                 <th className="px-6 py-6">
@@ -444,7 +444,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     Estado <span>{getInventorySortIndicator('estado')}</span>
                   </button>
                 </th>
-                <th className="px-6 py-6 text-right">Accion</th>
+                <th className="px-6 py-6 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -501,10 +501,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <td colSpan={7} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
                       <div className="w-20 h-20 mb-4 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner">
-                        <span className="text-3xl">ðŸ“­</span>
+                        <Inbox className="h-8 w-8 text-slate-300" />
                       </div>
-                      <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-lg">El inventario se encuentra vacÃ­o</p>
-                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2">Intenta modificar o limpiar los filtros de bÃºsqueda superior.</p>
+                      <p className="font-black font-['Outfit'] uppercase tracking-tight text-slate-800 text-lg">El inventario se encuentra vacío</p>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mt-2">Intenta modificar o limpiar los filtros de búsqueda superior.</p>
                     </div>
                   </td>
                 </tr>

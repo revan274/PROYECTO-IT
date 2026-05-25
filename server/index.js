@@ -364,10 +364,10 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
   const ipAddress = normalizeIpAddress(rawIp);
 
   if (rawMac && macAddress === null) {
-    errors.push('MAC invalida');
+    errors.push('MAC inválida');
   }
   if (rawIp && ipAddress === null) {
-    errors.push('IP invalida');
+    errors.push('IP inválida');
   }
 
   if (fromImport) {
@@ -526,7 +526,7 @@ function importAssets(db, options) {
   const upsert = options.upsert !== false;
   const usuario = asNonEmptyString(options.usuario) || 'Admin IT';
   const persist = options.persist !== false;
-  const sourceName = asNonEmptyString(options.fileName) || 'Importacion Excel';
+  const sourceName = asNonEmptyString(options.fileName) || 'Importación Excel';
   const auditReq = options.auditReq || null;
 
   const detailLimit = 40;
@@ -603,7 +603,7 @@ function importAssets(db, options) {
 
   if (persist && (report.created > 0 || report.updated > 0)) {
     pushAuditWithContext(db, auditReq, {
-      accion: 'Importacion Activos',
+      accion: 'Importación Activos',
       item: sourceName,
       cantidad: report.created + report.updated,
       usuario,
@@ -659,17 +659,17 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     const hasCargoUpdate = req.body?.cargos !== undefined;
     const hasRoleUpdate = req.body?.roles !== undefined;
     if (!hasBranchUpdate && !hasCargoUpdate && !hasRoleUpdate) {
-      return res.status(400).json({ error: 'No hay cambios de catalogos para aplicar.' });
+      return res.status(400).json({ error: 'No hay cambios de catálogos para aplicar.' });
     }
 
     if (hasBranchUpdate && !Array.isArray(req.body?.sucursales)) {
-      return res.status(400).json({ error: 'El catalogo de sucursales debe ser una lista.' });
+      return res.status(400).json({ error: 'El catálogo de sucursales debe ser una lista.' });
     }
     if (hasCargoUpdate && !Array.isArray(req.body?.cargos)) {
-      return res.status(400).json({ error: 'El catalogo de cargos debe ser una lista.' });
+      return res.status(400).json({ error: 'El catálogo de cargos debe ser una lista.' });
     }
     if (hasRoleUpdate && !Array.isArray(req.body?.roles)) {
-      return res.status(400).json({ error: 'El catalogo de roles debe ser una lista.' });
+      return res.status(400).json({ error: 'El catálogo de roles debe ser una lista.' });
     }
 
     const updated = await updateDb((db) => {
@@ -687,27 +687,27 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
 
       db.catalogos = normalized;
       pushAuditWithContext(db, req, {
-        accion: 'Catalogos Actualizados',
+        accion: 'Catálogos Actualizados',
         item: `Sucursales: ${normalized.sucursales.length} | Cargos: ${normalized.cargos.length} | Roles: ${normalized.roles.length}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
-        entidad: 'catalogo',
+        entidad: 'catálogo',
       });
       return { ok: true, catalogos: normalized };
     });
 
     if (!updated?.ok && updated?.code === 'INVALID_BRANCHES') {
-      return res.status(400).json({ error: 'Catalogo de sucursales invalido.' });
+      return res.status(400).json({ error: 'Catálogo de sucursales inválido.' });
     }
     if (!updated?.ok && updated?.code === 'INVALID_CARGOS') {
-      return res.status(400).json({ error: 'Catalogo de cargos invalido.' });
+      return res.status(400).json({ error: 'Catálogo de cargos inválido.' });
     }
     if (!updated?.ok && updated?.code === 'INVALID_ROLES') {
-      return res.status(400).json({ error: 'Catalogo de roles invalido.' });
+      return res.status(400).json({ error: 'Catálogo de roles inválido.' });
     }
     if (!updated?.ok) {
-      return res.status(500).json({ error: 'No se pudieron guardar los catalogos.' });
+      return res.status(500).json({ error: 'No se pudieron guardar los catálogos.' });
     }
 
     res.json({
@@ -747,7 +747,7 @@ app.post('/api/auth/login', async (req, res, next) => {
         meta: { retryAfterSec: throttle.retryAfterSec },
       });
       return res.status(429).json({
-        error: 'Demasiados intentos de inicio de sesion. Intenta mas tarde.',
+        error: 'Demasiados intentos de inicio de sesión. Intenta más tarde.',
         retryAfterSec: throttle.retryAfterSec,
       });
     }
@@ -782,10 +782,10 @@ app.post('/api/auth/login', async (req, res, next) => {
         item: username,
         cantidad: 1,
         resultado: 'error',
-        motivo: 'Credenciales invalidas',
+        motivo: 'Credenciales inválidas',
         username,
       });
-      return res.status(401).json({ error: 'Credenciales invalidas.' });
+      return res.status(401).json({ error: 'Credenciales inválidas.' });
     }
     if (!roleIsEnabledByCatalog(db, user.rol)) {
       await writeSecurityAudit(req, {
@@ -799,7 +799,7 @@ app.post('/api/auth/login', async (req, res, next) => {
         rol: user.rol,
         departamento: user.departamento,
       });
-      return res.status(403).json({ error: 'Tu rol esta deshabilitado en catalogo.' });
+      return res.status(403).json({ error: 'Tu rol está deshabilitado en catálogo.' });
     }
     if (DISALLOW_DEMO_PASSWORDS && isDemoPasswordUser(user)) {
       await writeSecurityAudit(req, {
@@ -1035,7 +1035,7 @@ app.get('/api/qr/resolve/:token', requireAuth, async (req, res, next) => {
   try {
     const verified = verifySignedAssetQrToken(req.params.token);
     if (!verified.ok) {
-      return res.status(400).json({ error: 'QR invalido o manipulado.' });
+      return res.status(400).json({ error: 'QR inválido o manipulado.' });
     }
 
     const db = await readDb();
@@ -1062,7 +1062,7 @@ app.get('/api/qr/resolve/:token', requireAuth, async (req, res, next) => {
 app.get('/api/auditoria', requireAuth, async (req, res, next) => {
   try {
     if (req.authUser?.rol === 'solicitante') {
-      return res.status(403).json({ error: 'No autorizado para consultar auditoria.' });
+      return res.status(403).json({ error: 'No autorizado para consultar auditoría.' });
     }
 
     const db = await readDb();
@@ -1277,13 +1277,13 @@ app.use((error, _req, res, _next) => {
   const isJsonParseError = error?.type === 'entity.parse.failed'
     || (error instanceof SyntaxError && Object.prototype.hasOwnProperty.call(error, 'body'));
   if (isJsonParseError) {
-    return res.status(400).json({ error: 'JSON invalido en la solicitud.' });
+    return res.status(400).json({ error: 'JSON inválido en la solicitud.' });
   }
 
   const status = Math.trunc(Number(error?.statusCode || error?.status || 500));
   const message = asNonEmptyString(error?.message);
   if (status >= 400 && status < 600) {
-    return res.status(status).json({ error: message || 'Solicitud invalida.' });
+    return res.status(status).json({ error: message || 'Solicitud inválida.' });
   }
 
   console.error(error);

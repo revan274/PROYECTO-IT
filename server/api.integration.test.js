@@ -16,7 +16,7 @@ const TECH_PASSWORD = 'Tecnico.Integration.123';
 
 const ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-  { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: true },
+  { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
   { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
 
@@ -38,7 +38,7 @@ const ADMIN_USER = {
 
 const TECH_USER = {
   id: 502,
-  nombre: 'Tecnico Integracion',
+  nombre: 'Técnico Integración',
   username: 'tecnico.integration',
   passwordHash: createUserPasswordHash(TECH_PASSWORD),
   rol: 'tecnico',
@@ -128,7 +128,7 @@ function buildFixtureDb() {
       {
         id: 2,
         tag: 'BAS-010',
-        tipo: 'Bascula',
+        tipo: 'Báscula',
         marca: 'Datalogic',
         ubicacion: 'Frutas',
         estado: 'Falla',
@@ -168,7 +168,7 @@ function buildFixtureDb() {
       createTicket({
         id: 702,
         activoTag: 'BAS-010',
-        descripcion: 'Bascula sin comunicacion con caja.',
+        descripcion: 'Báscula sin comunicación con caja.',
         prioridad: 'ALTA',
         estado: 'En Proceso',
         atencionTipo: 'PRESENCIAL',
@@ -365,7 +365,10 @@ test('GET /api/bootstrap limita el payload para solicitantes', async () => {
   });
 
   assert.equal(response.status, 200);
-  assert.deepEqual(data.activos, []);
+  assert.deepEqual(data.activos, [
+    { id: 1, tag: 'POS-001', tipo: 'POS', ubicacion: 'Caja 1', departamento: '' },
+    { id: 2, tag: 'BAS-010', tipo: 'BÁSCULA', ubicacion: 'Frutas', departamento: '' },
+  ]);
   assert.deepEqual(data.insumos, []);
   assert.deepEqual(data.users, []);
   assert.deepEqual(data.auditoria, []);
@@ -566,7 +569,7 @@ test('POST/PATCH /api/activos crea y actualiza activos persistidos', { concurren
       ipAddress: '10.10.10.92',
       macAddress: 'AA:BB:CC:DD:EE:92',
       responsable: 'Soporte Campo',
-      comentarios: 'Actualizacion de prueba',
+      comentarios: 'Actualización de prueba',
     },
   });
 
@@ -691,7 +694,7 @@ test('resolver un ticket mantiene el activo en falla si existe otro ticket abier
   assert.equal(storedAsset.estado, 'Falla');
 });
 
-test('POST/PATCH /api/tickets persiste traslado y nuevos tipos de atencion', { concurrency: false }, async () => {
+test('POST/PATCH /api/tickets persiste traslado y nuevos tipos de atención', { concurrency: false }, async () => {
   const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
 
   const created = await requestJson('/api/tickets', {
@@ -699,7 +702,7 @@ test('POST/PATCH /api/tickets persiste traslado y nuevos tipos de atencion', { c
     token: session.token,
     body: {
       activoTag: 'POS-001',
-      descripcion: 'Atencion fuera de horario en sucursal',
+      descripcion: 'Atención fuera de horario en sucursal',
       sucursal: 'TJ01',
       prioridad: 'ALTA',
       atencionTipo: 'PRESENCIAL_FUERA_DE_HORARIO',
@@ -778,7 +781,7 @@ test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { con
   assert.equal(new Date(secondClose.data.fechaCierre).getTime() > new Date(firstClosedAt).getTime(), true);
 });
 
-test('un rol deshabilitado pierde acceso aunque ya tuviera una sesion activa', { concurrency: false }, async () => {
+test('un rol deshabilitado pierde acceso aunque ya tuviera una sesión activa', { concurrency: false }, async () => {
   const adminSession = await login(ADMIN_USER.username, ADMIN_PASSWORD);
   const techSession = await login(TECH_USER.username, TECH_PASSWORD);
 
@@ -788,7 +791,7 @@ test('un rol deshabilitado pierde acceso aunque ya tuviera una sesion activa', {
     body: {
       roles: [
         { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-        { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: false },
+        { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: false },
         { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
       ],
     },
@@ -809,7 +812,7 @@ test('un rol deshabilitado pierde acceso aunque ya tuviera una sesion activa', {
   });
 
   assert.equal(forbidden.response.status, 403, JSON.stringify(forbidden.data));
-  assert.equal(forbidden.data.error, 'Tu rol esta deshabilitado en catalogo.');
+  assert.equal(forbidden.data.error, 'Tu rol está deshabilitado en catálogo.');
 });
 
 test('GET /api/auditoria soporta all=1 y entityId para consultas bajo demanda', { concurrency: false }, async () => {
@@ -819,7 +822,7 @@ test('GET /api/auditoria soporta all=1 y entityId para consultas bajo demanda', 
     method: 'POST',
     token: session.token,
     body: {
-      nombre: 'Switch Auditoria Integracion',
+      nombre: 'Switch Auditoría Integración',
       unidad: 'Piezas',
       stock: 5,
       min: 1,
@@ -852,7 +855,7 @@ test('GET /api/auditoria soporta all=1 y entityId para consultas bajo demanda', 
   assert.equal(audit.data.items.every((item) => Number(item.entidadId) === Number(created.data.id)), true);
 });
 
-test('GET /api/bootstrap limita la auditoria incluida para reducir payload inicial', { concurrency: false }, async () => {
+test('GET /api/bootstrap limita la auditoría incluida para reducir payload inicial', { concurrency: false }, async () => {
   const persisted = await readPersistedDb();
   persisted.auditoria = Array.from({ length: 40 }, (_, index) => ({
     id: 3000 + index,

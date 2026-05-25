@@ -36,9 +36,9 @@ const ASSET_TYPE_TEMPLATES: TicketIssueSuggestionTemplate[] = [
     preferredArea: 'Recibos',
     areas: ['Recibos'],
     extraIssues: [
-      'Impresora fuera de linea',
+      'Impresora fuera de línea',
       'No corta ticket',
-      'Error de comunicacion USB o red',
+      'Error de comunicación USB o red',
     ],
   },
   {
@@ -46,8 +46,8 @@ const ASSET_TYPE_TEMPLATES: TicketIssueSuggestionTemplate[] = [
     preferredArea: 'Línea de cajas',
     areas: ['Línea de cajas', 'Tienda'],
     extraIssues: [
-      'Caja sin comunicacion con perifericos',
-      'No lee articulos o codigos',
+      'Caja sin comunicación con periféricos',
+      'No lee artículos o códigos',
       'No registra peso o venta correctamente',
     ],
   },
@@ -58,7 +58,7 @@ const ASSET_TYPE_TEMPLATES: TicketIssueSuggestionTemplate[] = [
     extraIssues: [
       'Equipo no enciende',
       'Pantalla sin imagen',
-      'No inicia sesion o perfil',
+      'No inicia sesión o perfil',
       'Sin acceso a red o recursos compartidos',
     ],
   },
@@ -68,9 +68,9 @@ const ASSET_TYPE_TEMPLATES: TicketIssueSuggestionTemplate[] = [
     areas: ['Mantenimiento', 'Tienda'],
     extraIssues: [
       'Servidor sin respuesta',
-      'Switch o enlace de red caido',
-      'Telefonia IP sin registro',
-      'Camara o grabador sin video',
+      'Switch o enlace de red caído',
+      'Telefonía IP sin registro',
+      'Cámara o grabador sin video',
     ],
   },
 ];
@@ -92,8 +92,8 @@ const LOCATION_TEMPLATES: TicketIssueSuggestionTemplate[] = [
     areas: ['Línea de cajas', 'Tienda'],
     extraIssues: [
       'Caja o piso sin operar',
-      'Periferico de piso sin comunicacion',
-      'Lentitud en operacion de tienda',
+      'Periférico de piso sin comunicación',
+      'Lentitud en operación de tienda',
     ],
   },
   {
@@ -362,7 +362,7 @@ export function normalizeTicketTravelRequired(value: unknown): boolean | null {
 }
 
 export function formatTicketTravelRequired(value: unknown): string {
-  return normalizeTicketTravelRequired(value) ? 'Si' : 'No';
+  return normalizeTicketTravelRequired(value) ? 'Sí' : 'No';
 }
 
 export function ticketRequiresTravel(

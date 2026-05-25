@@ -86,10 +86,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: 'El usuario ya existe.' });
     }
     if (!created?.ok && created?.code === 'INVALID_CARGO') {
-      return res.status(400).json({ error: 'Cargo invalido.' });
+      return res.status(400).json({ error: 'Cargo inválido.' });
     }
     if (!created?.ok && created?.code === 'ROLE_DISABLED') {
-      return res.status(400).json({ error: 'Rol deshabilitado en catalogo.' });
+      return res.status(400).json({ error: 'Rol deshabilitado en catálogo.' });
     }
     if (!created?.ok) {
       return res.status(500).json({ error: 'No se pudo crear el usuario.' });
@@ -105,7 +105,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
     if (!ensureAdmin(req, res)) return;
     const id = toInt(req.params.id);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const hasNombre = req.body?.nombre !== undefined;
     const hasUsername = req.body?.username !== undefined;
@@ -127,10 +127,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const { usuario } = getRequestActor(req);
 
     if (hasNombre && !nombre) {
-      return res.status(400).json({ error: 'Nombre invalido.' });
+      return res.status(400).json({ error: 'Nombre inválido.' });
     }
     if (hasUsername) {
-      if (!username) return res.status(400).json({ error: 'Usuario invalido.' });
+      if (!username) return res.status(400).json({ error: 'Usuario inválido.' });
       if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
         return res.status(400).json({ error: 'El usuario debe tener 3 a 32 caracteres (a-z, 0-9, ., _, -).' });
       }
@@ -139,10 +139,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'El password debe tener al menos 6 caracteres.' });
     }
     if (hasCargo && !asNonEmptyString(cargoInput)) {
-      return res.status(400).json({ error: 'Cargo invalido.' });
+      return res.status(400).json({ error: 'Cargo inválido.' });
     }
     if (hasRol && !rol) {
-      return res.status(400).json({ error: 'Rol invalido.' });
+      return res.status(400).json({ error: 'Rol inválido.' });
     }
     if (hasActivo && typeof activo !== 'boolean') {
       return res.status(400).json({ error: 'El estado activo debe ser booleano.' });
@@ -191,7 +191,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       }
 
       pushAuditWithContext(db, req, {
-        accion: hasActivo ? (activo ? 'Activacion Usuario' : 'Desactivacion Usuario') : 'Edicion Usuario',
+        accion: hasActivo ? (activo ? 'Activación Usuario' : 'Desactivación Usuario') : 'Edición Usuario',
         item: `${user.username} | ${user.departamento || 'SIN CARGO'}`,
         cantidad: 1,
         usuario,
@@ -210,10 +210,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: 'El usuario ya existe.' });
     }
     if (!updated?.ok && updated?.code === 'INVALID_CARGO') {
-      return res.status(400).json({ error: 'Cargo invalido.' });
+      return res.status(400).json({ error: 'Cargo inválido.' });
     }
     if (!updated?.ok && updated?.code === 'ROLE_DISABLED') {
-      return res.status(400).json({ error: 'Rol deshabilitado en catalogo.' });
+      return res.status(400).json({ error: 'Rol deshabilitado en catálogo.' });
     }
     if (!updated?.ok && updated?.code === 'LAST_ADMIN') {
       return res.status(409).json({ error: 'Debe existir al menos un administrador activo.' });
@@ -235,7 +235,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     if (!ensureAdmin(req, res)) return;
     const id = toInt(req.params.id);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     const { usuario } = getRequestActor(req);
 
     const removed = await updateDb((db) => {

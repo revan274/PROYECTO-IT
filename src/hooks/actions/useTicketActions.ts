@@ -70,7 +70,7 @@ export function useTicketActions({
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;
-      showToast(`${action} requiere conexion con el backend.`, 'warning');
+      showToast(`${action} requiere conexión con el backend.`, 'warning');
       return false;
     },
     [backendConnected, showToast],
@@ -119,11 +119,11 @@ export function useTicketActions({
           : !ticketAssetOptionsIncludes(activoTag)
             ? 'Selecciona un TAG valido para la sucursal elegida'
             : !areaAfectada
-              ? 'Selecciona area afectada'
+              ? 'Selecciona área afectada'
               : !atencionTipo
-                ? 'Selecciona el tipo de atencion del ticket'
+                ? 'Selecciona el tipo de atención del ticket'
                 : !descripcionBase
-                  ? 'Agrega la descripcion de la falla'
+                  ? 'Agrega la descripción de la falla'
                   : '';
 
     if (ticketValidationError) {
@@ -253,8 +253,8 @@ export function useTicketActions({
     }
 
     const confirmed = showConfirm
-      ? await showConfirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`)
-      : window.confirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta accion no se puede deshacer.`);
+      ? await showConfirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta acción no se puede deshacer.`)
+      : window.confirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta acción no se puede deshacer.`);
     if (!confirmed) return false;
     if (!ensureBackendConnected('Eliminar tickets')) return false;
 

@@ -22,7 +22,7 @@ export const DEFAULT_CARGO_CATALOG = [
 
 export const DEFAULT_ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-  { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: true },
+  { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
   { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
   { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
@@ -679,7 +679,7 @@ export function ensureCanCreateTickets(req, res) {
 
 export function ensureAdmin(req, res) {
   if (req.authUser?.rol !== 'admin') {
-    res.status(403).json({ error: 'Solo administradores pueden ejecutar esta operacion.' });
+  res.status(403).json({ error: 'Solo administradores pueden ejecutar esta operación.' });
     return false;
   }
   return true;

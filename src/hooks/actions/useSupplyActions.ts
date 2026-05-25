@@ -40,7 +40,7 @@ export function useSupplyActions({
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;
-      showToast(`${action} requiere conexion con el backend.`, 'warning');
+      showToast(`${action} requiere conexión con el backend.`, 'warning');
       return false;
     },
     [backendConnected, showToast],
@@ -64,7 +64,7 @@ export function useSupplyActions({
     });
 
     if (isReadOnly) {
-      showToast('Tu rol no permite esta accion', 'warning');
+      showToast('Tu rol no permite esta acción', 'warning');
       return false;
     }
     if (!validation.isValid) {
@@ -174,7 +174,7 @@ export function useSupplyActions({
 
     const target = insumos.filter((item) => getSupplyHealthStatus(item) !== 'OK');
     if (target.length === 0) {
-      showToast('No hay insumos criticos para reponer', 'warning');
+      showToast('No hay insumos críticos para reponer', 'warning');
       return;
     }
     if (!ensureBackendConnected('Reponer insumos')) return;
@@ -198,11 +198,11 @@ export function useSupplyActions({
     await refreshData();
 
     if (failed === 0) {
-      showToast(`Reposicion aplicada a ${succeeded} insumos criticos`, 'success');
+      showToast(`Reposición aplicada a ${succeeded} insumos críticos`, 'success');
     } else if (succeeded === 0) {
       showToast('No se pudo reponer ningún insumo critico', 'error');
     } else {
-      showToast(`Reposicion parcial: ${succeeded} ok, ${failed} fallaron`, 'warning');
+      showToast(`Reposición parcial: ${succeeded} ok, ${failed} fallaron`, 'warning');
     }
   };
 

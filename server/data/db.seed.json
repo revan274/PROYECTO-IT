@@ -20,7 +20,7 @@
     ],
     "roles": [
       { "value": "admin", "label": "Administrador", "permissions": "Acceso total", "activo": true },
-      { "value": "tecnico", "label": "Tecnico", "permissions": "Operacion IT + tickets", "activo": true },
+      { "value": "tecnico", "label": "Técnico", "permissions": "Operación IT + tickets", "activo": true },
       { "value": "consulta", "label": "Consulta", "permissions": "Solo consulta", "activo": true },
       { "value": "solicitante", "label": "Solicitante", "permissions": "Crear tickets", "activo": true }
     ]
@@ -37,7 +37,7 @@
     },
     {
       "id": 502,
-      "nombre": "Tecnico 1",
+      "nombre": "Técnico 1",
       "username": "tecnico1",
       "passwordHash": "scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456",
       "rol": "tecnico",
@@ -60,7 +60,7 @@
       "tag": "POS-001",
       "tipo": "POS",
       "marca": "IBM SurePOS",
-      "ubicacion": "Caja Rapida 1",
+      "ubicacion": "Caja Rápida 1",
       "estado": "Operativo",
       "serial": "SN-99201",
       "fechaCompra": "2022-01-15"
@@ -70,7 +70,7 @@
       "tag": "POS-002",
       "tipo": "POS",
       "marca": "IBM SurePOS",
-      "ubicacion": "Caja Rapida 2",
+      "ubicacion": "Caja Rápida 2",
       "estado": "Operativo",
       "serial": "SN-99202",
       "fechaCompra": "2022-01-15"
@@ -78,7 +78,7 @@
     {
       "id": 3,
       "tag": "BAS-010",
-      "tipo": "Bascula",
+      "tipo": "Báscula",
       "marca": "Datalogic",
       "ubicacion": "Frutas y Verduras",
       "estado": "Falla",
@@ -108,7 +108,7 @@
     },
     {
       "id": 12,
-      "nombre": "Papel Termico 80mm",
+      "nombre": "Papel Térmico 80mm",
       "unidad": "Rollos",
       "stock": 12,
       "min": 20,
@@ -145,7 +145,7 @@
       "fecha": "2023-10-24 09:00",
       "fechaCreacion": "2023-10-24T09:00:00.000Z",
       "fechaLimite": "2023-10-24T11:00:00.000Z",
-      "asignadoA": "Tecnico 1",
+      "asignadoA": "Técnico 1",
       "historial": [
         {
           "fecha": "2023-10-24 09:00",
@@ -161,7 +161,7 @@
     {
       "id": 201,
       "accion": "Entrada",
-      "item": "Papel Termico",
+      "item": "Papel Térmico",
       "cantidad": 50,
       "fecha": "2024-05-20 10:30",
       "usuario": "Admin IT"

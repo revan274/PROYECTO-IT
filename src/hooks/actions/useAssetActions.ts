@@ -21,7 +21,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;
-      showToast(`${action} requiere conexion con el backend.`, 'warning');
+      showToast(`${action} requiere conexión con el backend.`, 'warning');
       return false;
     },
     [backendConnected, showToast],
@@ -34,7 +34,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
 
   const handleSaveActivo = async (formData: Partial<FormDataState>, editingAssetId: number | null): Promise<boolean> => {
     if (isReadOnly) {
-      showToast('Tu rol no permite esta accion', 'warning');
+      showToast('Tu rol no permite esta acción', 'warning');
       return false;
     }
     if (!ensureBackendConnected('Guardar activo')) return false;
@@ -133,8 +133,8 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
       : window.confirm(`Se eliminaran ${activos.length} activos de forma permanente. Continuar?`);
     if (!confirmacionInicial) return false;
     const confirmacionFinal = showConfirm
-      ? await showConfirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?', { confirmLabel: 'Borrar todo' })
-      : window.confirm('Esta accion no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
+      ? await showConfirm('Esta acción no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?', { confirmLabel: 'Borrar todo' })
+      : window.confirm('Esta acción no se puede deshacer. Confirmas borrar TODO el inventario de activos IT?');
     if (!confirmacionFinal) return false;
     if (!ensureBackendConnected('Eliminar el inventario completo')) return false;
 

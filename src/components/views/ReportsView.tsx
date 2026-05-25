@@ -354,7 +354,7 @@ export function ReportsView({
               onChange={(event) => setReportAttentionFilter(event.target.value as ReportAttentionFilter)}
               className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
             >
-              <option value="TODAS">Atencion: todas</option>
+              <option value="TODAS">Atención: todas</option>
               {ticketAttentionTypes.map((type) => (
                 <option key={`rep-attention-${type}`} value={type}>
                   {formatTicketAttentionType(type)}
@@ -366,8 +366,8 @@ export function ReportsView({
               onChange={(event) => setReportTechnicianFilter(event.target.value)}
               className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
             >
-              <option value="TODOS">Tecnico: todos</option>
-              <option value="SIN_ASIGNAR">Tecnico: sin asignar</option>
+              <option value="TODOS">Técnico: todos</option>
+              <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
               {reportTechnicianOptions.map((name) => (
                 <option key={`rep-tech-${name}`} value={name}>
                   {name}
@@ -463,8 +463,8 @@ export function ReportsView({
               onChange={(event) => setTravelReportTechnician(event.target.value)}
               className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
             >
-              <option value="TODOS">Tecnico: todos</option>
-              <option value="SIN_ASIGNAR">Tecnico: sin asignar</option>
+              <option value="TODOS">Técnico: todos</option>
+              <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
               {travelTechnicianOptions.map((name) => (
                 <option key={`travel-tech-${name}`} value={name}>
                   {name}
@@ -556,7 +556,7 @@ export function ReportsView({
                 </div>
               </div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                El formato toma tickets del mes seleccionado y respeta filtros de sucursal, area, estado y prioridad.
+                El formato toma tickets del mes seleccionado y respeta filtros de sucursal, área, estado y prioridad.
               </p>
             </div>
           </div>
@@ -739,7 +739,7 @@ export function ReportsView({
         </div>
 
         <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-          <h4 className="text-base font-black uppercase text-slate-800">Carga por Tecnico</h4>
+          <h4 className="text-base font-black uppercase text-slate-800">Carga por Técnico</h4>
           {reportTechBars.slice(0, 8).map((item) => (
             <button
               key={`report-tech-${item.label}`}
@@ -759,7 +759,7 @@ export function ReportsView({
         </div>
 
         <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-          <h4 className="text-base font-black uppercase text-slate-800">Auditoria por Modulo</h4>
+          <h4 className="text-base font-black uppercase text-slate-800">Auditoría por Módulo</h4>
           {reportAuditModuleBars.map((item) => (
             <div key={`report-audit-${item.module}`} className="space-y-1">
               <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
@@ -810,7 +810,7 @@ export function ReportsView({
       </div>
 
       <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-        <h4 className="text-base font-black uppercase text-slate-800">Tipos de Atencion</h4>
+        <h4 className="text-base font-black uppercase text-slate-800">Tipos de Atención</h4>
         {reportAttentionBars.map((item) => (
           <div key={`report-attention-${item.label}`} className="w-full text-left space-y-1">
             <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
@@ -827,7 +827,7 @@ export function ReportsView({
         ))}
         {reportAttentionBars.length === 0 && (
           <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-            Sin datos de atencion para este periodo.
+            Sin datos de atención para este período.
           </div>
         )}
       </div>
@@ -843,7 +843,7 @@ export function ReportsView({
         <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Insumos</p>
           <p className="text-sm font-black text-slate-700">
-            Total: {reportSupplySnapshot.total} | Agotados: {reportSupplySnapshot.agotados} | Bajo minimo: {reportSupplySnapshot.bajoMinimo}
+            Total: {reportSupplySnapshot.total} | Agotados: {reportSupplySnapshot.agotados} | Bajo mínimo: {reportSupplySnapshot.bajoMinimo}
           </p>
         </div>
       </div>

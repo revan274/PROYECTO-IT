@@ -358,7 +358,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   try {
     return JSON.parse(payload) as T;
   } catch {
-    throw new Error('Respuesta JSON invalida del backend.');
+    throw new Error('Respuesta JSON inválida del backend.');
   }
 }
 

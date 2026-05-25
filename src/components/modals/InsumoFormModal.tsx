@@ -146,7 +146,7 @@ export function InsumoFormModal({
                 : 'bg-slate-50 border border-slate-100 text-slate-700'
             }`}
           >
-            <option value="" disabled>Selecciona categoria...</option>
+            <option value="" disabled>Selecciona categoría...</option>
             {supplyCategoryOptions.map((categoria) => (
               <option key={categoria} value={categoria}>{categoria}</option>
             ))}

@@ -104,11 +104,11 @@ export function createAuthRuntime() {
       await updateDb((db) =>
         pushAuditWithContext(db, req, {
           modulo: 'otros',
-          entidad: 'sesion',
+          entidad: 'sesión',
           ...payload,
         }));
     } catch {
-      // No interrumpir el flujo de autenticacion por fallas de auditoria.
+      // No interrumpir el flujo de autenticación por fallas de auditoría.
     }
   }
 
@@ -116,12 +116,12 @@ export function createAuthRuntime() {
     try {
       const token = parseBearerToken(req.headers.authorization);
       if (!token) {
-        return res.status(401).json({ error: 'Sesion requerida.' });
+        return res.status(401).json({ error: 'Sesión requerida.' });
       }
 
       const session = getValidSession(token);
       if (!session) {
-        return res.status(401).json({ error: 'Sesion invalida o expirada.' });
+        return res.status(401).json({ error: 'Sesión inválida o expirada.' });
       }
 
       const db = await readDb();
@@ -139,7 +139,7 @@ export function createAuthRuntime() {
       if (!roleIsEnabledByCatalog(db, user.rol)) {
         authSessions.delete(token);
         await writeSecurityAudit(req, {
-          accion: 'Sesion Rechazada',
+          accion: 'Sesión Rechazada',
           item: session.username || user.username || 'N/A',
           cantidad: 1,
           resultado: 'error',
@@ -149,7 +149,7 @@ export function createAuthRuntime() {
           rol: user.rol,
           departamento: user.departamento,
         });
-        return res.status(403).json({ error: 'Tu rol esta deshabilitado en catalogo.' });
+        return res.status(403).json({ error: 'Tu rol está deshabilitado en catálogo.' });
       }
 
       req.authToken = token;

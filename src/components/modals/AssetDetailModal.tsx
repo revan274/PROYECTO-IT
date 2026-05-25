@@ -116,9 +116,9 @@ export function AssetDetailModal({
             </div>
 
             <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ubicacion y Responsable</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ubicación y Responsable</p>
               <div className="text-sm">
-                <p className="font-black text-slate-500 uppercase">Ubicacion</p>
+                <p className="font-black text-slate-500 uppercase">Ubicación</p>
                 <p className="font-black">{asset.ubicacion || 'N/D'}</p>
               </div>
               <div className="text-sm">

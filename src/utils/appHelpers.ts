@@ -301,12 +301,12 @@ export function getTicketAreaLabel(ticket: TicketItem): string {
   }
   const departamento = String(ticket.departamento || '').trim();
   if (departamento) return departamento;
-  return 'Sin area';
+  return 'Sin área';
 }
 
 export function extractTicketIssueDescription(ticket: TicketItem): string {
   const description = String(ticket.descripcion || '').trim();
-  if (!description) return 'Sin descripcion';
+  if (!description) return 'Sin descripción';
 
   const cleaned = description
     .replace(/^(?:[aá]rea afectada:)\s*[^|]+(?:\|\s*)?/i, '')
@@ -319,7 +319,7 @@ export function normalizeIncidentCause(value: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return normalized || 'sin descripcion';
+  return normalized || 'sin descripción';
 }
 
 export function matchesReportBranch(ticket: TicketItem, filter: string): boolean {

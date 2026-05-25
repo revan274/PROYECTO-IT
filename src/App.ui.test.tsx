@@ -31,7 +31,7 @@ const BASE_CATALOGS = {
   cargos: ['Coordinador de Sistemas', 'Auxiliar de Sistemas'],
   roles: [
     { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-    { value: 'tecnico', label: 'Tecnico', permissions: 'Operacion IT + tickets', activo: true },
+    { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
     { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
   ],
 };
@@ -96,7 +96,7 @@ function buildAdminBootstrap() {
       {
         id: 2,
         tag: 'BAS-010',
-        tipo: 'Bascula',
+        tipo: 'Báscula',
         marca: 'Datalogic',
         ubicacion: 'Frutas',
         estado: 'Falla',
@@ -135,7 +135,7 @@ function buildAdminBootstrap() {
       {
         id: 702,
         activoTag: 'BAS-010',
-        descripcion: 'Bascula sin comunicacion con caja',
+        descripcion: 'Báscula sin comunicación con caja',
         sucursal: 'TJ01',
         prioridad: 'ALTA',
         estado: 'En Proceso',
@@ -143,7 +143,7 @@ function buildAdminBootstrap() {
         fecha: '2026-03-30 12:00',
         fechaCreacion: '2026-03-30T12:00:00.000Z',
         fechaLimite: '2026-03-30T20:00:00.000Z',
-        asignadoA: 'Tecnico Integracion',
+        asignadoA: 'Técnico Integración',
         solicitadoPor: ADMIN_USER.nombre,
         solicitadoPorId: ADMIN_USER.id,
         solicitadoPorUsername: ADMIN_USER.username,
@@ -165,7 +165,7 @@ function buildAdminBootstrap() {
       { ...ADMIN_USER, activo: true },
       {
         id: 502,
-        nombre: 'Tecnico Integracion',
+        nombre: 'Técnico Integración',
         username: 'tecnico.integration',
         rol: 'tecnico',
         departamento: 'IT',
@@ -186,7 +186,7 @@ function buildRequesterBootstrap() {
       {
         id: 801,
         activoTag: 'POS-001',
-        descripcion: 'Terminal sin conexion al servidor',
+        descripcion: 'Terminal sin conexión al servidor',
         sucursal: 'TJ01',
         prioridad: 'MEDIA',
         estado: 'Abierto',
@@ -227,6 +227,14 @@ function resetUiState() {
     theme: 'light',
     sidebarOpen: false,
     toast: null,
+    activos: [],
+    insumos: [],
+    tickets: [],
+    users: [],
+    auditoria: [],
+    isSyncing: false,
+    backendConnected: false,
+    lastSync: null,
   });
 }
 
@@ -299,7 +307,7 @@ describe('App UI flow', () => {
 
     expect(screen.getByRole('button', { name: /Nuevo Ticket/i })).toBeTruthy();
     expect(screen.getByText(/POS-001\s+\|\s+Impresora fiscal desconectada/i)).toBeTruthy();
-    expect(screen.getByText(/BAS-010\s+\|\s+Bascula sin comunicacion con caja/i)).toBeTruthy();
+    expect(screen.getByText(/BAS-010\s+\|\s+Báscula sin comunicación con caja/i)).toBeTruthy();
   });
 
   test('un solicitante entra directo a tickets y no ve navegacion administrativa', async () => {
@@ -329,7 +337,7 @@ describe('App UI flow', () => {
     expect(screen.queryByRole('link', { name: /^Dashboard$/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /^Usuarios$/i })).toBeNull();
     expect(screen.queryByText('Estado del Sistema')).toBeNull();
-    expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexion al servidor/i)).toBeTruthy();
+    expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexión al servidor/i)).toBeTruthy();
     expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
   });
 
@@ -364,7 +372,7 @@ describe('App UI flow', () => {
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
     await screen.findByText('Tickets IT');
-    expect(screen.getByText(/No hay tickets para los filtros seleccionados/i)).toBeTruthy();
+    expect(await screen.findByText(/No hay tickets que requieran tu atención con los filtros actuales/i)).toBeTruthy();
     expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
   });
 

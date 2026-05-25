@@ -137,7 +137,7 @@ router.get('/:id/qr-token', requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: 'No autorizado para generar QR de activos.' });
     }
     const id = toInt(req.params.id);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const db = await readDb();
     const asset = db.activos.find((item) => Number(item.id) === Number(id));
@@ -205,7 +205,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (!ensureCanEdit(req, res)) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const parsed = normalizeAssetPayload(req.body, { mode: 'create' });
     if (!parsed.ok) {
@@ -226,7 +226,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       const nextItem = { ...db.activos[idx], ...normalized, id };
       db.activos[idx] = nextItem;
       pushAuditWithContext(db, req, {
-        accion: 'Edicion Activo',
+        accion: 'Edición Activo',
         item: nextItem.tag,
         cantidad: 1,
         usuario,
@@ -258,7 +258,7 @@ router.post('/import', requireAuth, async (req, res, next) => {
   try {
     if (!ensureCanEdit(req, res)) return;
     const { usuario } = getRequestActor(req);
-    const fileName = asNonEmptyString(req.body?.fileName) || 'Importacion Excel';
+    const fileName = asNonEmptyString(req.body?.fileName) || 'Importación Excel';
     const dryRun = req.body?.dryRun === true;
     const upsert = req.body?.upsert !== false;
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
@@ -270,7 +270,7 @@ router.post('/import', requireAuth, async (req, res, next) => {
       return res.status(413).json({ error: `La importacion excede el maximo permitido (${IMPORT_MAX_ROWS} filas).` });
     }
     if (items.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
-      return res.status(400).json({ error: 'Formato de filas invalido para importacion.' });
+      return res.status(400).json({ error: 'Formato de filas inválido para importación.' });
     }
 
     if (dryRun) {
@@ -337,7 +337,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!ensureCanEdit(req, res)) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const removed = await updateDb((db) => {
       const idx = db.activos.findIndex((a) => a.id === id);

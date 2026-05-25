@@ -149,49 +149,53 @@ export function TicketFormModal({
           ))}
         </select>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
-          <select
-            required
-            value={formData.atencionTipo || ''}
-            onChange={(e) => {
-              const value = normalizeTicketAttentionType(e.target.value);
-              const traslado =
-                value === 'PRESENCIAL' || value === 'PRESENCIAL_FUERA_DE_HORARIO'
-                  ? true
-                  : value === 'REMOTO' || value === 'REMOTO_FUERA_DE_HORARIO'
-                    ? false
-                    : undefined;
-              onChange({
-                atencionTipo: value || undefined,
-                ...(traslado !== undefined ? { trasladoRequerido: traslado } : {}),
-              });
-            }}
-            className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-          >
-            <option value="">Tipo de atencion...</option>
-            {TICKET_ATTENTION_TYPES.map((type) => (
-              <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
-            ))}
-          </select>
-          <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Traslado
-              </p>
-              <p className="text-xs font-black uppercase text-slate-700">
-                {formData.trasladoRequerido ? 'Si' : 'No'}
-              </p>
-            </div>
-            <span className="relative inline-flex h-7 w-12 shrink-0">
-              <input
-                type="checkbox"
-                checked={!!formData.trasladoRequerido}
-                onChange={(e) => onChange({ trasladoRequerido: e.target.checked })}
-                className="peer sr-only"
-              />
-              <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500" />
-              <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white toggle-thumb shadow-sm transition-transform peer-checked:translate-x-5" />
-            </span>
-          </label>
+          {canEdit && (
+            <select
+              required
+              value={formData.atencionTipo || ''}
+              onChange={(e) => {
+                const value = normalizeTicketAttentionType(e.target.value);
+                const traslado =
+                  value === 'PRESENCIAL' || value === 'PRESENCIAL_FUERA_DE_HORARIO'
+                    ? true
+                    : value === 'REMOTO' || value === 'REMOTO_FUERA_DE_HORARIO'
+                      ? false
+                      : undefined;
+                onChange({
+                  atencionTipo: value || undefined,
+                  ...(traslado !== undefined ? { trasladoRequerido: traslado } : {}),
+                });
+              }}
+              className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="">Tipo de atención...</option>
+              {TICKET_ATTENTION_TYPES.map((type) => (
+                <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
+              ))}
+            </select>
+          )}
+          {canEdit && (
+            <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Traslado
+                </p>
+                <p className="text-xs font-black uppercase text-slate-700">
+                  {formData.trasladoRequerido ? 'Sí' : 'No'}
+                </p>
+              </div>
+              <span className="relative inline-flex h-7 w-12 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={!!formData.trasladoRequerido}
+                  onChange={(e) => onChange({ trasladoRequerido: e.target.checked })}
+                  className="peer sr-only"
+                />
+                <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500" />
+                <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white toggle-thumb shadow-sm transition-transform peer-checked:translate-x-5" />
+              </span>
+            </label>
+          )}
         </div>
         <textarea
           required
@@ -220,8 +224,8 @@ export function TicketFormModal({
                 ? selectedTicketAssetContext
                   ? 'Sin fallas sugeridas para este contexto'
                   : !selectedIssueArea
-                    ? 'Selecciona area o TAG primero'
-                    : 'Sin fallas configuradas para esta area'
+                    ? 'Selecciona área o TAG primero'
+                    : 'Sin fallas configuradas para esta área'
                 : 'Selecciona una falla sugerida...'}
             </option>
             {issueOptionsForSelectedArea.map((issue) => (
@@ -245,14 +249,14 @@ export function TicketFormModal({
             value={formData.asignadoA || ''}
             onChange={(e) => onChange({ asignadoA: e.target.value })}
           >
-            <option value="">Asignar tecnico...</option>
+            <option value="">Asignar técnico...</option>
             {assignableUsers.map((user) => (
               <option key={user.id} value={user.nombre}>{user.nombre}</option>
             ))}
           </select>
         ) : (
           <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
-            El ticket se registrara sin asignacion inicial.
+            El ticket se registrará sin asignación inicial.
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

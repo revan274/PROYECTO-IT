@@ -92,10 +92,10 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
       ID: item.id,
       Nombre: item.nombre,
       Unidad: item.unidad,
-      Categoria: item.categoria,
+      Categoría: item.categoria,
       Stock: item.stock,
-      Minimo: item.min,
-      Ubicacion: item.ubicacion || '',
+      Mínimo: item.min,
+      Ubicación: item.ubicacion || '',
       Proveedor: item.proveedor || '',
     }));
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -132,7 +132,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
             <p className="text-2xl font-black text-slate-800">{supplySummary.totalInsumos}</p>
           </div>
           <div className="bg-white border border-slate-100 rounded-2xl p-4">
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bajo MÃ­nimo</p>
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bajo Mínimo</p>
             <p className="text-2xl font-black text-amber-500">{supplySummary.bajoMinimo}</p>
           </div>
           <div className="bg-white border border-slate-100 rounded-2xl p-4">
@@ -160,7 +160,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
             onChange={(e) => setSupplyCategoryFilter(e.target.value)}
             className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
           >
-            <option value="TODAS">Todas categorÃ­as</option>
+            <option value="TODAS">Todas las categorías</option>
             {supplyCategoryOptions.map((categoria) => (
               <option key={categoria} value={categoria}>{categoria}</option>
             ))}
@@ -217,7 +217,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                 : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
             }`}
           >
-            Ver bajo mÃ­nimo ({supplySummary.bajoMinimo})
+            Ver bajo mínimo ({supplySummary.bajoMinimo})
           </button>
           <button
             onClick={() => setSupplyStatusFilter('TODOS')}
@@ -234,7 +234,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
             onClick={() => void reponerCriticos(5)}
             className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border bg-[#f4fce3] text-[#5e8f1d] border-[#d8f5a2] hover:bg-[#e8f9c8] disabled:opacity-50"
           >
-            Reponer crÃ­ticos +5
+            Reponer críticos +5
           </button>
         </div>
 
@@ -302,7 +302,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
 
                 <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Ãšltimo movimiento
+                    Último movimiento
                   </p>
                   {latestMovement ? (
                     <>
@@ -349,7 +349,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                     />
                   </div>
                   <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Cobertura mÃ­n: {progress}% | Estado: {supplyStatus}
+                    Cobertura mín: {progress}% | Estado: {supplyStatus}
                   </p>
                 </div>
 
@@ -393,7 +393,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                       }}
                     />
                     <span className="text-[10px] font-black text-slate-400 uppercase -mt-1">
-                      MÃ­n: {item.min} | Unidad: {item.unidad || 'Piezas'}
+                      Mín: {item.min} | Unidad: {item.unidad || 'Piezas'}
                     </span>
                   </div>
 

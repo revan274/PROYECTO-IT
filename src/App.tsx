@@ -891,7 +891,7 @@ export default function App() {
   const descargarQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
     if (selectedAssetQrMode !== 'signed' || !selectedAssetQrValue) {
-      showToast('El QR firmado no esta disponible para descargar.', 'warning');
+      showToast('El QR firmado no está disponible para descargar.', 'warning');
       return;
     }
     const qrCanvas = document.getElementById(buildAssetQrCanvasId(selectedAsset.id));
@@ -910,7 +910,7 @@ export default function App() {
   const imprimirEtiquetaQrActivoSeleccionado = useCallback(() => {
     if (!selectedAsset) return;
     if (selectedAssetQrMode !== 'signed' || !selectedAssetQrValue) {
-      showToast('El QR firmado no esta disponible para imprimir.', 'warning');
+      showToast('El QR firmado no está disponible para imprimir.', 'warning');
       return;
     }
     const qrCanvas = document.getElementById(buildAssetQrCanvasId(selectedAsset.id));
@@ -927,7 +927,7 @@ export default function App() {
 
     const qrDataUrl = qrCanvas.toDataURL('image/png');
     const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
-    const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicacion no registrada';
+    const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicación no registrada';
     const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
     const equipmentRaw = [
       String(selectedAsset.equipo || '').trim(),
@@ -1254,7 +1254,7 @@ export default function App() {
             <p class="detail-v">${serial}</p>
           </div>
           <div class="detail-card">
-            <p class="detail-k">Ubicacion</p>
+            <p class="detail-k">Ubicación</p>
             <p class="detail-v">${ubicacion}</p>
           </div>
         </div>
@@ -1617,7 +1617,7 @@ export default function App() {
       if (parsedRows.length === 0) {
         showToast(
           invalidRows > 0
-            ? `No se importaron filas validas. Invalidas: ${invalidRows}`
+            ? `No se importaron filas válidas. Inválidas: ${invalidRows}`
             : 'No se encontraron equipos validos',
           'warning',
         );
@@ -1647,7 +1647,7 @@ export default function App() {
         `nuevos: ${preview.created}`,
         `actualizados: ${preview.updated}`,
         `omitidos: ${preview.skipped}`,
-        `invalidos: ${preview.invalid + invalidRows}`,
+        `inválidos: ${preview.invalid + invalidRows}`,
       ];
       showToast(summary.join(' | '), preview.created + preview.updated > 0 ? 'success' : 'warning');
     } catch (error) {
@@ -1715,7 +1715,7 @@ export default function App() {
         `Creados: ${result.created}`,
         `actualizados: ${result.updated}`,
         `omitidos: ${result.skipped}`,
-        `invalidos: ${invalidTotal}`,
+        `inválidos: ${invalidTotal}`,
       ];
       showToast(parts.join(' | '), invalidTotal > 0 ? 'warning' : 'success');
       setImportDraft(null);
@@ -1741,7 +1741,7 @@ export default function App() {
         return;
       }
     } else if (!canEdit) {
-      showToast('Tu rol no permite esta accion', 'warning');
+      showToast('Tu rol no permite esta acción', 'warning');
       return;
     }
 
@@ -3158,7 +3158,7 @@ export default function App() {
   }, [applyReportFilterSnapshot, showToast]);
   const saveCurrentReportFilterPreset = useCallback(() => {
     if (!sessionUser) {
-      showToast('Inicia sesion para guardar presets', 'warning');
+      showToast('Inicia sesión para guardar presets', 'warning');
       return;
     }
     const name = String(reportPresetName || '').trim();
@@ -3196,7 +3196,7 @@ export default function App() {
   const buildReportPresentationHtml = (): string => {
     const periodLabel = `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}`;
     const branchLabel = reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter);
-    const areaLabel = reportAreaFilter === 'TODAS' ? 'Todas las areas' : reportAreaFilter;
+    const areaLabel = reportAreaFilter === 'TODAS' ? 'Todas las áreas' : reportAreaFilter;
     const stateLabel = reportStateFilter === 'TODOS' ? 'Todos los estados' : reportStateFilter;
     const priorityLabel = reportPriorityFilter === 'TODAS' ? 'Todas las prioridades' : reportPriorityFilter;
     const attentionLabel = reportAttentionFilter === 'TODAS'
@@ -3207,7 +3207,7 @@ export default function App() {
       : reportTechnicianFilter === 'SIN_ASIGNAR'
         ? 'Sin asignar'
         : reportTechnicianFilter;
-    const filterSummary = `Sucursal: ${branchLabel} | Area: ${areaLabel} | Estado: ${stateLabel} | Prioridad: ${priorityLabel} | Atencion: ${attentionLabel} | Tecnico: ${technicianLabel}`;
+    const filterSummary = `Sucursal: ${branchLabel} | Área: ${areaLabel} | Estado: ${stateLabel} | Prioridad: ${priorityLabel} | Atención: ${attentionLabel} | Técnico: ${technicianLabel}`;
     const generatedAt = new Date().toLocaleString();
     const safePeriod = escapeHtml(periodLabel);
     const safeFilterSummary = escapeHtml(filterSummary);
@@ -3326,7 +3326,7 @@ export default function App() {
       <div class="card"><div class="label">Activos totales</div><div class="kpi">${reportInventorySnapshot.totalActivos}</div></div>
       <div class="card"><div class="label">Activos en falla</div><div class="kpi">${reportInventorySnapshot.activosEnFalla}</div></div>
       <div class="card"><div class="label">Insumos total</div><div class="kpi">${reportSupplySnapshot.total}</div></div>
-      <div class="card"><div class="label">Insumos criticos</div><div class="kpi">${reportSupplySnapshot.agotados + reportSupplySnapshot.bajoMinimo}</div></div>
+      <div class="card"><div class="label">Insumos críticos</div><div class="kpi">${reportSupplySnapshot.agotados + reportSupplySnapshot.bajoMinimo}</div></div>
     </div>
   </section>
 
@@ -3342,7 +3342,7 @@ export default function App() {
       <thead><tr><th>Sucursal</th><th>Cantidad</th></tr></thead>
       <tbody>${branchRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
     </table>
-    <p class="section-title">Tickets por area</p>
+    <p class="section-title">Tickets por área</p>
     <table>
       <thead><tr><th>Area</th><th>Cantidad</th></tr></thead>
       <tbody>${areaRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
@@ -3357,9 +3357,9 @@ export default function App() {
       <thead><tr><th>Periodo</th><th>Creados</th><th>Cerrados</th></tr></thead>
       <tbody>${trendRows || '<tr><td colspan="3">Sin datos</td></tr>'}</tbody>
     </table>
-    <p class="section-title">Auditoria por modulo</p>
+    <p class="section-title">Auditoría por módulo</p>
     <table>
-      <thead><tr><th>Modulo</th><th>Movimientos</th></tr></thead>
+      <thead><tr><th>Módulo</th><th>Movimientos</th></tr></thead>
       <tbody>${auditRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
     </table>
   </section>
@@ -3376,7 +3376,7 @@ export default function App() {
           <th>Tag</th>
           <th>Prioridad</th>
           <th>Estado</th>
-          <th>Atencion</th>
+          <th>Atención</th>
           <th>SLA</th>
           <th>Asignado</th>
         </tr>
@@ -3449,17 +3449,17 @@ export default function App() {
       const summaryRows = [
         { Indicador: 'Periodo', Valor: `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}` },
         { Indicador: 'Filtro sucursal', Valor: reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter) },
-        { Indicador: 'Filtro area', Valor: reportAreaFilter === 'TODAS' ? 'Todas las areas' : reportAreaFilter },
+        { Indicador: 'Filtro área', Valor: reportAreaFilter === 'TODAS' ? 'Todas las áreas' : reportAreaFilter },
         { Indicador: 'Filtro estado', Valor: reportStateFilter === 'TODOS' ? 'Todos los estados' : reportStateFilter },
         { Indicador: 'Filtro prioridad', Valor: reportPriorityFilter === 'TODAS' ? 'Todas las prioridades' : reportPriorityFilter },
         {
-          Indicador: 'Filtro atencion',
+          Indicador: 'Filtro atención',
           Valor: reportAttentionFilter === 'TODAS'
             ? 'Todas las atenciones'
             : formatTicketAttentionType(reportAttentionFilter),
         },
         {
-          Indicador: 'Filtro tecnico',
+          Indicador: 'Filtro técnico',
           Valor: reportTechnicianFilter === 'TODOS'
             ? 'Todos los tecnicos'
             : reportTechnicianFilter === 'SIN_ASIGNAR'
@@ -3482,7 +3482,7 @@ export default function App() {
         { Indicador: 'Cumplimiento SLA previo (%)', Valor: reportComparisonWindow ? reportPreviousSlaCompliancePct : 'N/D' },
         { Indicador: 'Comparativo cumplimiento SLA', Valor: reportSlaComplianceTrend.label },
         { Indicador: 'SLA vencido', Valor: reportSlaExpiredCount },
-        { Indicador: 'Criticos', Valor: reportCriticalCount },
+        { Indicador: 'Críticos', Valor: reportCriticalCount },
         { Indicador: 'MTTR promedio (horas)', Valor: reportAvgResolutionHours ?? 'N/D' },
         { Indicador: 'MTTR promedio previo (horas)', Valor: reportComparisonWindow ? (reportPreviousAvgResolutionHours ?? 'N/D') : 'N/D' },
         { Indicador: 'MTTR mediana (horas)', Valor: reportMedianResolutionHours ?? 'N/D' },
@@ -3495,29 +3495,29 @@ export default function App() {
         { Indicador: 'Activos en falla', Valor: reportInventorySnapshot.activosEnFalla },
         { Indicador: 'Insumos total', Valor: reportSupplySnapshot.total },
         { Indicador: 'Insumos agotados', Valor: reportSupplySnapshot.agotados },
-        { Indicador: 'Insumos bajo minimo', Valor: reportSupplySnapshot.bajoMinimo },
+        { Indicador: 'Insumos bajo mínimo', Valor: reportSupplySnapshot.bajoMinimo },
       ];
       const detailRows = reportTickets.map((ticket) => ({
         ID: ticket.id,
         Fecha: formatDateTime(ticket.fechaCreacion || ticket.fecha),
         Sucursal: formatTicketBranchFromCatalog(ticket.sucursal),
-        Area: getTicketAreaLabel(ticket),
+        Área: getTicketAreaLabel(ticket),
         Tag: ticket.activoTag,
         Prioridad: ticket.prioridad,
         Estado: ticket.estado,
-        Atencion: formatTicketAttentionType(ticket.atencionTipo),
+        Atención: formatTicketAttentionType(ticket.atencionTipo),
         SLA: isTicketSlaExpired(ticket, liveNow) ? 'VENCIDO' : 'EN TIEMPO',
         Asignado: ticket.asignadoA || 'Sin asignar',
         SolicitadoPor: ticket.solicitadoPor || '',
         Departamento: ticket.departamento || '',
-        Descripcion: ticket.descripcion,
+        Descripción: ticket.descripcion,
       }));
       const stateRows = reportStateBars.map((row) => ({ Estado: row.label, Cantidad: row.count }));
       const branchRows = reportBranchBars.map((row) => ({ Sucursal: row.label, Cantidad: row.count }));
-      const areaRows = reportAreaBars.map((row) => ({ Area: row.label, Cantidad: row.count }));
-      const techRows = reportTechBars.map((row) => ({ Tecnico: row.label, Cantidad: row.count }));
+      const areaRows = reportAreaBars.map((row) => ({ Área: row.label, Cantidad: row.count }));
+      const techRows = reportTechBars.map((row) => ({ Técnico: row.label, Cantidad: row.count }));
       const causeRows = reportIncidentCauseBars.map((row) => ({
-        Area: row.area,
+        Área: row.area,
         Causa: row.cause,
         Cantidad: row.count,
       }));
@@ -3529,8 +3529,8 @@ export default function App() {
       const auditRows = reportAuditRows.map((row) => ({
         Fecha: row.fecha,
         Usuario: row.usuario,
-        Modulo: auditModuleLabel(row.modulo || 'otros'),
-        Accion: row.accion,
+        Módulo: auditModuleLabel(row.modulo || 'otros'),
+        Acción: row.accion,
         Item: row.item,
         Cantidad: row.cantidad,
       }));
@@ -3538,11 +3538,11 @@ export default function App() {
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detailRows), 'Tickets');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(stateRows), 'Estado');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(branchRows), 'Sucursal');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(areaRows), 'Area');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(techRows), 'Tecnico');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(areaRows), 'Área');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(techRows), 'Técnico');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(causeRows), 'Causas');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(trendRows), 'Tendencia');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(auditRows), 'Auditoria');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(auditRows), 'Auditoría');
       const suffix = `${reportDateFrom || 'inicio'}_${reportDateTo || 'fin'}`.replace(/[^0-9A-Za-z_-]/g, '-');
       XLSX.writeFile(workbook, `reporteria_it_${suffix}.xlsx`);
       showToast('Reporte Excel generado', 'success');

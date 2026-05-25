@@ -63,11 +63,11 @@ Revisa `.env.example`. Variables principales:
 ## Datos locales
 - El repo conserva un seed sanitizado en `server/data/db.seed.json`.
 - Si defines `DATABASE_URL`, el backend usa Postgres/Neon como almacenamiento principal del estado (`users`, `activos`, `insumos`, `tickets`, `auditoria`, `catalogos`).
-- En el primer arranque con `DATABASE_URL`, si la base esta vacia, el backend la inicializa desde `DB_FILE` si existe o desde `server/data/db.seed.json`.
+- En el primer arranque con `DATABASE_URL`, si la base está vacía, el backend la inicializa desde `DB_FILE` si existe o desde `server/data/db.seed.json`.
 - La base runtime local no se versiona y por defecto vive en `server/data/runtime/db.json`.
 - Si el proceso detecta un disco montado en `/var/data`, usa `/var/data/runtime/db.json` como runtime por defecto.
-- Si el runtime DB no existe, el backend lo inicializa automaticamente desde el seed.
-- En produccion, si `DB_FILE` no existe, el backend falla por seguridad salvo que habilites `ALLOW_PRODUCTION_SEED=true` de forma temporal.
+- Si el runtime DB no existe, el backend lo inicializa automáticamente desde el seed.
+- En producción, si `DB_FILE` no existe, el backend falla por seguridad salvo que habilites `ALLOW_PRODUCTION_SEED=true` de forma temporal.
 - `server/data/backups/` y `server/data/runtime/` se consideran datos locales.
 - Los adjuntos de tickets y respaldos siguen siendo archivos locales; Neon no cubre esos binarios.
 
@@ -103,9 +103,9 @@ Revisa `.env.example`. Variables principales:
 
 ## Notas
 - Todas las rutas de datos requieren `Authorization: Bearer <token>`.
-- Los permisos se validan por rol en sesion autenticada.
-- Las credenciales remotas de activos ya no se almacenan ni se exponen desde la aplicacion.
-- En produccion debes definir `QR_SIGNING_SECRET`; el backend rechaza valores inseguros por defecto.
+- Los permisos se validan por rol en sesión autenticada.
+- Las credenciales remotas de activos ya no se almacenan ni se exponen desde la aplicación.
+- En producción debes definir `QR_SIGNING_SECRET`; el backend rechaza valores inseguros por defecto.
 
 ## Despliegue en Render (1 servicio)
 Este repo incluye `render.yaml` para desplegar frontend + API en el mismo dominio.
@@ -117,7 +117,7 @@ Este repo incluye `render.yaml` para desplegar frontend + API en el mismo domini
    - `CORS_ORIGINS`: URL publica del servicio (ej: `https://mesa-it.onrender.com`)
    - `QR_SIGNING_SECRET`: secreto largo y unico
    - El blueprint monta un disco en `/var/data` y permite bootstrap inicial del DB con `ALLOW_PRODUCTION_SEED=true`.
-   - Despues del primer arranque exitoso puedes cambiar `ALLOW_PRODUCTION_SEED=false` si quieres fail-closed estricto.
+   - Después del primer arranque exitoso puedes cambiar `ALLOW_PRODUCTION_SEED=false` si quieres fail-closed estricto.
 5. Deploy.
 
-El backend sirve automaticamente `dist/` cuando existe build, y la API queda en `/api`.
+El backend sirve automáticamente `dist/` cuando existe build, y la API queda en `/api`.

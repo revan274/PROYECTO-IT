@@ -10,7 +10,7 @@ function createRow(overrides: Partial<TravelReportRow>): TravelReportRow {
   return {
     ticketId: 1,
     createdAt: new Date(2026, 3, 6, 9, 0, 0, 0).getTime(),
-    nombre: 'Tecnico Integracion',
+    nombre: 'Técnico Integración',
     destinationCode: 'TJ01',
     destinationLabel: 'Sucursal Norte',
     routeIndex: 1,
@@ -22,11 +22,11 @@ function createRow(overrides: Partial<TravelReportRow>): TravelReportRow {
 }
 
 describe('resolveTravelTechnicianScope', () => {
-  test('usa un key estable por usuario cuando el tecnico existe', () => {
+  test('usa un key estable por usuario cuando el técnico existe', () => {
     const users: UserItem[] = [
       {
         id: 502,
-        nombre: 'Tecnico Integracion',
+        nombre: 'Técnico Integración',
         username: 'tecnico.integration',
         rol: 'tecnico',
         departamento: 'IT',
@@ -34,9 +34,9 @@ describe('resolveTravelTechnicianScope', () => {
       },
     ];
 
-    expect(resolveTravelTechnicianScope('Tecnico Integracion', users)).toEqual({
+    expect(resolveTravelTechnicianScope('Técnico Integración', users)).toEqual({
       key: 'user:502',
-      label: 'Tecnico Integracion',
+      label: 'Técnico Integración',
     });
   });
 });
@@ -53,7 +53,7 @@ describe('buildTravelReportRowsFromActualTrips', () => {
       createRow({
         ticketId: 12,
         createdAt: new Date(2026, 3, 6, 12, 0, 0, 0).getTime(),
-        motivo: 'Bascula sin conexion',
+        motivo: 'Báscula sin conexión',
       }),
     ];
 
@@ -61,7 +61,7 @@ describe('buildTravelReportRowsFromActualTrips', () => {
       rows,
       new Map([['TJ01', 1]]),
       destinationRuleByCode,
-      'Tecnico Integracion',
+      'Técnico Integración',
       { year: 2026, monthIndex: 3, startMs: new Date(2026, 3, 1).getTime(), endMs: new Date(2026, 4, 1).getTime() - 1 },
     );
 
@@ -69,7 +69,7 @@ describe('buildTravelReportRowsFromActualTrips', () => {
     expect(result[0]).toMatchObject({
       destinationCode: 'TJ01',
       fecha: '06/04/2026',
-      motivo: 'Impresora fiscal / Bascula sin conexion',
+      motivo: 'Impresora fiscal / Báscula sin conexión',
     });
   });
 
@@ -89,7 +89,7 @@ describe('buildTravelReportRowsFromActualTrips', () => {
       rows,
       new Map([['JIM01', 3]]),
       destinationRuleByCode,
-      'Tecnico Integracion',
+      'Técnico Integración',
       { year: 2026, monthIndex: 3, startMs: new Date(2026, 3, 1).getTime(), endMs: new Date(2026, 4, 1).getTime() - 1 },
     );
 

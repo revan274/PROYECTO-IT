@@ -29,10 +29,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'Campos requeridos incompletos para insumo.' });
     }
     if (stock < 0 || min < 0) {
-      return res.status(400).json({ error: 'Stock y minimo deben ser mayores o iguales a 0.' });
+      return res.status(400).json({ error: 'Stock y mínimo deben ser mayores o iguales a 0.' });
     }
     if (min > stock) {
-      return res.status(400).json({ error: 'El minimo no puede ser mayor al stock inicial.' });
+      return res.status(400).json({ error: 'El mínimo no puede ser mayor al stock inicial.' });
     }
 
     const result = await updateDb((db) => {
@@ -72,7 +72,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     });
 
     if (!result?.ok && result?.code === 'DUPLICATE') {
-      return res.status(409).json({ error: 'Ya existe un insumo activo con ese nombre y categoria.' });
+      return res.status(409).json({ error: 'Ya existe un insumo activo con ese nombre y categoría.' });
     }
     if (!result?.ok) {
       return res.status(500).json({ error: 'No se pudo registrar el insumo.' });
@@ -95,16 +95,16 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const ubicacion = asNonEmptyString(req.body?.ubicacion);
     const proveedor = asNonEmptyString(req.body?.proveedor);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     if (!nombre || stock === null || min === null) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para insumo.' });
     }
     if (stock < 0 || min < 0) {
-      return res.status(400).json({ error: 'Stock y minimo deben ser mayores o iguales a 0.' });
+      return res.status(400).json({ error: 'Stock y mínimo deben ser mayores o iguales a 0.' });
     }
     if (min > stock) {
-      return res.status(400).json({ error: 'El minimo no puede ser mayor al stock.' });
+      return res.status(400).json({ error: 'El mínimo no puede ser mayor al stock.' });
     }
 
     const updated = await updateDb((db) => {
@@ -136,7 +136,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       };
       db.insumos[idx] = nextItem;
       pushAuditWithContext(db, req, {
-        accion: 'Edicion Insumo',
+        accion: 'Edición Insumo',
         item: nextItem.nombre,
         cantidad: nextItem.stock,
         usuario,
@@ -153,10 +153,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Insumo no encontrado.' });
     }
     if (!updated?.ok && updated?.code === 'INACTIVE') {
-      return res.status(409).json({ error: 'El insumo esta dado de baja y no se puede editar.' });
+      return res.status(409).json({ error: 'El insumo está dado de baja y no se puede editar.' });
     }
     if (!updated?.ok && updated?.code === 'DUPLICATE') {
-      return res.status(409).json({ error: 'Ya existe un insumo activo con ese nombre y categoria.' });
+      return res.status(409).json({ error: 'Ya existe un insumo activo con ese nombre y categoría.' });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el insumo.' });
@@ -172,7 +172,7 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
     if (!ensureCanEdit(req, res)) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const delta = toInt(req.body?.delta);
     const stockInput = toInt(req.body?.stock);
@@ -217,7 +217,7 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Insumo no encontrado.' });
     }
     if (!updated?.ok && updated?.code === 'INACTIVE') {
-      return res.status(409).json({ error: 'El insumo esta dado de baja y no se puede editar.' });
+      return res.status(409).json({ error: 'El insumo está dado de baja y no se puede editar.' });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el stock.' });
@@ -233,7 +233,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!ensureCanEdit(req, res)) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const removed = await updateDb((db) => {
       const item = db.insumos.find((i) => i.id === id);
@@ -241,7 +241,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       if (!isSupplyActive(item)) return { ok: false, code: 'INACTIVE' };
       item.activo = false;
       pushAuditWithContext(db, req, {
-        accion: 'Baja Logica',
+        accion: 'Baja Lógica',
         item: item.nombre,
         cantidad: item.stock,
         usuario,

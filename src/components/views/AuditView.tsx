@@ -94,7 +94,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
             onChange={(e) => updateAuditFilters({ module: (e.target.value || '') as '' | AuditModule })}
             className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
           >
-            <option value="">Modulo: Todos</option>
+            <option value="">Módulo: Todos</option>
             <option value="tickets">Tickets</option>
             <option value="insumos">Insumos</option>
             <option value="activos">Activos</option>

@@ -27,7 +27,7 @@ function createAsset(overrides: Partial<Activo>): Activo {
 }
 
 describe('buildTicketAssetContextSummary', () => {
-  test('detecta sucursal, lugar y area sugerida desde un activo de piso', () => {
+  test('detecta sucursal, lugar y área sugerida desde un activo de piso', () => {
     const asset = createAsset({
       tipo: 'BSC',
       equipo: 'BSC',
@@ -43,7 +43,7 @@ describe('buildTicketAssetContextSummary', () => {
     });
   });
 
-  test('prioriza el contexto de infraestructura cuando el activo esta en site', () => {
+  test('prioriza el contexto de infraestructura cuando el activo está en site', () => {
     const asset = createAsset({
       tipo: 'SVR',
       equipo: 'SVR',
@@ -72,7 +72,7 @@ describe('buildSuggestedTicketIssues', () => {
 
     expect(issues).toContain('Atasco de papel en impresora');
     expect(issues).toContain('Sin papel térmico');
-    expect(issues).toContain('Impresora fuera de linea');
+    expect(issues).toContain('Impresora fuera de línea');
   });
 
   test('mantiene arriba el grupo elegido por el usuario y agrega extras contextuales', () => {

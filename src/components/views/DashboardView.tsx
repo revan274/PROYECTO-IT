@@ -97,9 +97,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="bg-slate-800 text-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] flex flex-col gap-6 md:flex-row md:items-center md:justify-between shadow-2xl relative overflow-hidden">
         <div className="z-10 min-w-0">
           <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight mb-2">Estado del Sistema</h2>
-          <p className="text-slate-400 text-sm">Resumen operativo | Periodo: {dashboardWindow.label}</p>
+          <p className="text-slate-400 text-sm">Resumen operativo | Período: {dashboardWindow.label}</p>
           <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-300">
-            Abiertos: {dashboardOpenTicketsCurrent.length} | Criticos: {dashboardCriticalTicketsCurrent.length} | Sin Asignar: {dashboardUnassignedCount}
+            Abiertos: {dashboardOpenTicketsCurrent.length} | Críticos: {dashboardCriticalTicketsCurrent.length} | Sin Asignar: {dashboardUnassignedCount}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {DASHBOARD_RANGES.map((range) => (
@@ -158,7 +158,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad Reciente | {dashboardWindow.label}</p>
-              <h3 className="text-lg font-black uppercase text-slate-800">Ultimos Tickets del Periodo</h3>
+              <h3 className="text-lg font-black uppercase text-slate-800">Últimos Tickets del Período</h3>
             </div>
             <button
               onClick={() => setView('tickets')}
@@ -209,7 +209,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="space-y-6">
           <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carga Operativa</p>
-            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Tickets por Tecnico</h3>
+            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Tickets por Técnico</h3>
             <div className="space-y-3">
               {dashboardTopOwners.map(([owner, count]) => (
                 <div key={`owner-${owner}`} className="space-y-2 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
@@ -247,7 +247,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Riesgos Inventario</p>
-            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Atencion Prioritaria</h3>
+            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Atención Prioritaria</h3>
             <div className="space-y-3">
               <button
                 onClick={() => {

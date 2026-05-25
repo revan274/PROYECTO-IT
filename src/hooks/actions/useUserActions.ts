@@ -45,7 +45,7 @@ export function useUserActions({
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;
-      showToast(`${action} requiere conexion con el backend.`, 'warning');
+      showToast(`${action} requiere conexión con el backend.`, 'warning');
       return false;
     },
     [backendConnected, showToast],

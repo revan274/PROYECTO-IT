@@ -69,17 +69,18 @@ router.post('/', requireAuth, async (req, res, next) => {
     const asignadoA = canEditByRole(req.authUser?.rol) ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
-    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || !atencionTipo) {
+    const isRequesterRole = req.authUser?.rol === 'solicitante';
+    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (!atencionTipo && !isRequesterRole)) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
     }
     if (hasTrasladoField && trasladoRequerido === undefined) {
-      return res.status(400).json({ error: 'Indicador de traslado no valido.' });
+      return res.status(400).json({ error: 'Indicador de traslado no válido.' });
     }
     for (const item of insumosUsados) {
       const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
       const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
       if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad <= 0) {
-        return res.status(400).json({ error: 'Insumo invalido en insumosUsados.' });
+        return res.status(400).json({ error: 'Insumo inválido en insumosUsados.' });
       }
     }
 
@@ -164,10 +165,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     });
 
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
-      return res.status(400).json({ error: 'Asignado a invalido. Debe ser un tecnico/admin activo.' });
+      return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
     }
     if (!created?.ok && created?.code === 'INVALID_BRANCH') {
-      return res.status(400).json({ error: 'Sucursal invalida para el ticket.' });
+      return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
     }
     if (!created?.ok) {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
@@ -194,25 +195,25 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
 
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate && !hasInsumosUpdate) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
     if (req.body?.estado && !estado) {
-      return res.status(400).json({ error: 'Estado de ticket no valido.' });
+      return res.status(400).json({ error: 'Estado de ticket no válido.' });
     }
     if (hasAtencionTipoUpdate && !atencionTipo) {
-      return res.status(400).json({ error: 'Tipo de atencion no valido.' });
+      return res.status(400).json({ error: 'Tipo de atención no válido.' });
     }
     if (hasTrasladoUpdate && trasladoRequerido === undefined) {
-      return res.status(400).json({ error: 'Indicador de traslado no valido.' });
+      return res.status(400).json({ error: 'Indicador de traslado no válido.' });
     }
     if (hasInsumosUpdate) {
       for (const item of insumosUsados) {
         const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
         const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
         if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad < 0) {
-          return res.status(400).json({ error: 'Insumo invalido en insumosUsados.' });
+          return res.status(400).json({ error: 'Insumo inválido en insumosUsados.' });
         }
       }
     }
@@ -262,7 +263,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         accion: estado
           ? ticketAuditAction(ticket.estado)
           : attentionChanged
-            ? 'Tipo Atencion Ticket'
+            ? 'Tipo Atención Ticket'
             : travelChanged
               ? 'Traslado Ticket'
               : 'Ticket Actualizado',
@@ -284,7 +285,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       }
       if (asignadoA !== undefined) {
         pushAuditWithContext(db, req, {
-          accion: 'Asignacion Ticket',
+          accion: 'Asignación Ticket',
           item: ticket.activoTag,
           cantidad: 1,
           usuario,
@@ -296,7 +297,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       }
       if (attentionChanged) {
         pushAuditWithContext(db, req, {
-          accion: 'Tipo Atencion Ticket',
+          accion: 'Tipo Atención Ticket',
           item: `${ticket.activoTag} | ${atencionTipo}`,
           cantidad: 1,
           usuario,
@@ -372,7 +373,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Ticket no encontrado.' });
     }
     if (!updated?.ok && updated?.code === 'ASSIGNEE_INVALID') {
-      return res.status(400).json({ error: 'Asignado a invalido. Debe ser un tecnico/admin activo.' });
+      return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el ticket.' });
@@ -389,7 +390,7 @@ router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     const comentario = asNonEmptyString(req.body?.comentario) || 'Ticket resuelto';
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const resolved = await updateDb((db) => {
       const ticket = db.tickets.find((t) => t.id === id);
@@ -434,7 +435,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const removed = await updateDb((db) => {
       const index = db.tickets.findIndex((item) => Number(item.id) === Number(id));
@@ -503,7 +504,7 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
     const id = toInt(req.params.id);
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     if (!comentario) return res.status(400).json({ error: 'Comentario requerido.' });
 
     const result = await updateDb((db) => {
@@ -557,7 +558,7 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
     const contentBase64 = asNonEmptyString(req.body?.contentBase64);
     const { usuario } = getRequestActor(req);
 
-    if (id === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     if (!fileName || !contentBase64) {
       return res.status(400).json({ error: 'fileName y contentBase64 son requeridos.' });
     }
@@ -566,10 +567,10 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
     try {
       contentBuffer = Buffer.from(contentBase64, 'base64');
     } catch {
-      return res.status(400).json({ error: 'Adjunto en base64 invalido.' });
+      return res.status(400).json({ error: 'Adjunto en base64 inválido.' });
     }
     if (!contentBuffer || contentBuffer.length === 0) {
-      return res.status(400).json({ error: 'Adjunto vacio.' });
+      return res.status(400).json({ error: 'Adjunto vacío.' });
     }
     if (contentBuffer.length > TICKET_ATTACHMENT_MAX_BYTES) {
       return res.status(413).json({ error: `Adjunto excede limite de ${Math.round(TICKET_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB.` });
@@ -671,7 +672,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
   try {
     const id = toInt(req.params.id);
     const attachmentId = toInt(req.params.attachmentId);
-    if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const db = await readDb();
     const ticket = db.tickets.find((item) => Number(item.id) === Number(id));
@@ -685,7 +686,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
     if (!attachment) return res.status(404).json({ error: 'Adjunto no encontrado.' });
 
     const absPath = toAbsoluteAttachmentPath(attachment.storagePath);
-    if (!absPath) return res.status(404).json({ error: 'Ruta de adjunto invalida.' });
+    if (!absPath) return res.status(404).json({ error: 'Ruta de adjunto inválida.' });
     let content;
     try {
       content = await fs.readFile(absPath);
@@ -709,7 +710,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
     const id = toInt(req.params.id);
     const attachmentId = toInt(req.params.attachmentId);
     const { usuario } = getRequestActor(req);
-    if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID invalido.' });
+    if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const result = await updateDb((db) => {
       const ticket = db.tickets.find((item) => Number(item.id) === Number(id));
@@ -775,7 +776,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const search = normalizeTextKey(req.query.search || '');
     const withPagination = req.query.page !== undefined || req.query.pageSize !== undefined;
     if (req.query.atencion !== undefined && !atencionTipo) {
-      return res.status(400).json({ error: 'Filtro de atencion invalido.' });
+      return res.status(400).json({ error: 'Filtro de atención inválido.' });
     }
 
     let list = filterTicketsForUser(db.tickets.slice(), req.authUser);

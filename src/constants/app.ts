@@ -75,9 +75,9 @@ export const TICKET_ATTENTION_TYPES: TicketAttentionType[] = [
 ];
 export const DASHBOARD_RANGES: Array<{ value: DashboardRange; label: string; days: number }> = [
   { value: 'TODAY', label: 'Hoy', days: 1 },
-  { value: '7D', label: '7 dias', days: 7 },
-  { value: '30D', label: '30 dias', days: 30 },
-  { value: '90D', label: '90 dias', days: 90 },
+  { value: '7D', label: '7 días', days: 7 },
+  { value: '30D', label: '30 días', days: 30 },
+  { value: '90D', label: '90 días', days: 90 },
 ];
 export const SLA_POLICY: Record<PrioridadTicket, number> = {
   MEDIA: 24,

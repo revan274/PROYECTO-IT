@@ -115,7 +115,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
             <form onSubmit={handleCreateUser} className="xl:col-span-2 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{editingUserId !== null ? 'Editar Usuario' : 'Nuevo Usuario'}</p>
-                <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualizacion de Cuenta' : 'Registro de Cuenta'}</h4>
+                <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualización de Cuenta' : 'Registro de Cuenta'}</h4>
               </div>
               <input
                 required
@@ -172,7 +172,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   onClick={resetNewUserForm}
                   className="w-full py-3 border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-xs hover:bg-slate-50"
                 >
-                  Cancelar Edicion
+                  Cancelar Edición
                 </button>
               )}
             </form>

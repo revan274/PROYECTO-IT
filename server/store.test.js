@@ -37,14 +37,14 @@ test('pushAudit prepends an entry and increments id from meta.nextId', () => {
     accion: 'Entrada',
     item: 'Cable',
     cantidad: 5,
-    usuario: 'Tecnico 1',
+    usuario: 'Técnico 1',
   });
 
   assert.equal(entry.id, 101);
   assert.equal(db.meta.nextId, 101);
   assert.equal(db.auditoria.length, 1);
   assert.equal(db.auditoria[0], entry);
-  assert.equal(entry.usuario, 'Tecnico 1');
+  assert.equal(entry.usuario, 'Técnico 1');
   assert.equal(entry.modulo, 'insumos');
   assert.equal(typeof entry.hash, 'string');
   assert.equal(entry.hash.length, 64);
@@ -78,14 +78,14 @@ test('summarizeAuditIntegrity validates generated chain', () => {
     accion: 'Entrada',
     item: 'Cable',
     cantidad: 1,
-    usuario: 'Tecnico 1',
+    usuario: 'Técnico 1',
     modulo: 'insumos',
   });
   pushAudit(db, {
     accion: 'Salida',
     item: 'Cable',
     cantidad: 1,
-    usuario: 'Tecnico 1',
+    usuario: 'Técnico 1',
     modulo: 'insumos',
   });
 
