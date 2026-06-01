@@ -120,7 +120,7 @@ export const USER_ROLE_PERMISSIONS: Record<UserRole, string> = {
   admin: 'Acceso total',
   tecnico: 'Operación IT + tickets',
   consulta: 'Solo consulta',
-  solicitante: 'Crear tickets',
+  solicitante: 'Crear y dar seguimiento a tickets',
 };
 export const USER_CARGO_OPTIONS = [
   { value: 'COORDINADOR DE SISTEMAS', label: 'Coordinador de Sistemas' },
@@ -144,7 +144,7 @@ export const DEFAULT_CATALOGS: CatalogState = {
     { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
     { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
     { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
-    { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
+    { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
   ],
 };
 export const TICKET_AREA_OPTIONS = ['Recibos', 'Gerencia', 'Línea de cajas', 'Tienda', 'Mantenimiento'] as const;

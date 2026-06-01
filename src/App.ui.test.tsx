@@ -22,6 +22,14 @@ const REQUESTER_USER = {
   departamento: 'VENTAS',
 };
 
+const CONSULTA_USER = {
+  id: 701,
+  nombre: 'Consulta Integracion',
+  username: 'consulta.integration',
+  rol: 'consulta',
+  departamento: 'OPERACIONES',
+};
+
 const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
 
 const BASE_CATALOGS = {
@@ -32,7 +40,8 @@ const BASE_CATALOGS = {
   roles: [
     { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
     { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
-    { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
+    { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
+    { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
   ],
 };
 
@@ -171,6 +180,7 @@ function buildAdminBootstrap() {
         departamento: 'IT',
         activo: true,
       },
+      { ...CONSULTA_USER, activo: true },
       { ...REQUESTER_USER, activo: true },
     ],
     catalogos: BASE_CATALOGS,
@@ -341,6 +351,42 @@ describe('App UI flow', () => {
     expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
   });
 
+  test('un usuario de consulta ve operacion en lectura y no puede generar tickets', async () => {
+    installFetchMock([
+      {
+        method: 'POST',
+        path: '/api/auth/login',
+        response: {
+          user: CONSULTA_USER,
+          token: 'token-consulta-ui',
+          loggedAt: '2026-03-30T18:15:00.000Z',
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/bootstrap',
+        response: buildAdminBootstrap(),
+      },
+    ]);
+
+    renderApp();
+
+    fillLoginForm(CONSULTA_USER.username, 'Consulta.Ui.123');
+
+    await screen.findByText('Backend Online');
+
+    expect(screen.getByRole('link', { name: /^Dashboard$/i })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /^Tickets$/i })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Usuarios$/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
+
+    await screen.findByText('Tickets IT');
+
+    const newTicketButton = screen.getByRole('button', { name: /Nuevo Ticket/i }) as HTMLButtonElement;
+    expect(newTicketButton.disabled).toBe(true);
+  });
+
   test('si bootstrap falla muestra backend offline y no rellena tickets locales', async () => {
     installFetchMock([
       {
@@ -441,13 +487,13 @@ describe('App UI flow', () => {
     fireEvent.click(screen.getByRole('link', { name: /^Usuarios$/i }));
 
     await screen.findByText('Usuarios Registrados');
-    await screen.findByText(/Mostrando 3 de 3/i);
+    await screen.findByText(/Mostrando 4 de 4/i);
 
     fireEvent.change(screen.getByDisplayValue('Todos los roles'), {
       target: { value: 'solicitante' },
     });
 
-    await screen.findByText(/Mostrando 1 de 3/i);
+    await screen.findByText(/Mostrando 1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.nombre)).toBeTruthy();
     expect(screen.queryByText(ADMIN_USER.username)).toBeNull();
 
@@ -455,7 +501,7 @@ describe('App UI flow', () => {
       target: { value: 'integration' },
     });
 
-    await screen.findByText(/Mostrando 1 de 3/i);
+    await screen.findByText(/Mostrando 1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.username)).toBeTruthy();
   });
 });

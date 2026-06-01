@@ -17,7 +17,8 @@ const TECH_PASSWORD = 'Tecnico.Integration.123';
 const ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
   { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
-  { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
+  { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
+  { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
 ];
 
 const BRANCH_CATALOG = [
@@ -734,6 +735,37 @@ test('POST/PATCH /api/tickets persiste traslado y nuevos tipos de atención', { 
   assert.equal(storedTicket.trasladoRequerido, false);
 });
 
+test('POST /api/tickets ignora modalidad enviada por solicitantes', { concurrency: false }, async () => {
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Caja sin conexión reportada por solicitante',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'PRESENCIAL',
+      trasladoRequerido: true,
+      asignadoA: TECH_USER.nombre,
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.solicitadoPorId, REQUESTER_USER.id);
+  assert.equal(created.data.asignadoA, '');
+  assert.equal(created.data.atencionTipo, undefined);
+  assert.equal(created.data.trasladoRequerido, undefined);
+
+  const persisted = await readPersistedDb();
+  const storedTicket = persisted.tickets.find((item) => item.id === created.data.id);
+  assert.ok(storedTicket);
+  assert.equal(storedTicket.asignadoA, '');
+  assert.equal(storedTicket.atencionTipo, undefined);
+  assert.equal(storedTicket.trasladoRequerido, undefined);
+});
+
 test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { concurrency: false }, async () => {
   const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
 
@@ -785,6 +817,22 @@ test('un rol deshabilitado pierde acceso aunque ya tuviera una sesión activa', 
   const adminSession = await login(ADMIN_USER.username, ADMIN_PASSWORD);
   const techSession = await login(TECH_USER.username, TECH_PASSWORD);
 
+  const blockedAdminCatalog = await requestJson('/api/catalogos', {
+    method: 'PATCH',
+    token: adminSession.token,
+    body: {
+      roles: [
+        { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: false },
+        { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
+        { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
+        { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
+      ],
+    },
+  });
+
+  assert.equal(blockedAdminCatalog.response.status, 409, JSON.stringify(blockedAdminCatalog.data));
+  assert.equal(blockedAdminCatalog.data.error, 'El rol administrador debe permanecer activo.');
+
   const updatedCatalog = await requestJson('/api/catalogos', {
     method: 'PATCH',
     token: adminSession.token,
@@ -792,7 +840,8 @@ test('un rol deshabilitado pierde acceso aunque ya tuviera una sesión activa', 
       roles: [
         { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
         { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: false },
-        { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
+        { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
+        { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
       ],
     },
   });

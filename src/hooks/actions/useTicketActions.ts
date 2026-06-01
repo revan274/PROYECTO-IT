@@ -12,6 +12,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { ApiError, apiRequest, getApiErrorMessage } from '../../utils/api';
 import { buildApiUrl, getStoredSessionToken } from '../../utils/app';
 import { ticketBelongsToSessionUser } from '../../utils/appHelpers';
+import { isRequesterOnlyRole } from '../../utils/roles';
 import {
   buildTicketDescription,
   buildTicketHistoryEntry,
@@ -89,7 +90,7 @@ export function useTicketActions({
   const canDeleteTicket = useCallback(
     (ticket: TicketItem) => {
       if (canEdit) return true;
-      if (sessionUser?.rol !== 'solicitante') return false;
+      if (!isRequesterOnlyRole(sessionUser?.rol)) return false;
       if (!canAccessTicketBySession(ticket)) return false;
       return ticket.estado === 'Abierto';
     },
@@ -106,7 +107,7 @@ export function useTicketActions({
     const sucursal = String(formData.sucursal || '').trim().toUpperCase();
     const areaAfectada = String(formData.areaAfectada || '').trim();
     const atencionTipo = normalizeTicketAttentionType(formData.atencionTipo);
-    const trasladoRequerido = normalizeTicketTravelRequired(formData.trasladoRequerido) === true;
+    const trasladoRequerido = normalizeTicketTravelRequired(formData.trasladoRequerido);
     const descripcionBase = String(formData.descripcion || '').trim();
     const prioridad = formData.prioridad || 'MEDIA';
 
@@ -120,7 +121,7 @@ export function useTicketActions({
             ? 'Selecciona un TAG valido para la sucursal elegida'
             : !areaAfectada
               ? 'Selecciona área afectada'
-              : !atencionTipo
+              : canEdit && !atencionTipo
                 ? 'Selecciona el tipo de atención del ticket'
                 : !descripcionBase
                   ? 'Agrega la descripción de la falla'
@@ -133,19 +134,22 @@ export function useTicketActions({
     if (!ensureBackendConnected('Crear tickets')) return false;
 
     const descripcionFinal = buildTicketDescription(areaAfectada, descripcionBase);
+    const payload: Record<string, unknown> = {
+      activoTag,
+      descripcion: descripcionFinal,
+      sucursal,
+      prioridad,
+    };
+    if (canEdit) {
+      payload.atencionTipo = atencionTipo;
+      if (trasladoRequerido !== undefined) payload.trasladoRequerido = trasladoRequerido;
+      payload.asignadoA = formData.asignadoA || '';
+    }
 
     try {
       await apiRequest('/tickets', {
         method: 'POST',
-        body: JSON.stringify({
-          activoTag,
-          descripcion: descripcionFinal,
-          sucursal,
-          prioridad,
-          atencionTipo,
-          trasladoRequerido,
-          asignadoA: canEdit ? (formData.asignadoA || '') : '',
-        }),
+        body: JSON.stringify(payload),
       });
       await refreshData();
       showToast('Ticket creado', 'success');

@@ -684,6 +684,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       if (hasBranchUpdate && normalized.sucursales.length === 0) return { ok: false, code: 'INVALID_BRANCHES' };
       if (hasCargoUpdate && normalized.cargos.length === 0) return { ok: false, code: 'INVALID_CARGOS' };
       if (hasRoleUpdate && normalized.roles.length === 0) return { ok: false, code: 'INVALID_ROLES' };
+      if (hasRoleUpdate && normalized.roles.find((role) => role.value === 'admin')?.activo === false) {
+        return { ok: false, code: 'ADMIN_ROLE_DISABLED' };
+      }
 
       db.catalogos = normalized;
       pushAuditWithContext(db, req, {
@@ -705,6 +708,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     }
     if (!updated?.ok && updated?.code === 'INVALID_ROLES') {
       return res.status(400).json({ error: 'Catálogo de roles inválido.' });
+    }
+    if (!updated?.ok && updated?.code === 'ADMIN_ROLE_DISABLED') {
+      return res.status(409).json({ error: 'El rol administrador debe permanecer activo.' });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudieron guardar los catálogos.' });

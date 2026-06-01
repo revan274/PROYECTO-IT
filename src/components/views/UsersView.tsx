@@ -25,6 +25,7 @@ interface UsersViewProps {
   }>>;
   userCargoOptions: Array<{ value: string; label: string }>;
   roleCatalogOptions: Array<{ value: string; label: string }>;
+  roleFilterOptions: Array<{ value: string; label: string }>;
   isCreatingUser: boolean;
   resetNewUserForm: () => void;
   sortedUsers: UserItem[];
@@ -57,6 +58,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
   setNewUserForm,
   userCargoOptions,
   roleCatalogOptions,
+  roleFilterOptions,
   isCreatingUser,
   resetNewUserForm,
   sortedUsers,
@@ -210,7 +212,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         onChange={(e) => setUserRoleFilter(e.target.value as 'TODOS' | UserRole)}
                       >
                         <option value="TODOS">Todos los roles</option>
-                        {roleCatalogOptions.map((role) => (
+                        {roleFilterOptions.map((role) => (
                           <option key={role.value} value={role.value}>{role.label}</option>
                         ))}
                       </select>

@@ -107,6 +107,13 @@ Revisa `.env.example`. Variables principales:
 - Las credenciales remotas de activos ya no se almacenan ni se exponen desde la aplicación.
 - En producción debes definir `QR_SIGNING_SECRET`; el backend rechaza valores inseguros por defecto.
 
+## Roles y permisos
+- `admin`: acceso total, gestión de catálogos, usuarios y borrado masivo.
+- `tecnico`: operación IT sobre activos, insumos y tickets; no gestiona usuarios.
+- `consulta`: lectura de operación, reportes y auditoría; no modifica datos.
+- `solicitante`: solo flujo de tickets propios; puede crear tickets, comentar, adjuntar y eliminar tickets abiertos creados por sí mismo.
+- El rol `admin` debe permanecer activo en el catálogo para evitar bloquear la administración del sistema.
+
 ## Despliegue en Render (1 servicio)
 Este repo incluye `render.yaml` para desplegar frontend + API en el mismo dominio.
 

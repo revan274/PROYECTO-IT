@@ -14,6 +14,7 @@ import type {
   UserRole,
 } from '../types/app';
 import { normalizeForCompare } from './format';
+import { USER_ROLE_ORDER, isUserRole } from './roles';
 
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
@@ -171,9 +172,7 @@ export function assetRequiresResponsible(asset: Pick<Activo, 'tipo' | 'equipo'>)
   return !RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES.has(getAssetRiskTypeKey(asset));
 }
 
-export function isUserRole(value: string): value is UserRole {
-  return value === 'admin' || value === 'tecnico' || value === 'consulta' || value === 'solicitante';
-}
+export { isUserRole };
 
 export function normalizeCatalogState(value?: Partial<CatalogState>): CatalogState {
   const branchSource = Array.isArray(value?.sucursales) && value.sucursales.length > 0
@@ -220,7 +219,7 @@ export function normalizeCatalogState(value?: Partial<CatalogState>): CatalogSta
       activo: role?.activo !== false,
     });
   });
-  const roles: CatalogRole[] = (['admin', 'tecnico', 'consulta', 'solicitante'] as UserRole[]).map((role) => (
+  const roles: CatalogRole[] = USER_ROLE_ORDER.map((role) => (
     roleMap.get(role) || {
       value: role,
       label: USER_ROLE_LABEL[role],

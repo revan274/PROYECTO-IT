@@ -94,12 +94,19 @@ import {
   enrichAssetsWithNetworkSheet,
   formatTicketBranch,
   formatUserCargo,
-  isUserRole,
   parseNetworkSheetRows,
   parseAssetLifeYears,
   resolveAssetBranchCode,
   spreadsheetCellToText,
 } from './utils/assets';
+import {
+  canCreateTicketsByRole,
+  canEditByRole,
+  canManageUsersByRole,
+  isRequesterOnlyRole,
+  isUserRole,
+  roleCanGenerateTickets,
+} from './utils/roles';
 import {
   escapeHtml,
   formatBytes,
@@ -519,15 +526,15 @@ export default function App() {
     setSelectedAssetQrValue,
   ]);
 
-  const canEdit = sessionUser?.rol === 'admin' || sessionUser?.rol === 'tecnico';
-  const canCreateTickets = canEdit || sessionUser?.rol === 'solicitante';
+  const canEdit = canEditByRole(sessionUser?.rol);
+  const canCreateTickets = canCreateTicketsByRole(sessionUser?.rol);
   const canSubmitInsumo = canEdit && insumoFormValidation.isValid && !isModalSaving;
   const isAssetModalOpen = showModal === 'activo';
   const isSupplyModalOpen = showModal === 'insumo';
   const isTicketModalOpen = showModal === 'ticket';
-  const canManageUsers = sessionUser?.rol === 'admin';
+  const canManageUsers = canManageUsersByRole(sessionUser?.rol);
   const isReadOnly = !canEdit;
-  const isRequesterOnlyUser = sessionUser?.rol === 'solicitante';
+  const isRequesterOnlyUser = isRequesterOnlyRole(sessionUser?.rol);
   const routeView = useMemo(
     () => getViewFromPathname(location.pathname),
     [location.pathname],
@@ -629,6 +636,16 @@ export default function App() {
         return isUserRole(value) && role.activo !== false;
       });
       return active.length > 0 ? active : DEFAULT_CATALOGS.roles;
+    },
+    [catalogos],
+  );
+  const roleFilterOptions = useMemo(
+    () => {
+      const known = catalogos.roles.filter((role) => {
+        const value = String(role.value || '').trim().toLowerCase();
+        return isUserRole(value);
+      });
+      return known.length > 0 ? known : DEFAULT_CATALOGS.roles;
     },
     [catalogos],
   );
@@ -1545,7 +1562,7 @@ export default function App() {
 
   const handleImportInventory = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite importar inventario', 'warning');
       return;
     }
 
@@ -1902,7 +1919,7 @@ export default function App() {
     [users],
   );
   const ticketEligibleUsersCount = useMemo(
-    () => users.filter((user) => user.activo !== false && user.rol !== 'consulta').length,
+    () => users.filter((user) => user.activo !== false && roleCanGenerateTickets(user.rol)).length,
     [users],
   );
 
@@ -2250,7 +2267,7 @@ export default function App() {
   const canDeleteTicket = useCallback(
     (ticket: TicketItem): boolean => {
       if (canEdit) return true;
-      if (sessionUser?.rol !== 'solicitante') return false;
+      if (!isRequesterOnlyRole(sessionUser?.rol)) return false;
       if (!canAccessTicketBySession(ticket)) return false;
       return ticket.estado === 'Abierto';
     },
@@ -4414,6 +4431,7 @@ export default function App() {
                       setNewUserForm={setNewUserForm}
                       userCargoOptions={userCargoOptions}
                       roleCatalogOptions={roleCatalogOptions}
+                      roleFilterOptions={roleFilterOptions}
                       isCreatingUser={isCreatingUser}
                       resetNewUserForm={resetNewUserForm}
                       sortedUsers={sortedUsers}
@@ -4449,7 +4467,7 @@ export default function App() {
                     canCreateTickets={canCreateTickets}
                     canCreateComments={canCreateTickets}
                     canEdit={canEdit}
-                    canRequesterDelete={sessionUser?.rol === 'solicitante'}
+                    canRequesterDelete={isRequesterOnlyUser}
                     openTicketsCount={openTicketsCount}
                     criticalTicketsCount={criticalTicketsCount}
                     unassignedTicketsCount={unassignedTicketsCount}

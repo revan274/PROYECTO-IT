@@ -3,6 +3,7 @@ import type React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
 import type { Insumo } from '../../types/app';
+import { canEditByRole } from '../../utils/roles';
 
 interface InsumoValidationResult {
   isValid: boolean;
@@ -35,7 +36,7 @@ export function useSupplyActions({
   const showConfirm = useAppStore((state) => state.showConfirm);
   const showPrompt = useAppStore((state) => state.showPrompt);
 
-  const isReadOnly = sessionUser?.rol !== 'admin' && sessionUser?.rol !== 'tecnico';
+  const isReadOnly = !canEditByRole(sessionUser?.rol);
 
   const ensureBackendConnected = useCallback(
     (action: string) => {
@@ -101,7 +102,7 @@ export function useSupplyActions({
 
   const eliminarInsumo = async (id: number): Promise<boolean> => {
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite eliminar insumos', 'warning');
       return false;
     }
 
@@ -141,7 +142,7 @@ export function useSupplyActions({
     });
 
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite ajustar stock', 'warning');
       return;
     }
     if (!ensureBackendConnected('Actualizar stock')) return;
@@ -168,7 +169,7 @@ export function useSupplyActions({
 
   const reponerCriticos = async (cantidad = 5) => {
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite reponer insumos', 'warning');
       return;
     }
 
@@ -208,7 +209,7 @@ export function useSupplyActions({
 
   const establecerStockManual = async (id: number, valor: string): Promise<boolean> => {
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite ajustar stock', 'warning');
       return false;
     }
 

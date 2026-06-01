@@ -3,6 +3,10 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
+import {
+  DEFAULT_ROLE_CATALOG,
+  normalizeStoredUserRole,
+} from './domain/roles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +35,6 @@ const PASSWORD_KEYLEN = 64;
 const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
 const AUDIT_RESULTS = new Set(['ok', 'error']);
 const AUDIT_GENESIS_HASH = 'genesis';
-const USER_ROLES = new Set(['admin', 'tecnico', 'consulta', 'solicitante']);
 const DEFAULT_TICKET_BRANCHES = [
   { code: 'TJ01', name: 'Sucursal Estrella', activo: true },
   { code: 'TC01', name: 'Sucursal Camargo', activo: true },
@@ -46,12 +49,6 @@ const DEFAULT_USER_CARGOS = [
   'Desarrollador',
   'Auxiliar de Sistemas',
   'CeDis',
-];
-const DEFAULT_ROLE_CATALOG = [
-  { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-  { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
-  { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
-  { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
 const TICKET_BRANCH_CODES = new Set(DEFAULT_TICKET_BRANCHES.map((branch) => branch.code));
 let pgPool = null;
@@ -451,9 +448,7 @@ function normalizeTravelAdjustment(item) {
 }
 
 function normalizeUserRole(value) {
-  const role = text(value).toLowerCase();
-  if (!USER_ROLES.has(role)) return 'consulta';
-  return role;
+  return normalizeStoredUserRole(value);
 }
 
 function normalizeAuditModule(value) {

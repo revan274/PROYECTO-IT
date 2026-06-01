@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
 import type { FormDataState } from '../../types/app';
+import { canEditByRole, canManageUsersByRole } from '../../utils/roles';
 
 interface UseAssetActionsProps {
   onAfterBulkDelete?: () => void;
@@ -15,8 +16,8 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
   const showToast = useAppStore((state) => state.showToast);
   const showConfirm = useAppStore((state) => state.showConfirm);
 
-  const canManageUsers = sessionUser?.rol === 'admin';
-  const isReadOnly = sessionUser?.rol !== 'admin' && sessionUser?.rol !== 'tecnico';
+  const canManageUsers = canManageUsersByRole(sessionUser?.rol);
+  const isReadOnly = !canEditByRole(sessionUser?.rol);
 
   const ensureBackendConnected = useCallback(
     (action: string) => {
@@ -88,7 +89,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
 
   const eliminarActivo = async (id: number): Promise<boolean> => {
     if (isReadOnly) {
-      showToast('Tu rol es solo consulta', 'warning');
+      showToast('Tu rol no permite eliminar activos', 'warning');
       return false;
     }
 

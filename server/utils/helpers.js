@@ -1,5 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { pushAudit } from '../store.js';
+import {
+  DEFAULT_ROLE_CATALOG,
+  USER_ROLES,
+  canCreateTicketsByRole as roleCanCreateTickets,
+  canEditByRole as roleCanEdit,
+  normalizeKnownUserRole,
+} from '../domain/roles.js';
+
+export { DEFAULT_ROLE_CATALOG, USER_ROLES };
 
 // --- Domain constants ---
 
@@ -9,8 +18,6 @@ export const SLA_HOURS = {
   CRITICA: 2,
 };
 
-export const USER_ROLES = new Set(['admin', 'tecnico', 'consulta', 'solicitante']);
-
 export const DEFAULT_CARGO_CATALOG = [
   'Coordinador de Sistemas',
   'Gerente',
@@ -18,13 +25,6 @@ export const DEFAULT_CARGO_CATALOG = [
   'Desarrollador',
   'Auxiliar de Sistemas',
   'CeDis',
-];
-
-export const DEFAULT_ROLE_CATALOG = [
-  { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
-  { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },
-  { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
-  { value: 'solicitante', label: 'Solicitante', permissions: 'Crear tickets', activo: true },
 ];
 
 export const DEFAULT_BRANCH_CATALOG = [
@@ -152,9 +152,7 @@ export function ticketAuditAction(estado) {
 // --- User normalize ---
 
 export function normalizeUserRole(value) {
-  const role = asNonEmptyString(value).toLowerCase();
-  if (!USER_ROLES.has(role)) return null;
-  return role;
+  return normalizeKnownUserRole(value);
 }
 
 export function normalizeUserCargo(value, cargoCatalog = DEFAULT_CARGO_CATALOG) {
@@ -267,11 +265,11 @@ export function serializeTravelAdjustment(item) {
 // --- Role / access helpers ---
 
 export function canEditByRole(role) {
-  return role === 'admin' || role === 'tecnico';
+  return roleCanEdit(role);
 }
 
 export function canCreateTicketsByRole(role) {
-  return role === 'admin' || role === 'tecnico' || role === 'solicitante';
+  return roleCanCreateTickets(role);
 }
 
 export function ticketBelongsToUser(ticket, user) {

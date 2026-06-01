@@ -62,15 +62,15 @@ router.post('/', requireAuth, async (req, res, next) => {
     const descripcion = asNonEmptyString(req.body?.descripcion);
     const sucursalInput = req.body?.sucursal;
     const prioridad = normalizePrioridad(req.body?.prioridad);
-    const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
-    const hasTrasladoField = req.body?.trasladoRequerido !== undefined;
+    const isEditorRole = canEditByRole(req.authUser?.rol);
+    const atencionTipo = isEditorRole ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
+    const hasTrasladoField = isEditorRole && req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
     const insumosUsados = Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
-    const asignadoA = canEditByRole(req.authUser?.rol) ? asNonEmptyString(req.body?.asignadoA) : '';
+    const asignadoA = isEditorRole ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
-    const isRequesterRole = req.authUser?.rol === 'solicitante';
-    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (!atencionTipo && !isRequesterRole)) {
+    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (isEditorRole && !atencionTipo)) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
     }
     if (hasTrasladoField && trasladoRequerido === undefined) {
@@ -101,8 +101,8 @@ router.post('/', requireAuth, async (req, res, next) => {
         descripcion,
         sucursal,
         prioridad,
-        atencionTipo,
-        ...(trasladoRequerido !== undefined ? { trasladoRequerido } : {}),
+        ...(atencionTipo ? { atencionTipo } : {}),
+        ...(hasTrasladoField ? { trasladoRequerido } : {}),
         estado: 'Abierto',
         fecha: now(),
         fechaCreacion: createdAtIso,
@@ -153,7 +153,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
       pushAuditWithContext(db, req, {
         accion: 'Nuevo Ticket',
-        item: `${activoTag} | ${sucursal} | ${atencionTipo}${trasladoRequerido ? ' | TRASLADO' : ''}`,
+        item: `${activoTag} | ${sucursal} | ${atencionTipo || 'SIN DEFINIR'}${trasladoRequerido ? ' | TRASLADO' : ''}`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',

@@ -22,7 +22,7 @@
       { "value": "admin", "label": "Administrador", "permissions": "Acceso total", "activo": true },
       { "value": "tecnico", "label": "Técnico", "permissions": "Operación IT + tickets", "activo": true },
       { "value": "consulta", "label": "Consulta", "permissions": "Solo consulta", "activo": true },
-      { "value": "solicitante", "label": "Solicitante", "permissions": "Crear tickets", "activo": true }
+      { "value": "solicitante", "label": "Solicitante", "permissions": "Crear y dar seguimiento a tickets", "activo": true }
     ]
   },
   "users": [
