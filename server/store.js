@@ -878,7 +878,7 @@ function normalizeDbShape(db) {
   return normalized;
 }
 
-function getPgPool() {
+export function getPgPool() {
   if (!USE_POSTGRES) return null;
   if (!pgPool) {
     pgPool = new Pool({

@@ -1,7 +1,12 @@
 import { readDb, updateDb, sanitizeUser } from '../store.js';
 import {
+  createSession,
+  deleteSession,
+  deleteSessionsByUserId,
+  getSession,
+} from '../sessionStore.js';
+import {
   parseBearerToken,
-  createAuthToken,
   getLoginAttemptKey,
   isDemoPasswordUser,
   pushAuditWithContext,
@@ -11,11 +16,9 @@ import {
   LOGIN_LOCK_MS,
   LOGIN_TRACK_WINDOW_MS,
   LOGIN_ATTEMPT_GC_MS,
-  AUTH_TOKEN_TTL_MS,
 } from '../utils/helpers.js';
 
 export function createAuthRuntime() {
-  const authSessions = new Map();
   const loginAttempts = new Map();
   let lastLoginAttemptGcAt = 0;
 
@@ -32,23 +35,7 @@ export function createAuthRuntime() {
   }
 
   function registerSession(user) {
-    const token = createAuthToken();
-    authSessions.set(token, {
-      userId: Number(user.id),
-      username: String(user.username).toLowerCase(),
-      issuedAt: Date.now(),
-    });
-    return token;
-  }
-
-  function getValidSession(token) {
-    const session = authSessions.get(token);
-    if (!session) return null;
-    if (Date.now() - Number(session.issuedAt || 0) > AUTH_TOKEN_TTL_MS) {
-      authSessions.delete(token);
-      return null;
-    }
-    return session;
+    return createSession(user);
   }
 
   function getLoginThrottle(req, username) {
@@ -119,7 +106,7 @@ export function createAuthRuntime() {
         return res.status(401).json({ error: 'Sesión requerida.' });
       }
 
-      const session = getValidSession(token);
+      const session = await getSession(token);
       if (!session) {
         return res.status(401).json({ error: 'Sesión inválida o expirada.' });
       }
@@ -133,11 +120,11 @@ export function createAuthRuntime() {
       );
 
       if (!user) {
-        authSessions.delete(token);
+        await deleteSession(token);
         return res.status(401).json({ error: 'Usuario no autorizado.' });
       }
       if (!roleIsEnabledByCatalog(db, user.rol)) {
-        authSessions.delete(token);
+        await deleteSession(token);
         await writeSecurityAudit(req, {
           accion: 'Sesión Rechazada',
           item: session.username || user.username || 'N/A',
@@ -161,16 +148,11 @@ export function createAuthRuntime() {
   }
 
   function revokeSessionsByUserId(userId) {
-    for (const [token, session] of authSessions.entries()) {
-      if (Number(session?.userId) === Number(userId)) {
-        authSessions.delete(token);
-      }
-    }
+    return deleteSessionsByUserId(userId);
   }
 
   function destroySession(token) {
-    if (!token) return;
-    authSessions.delete(token);
+    return deleteSession(token);
   }
 
   return {

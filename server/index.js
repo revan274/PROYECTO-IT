@@ -845,7 +845,7 @@ app.post('/api/auth/login', async (req, res, next) => {
     }
 
     clearLoginFailures(req, username);
-    const token = registerSession(user);
+    const token = await registerSession(user);
     await writeSecurityAudit(req, {
       accion: 'Login Exitoso',
       item: user.username,
@@ -870,7 +870,7 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
   try {
     const actor = getRequestActor(req);
-    destroySession(req.authToken);
+    await destroySession(req.authToken);
     await writeSecurityAudit(req, {
       accion: 'Logout',
       item: actor.username || actor.usuario || 'N/A',
