@@ -43,6 +43,8 @@ Revisa `.env.example`. Variables principales:
 - `PORT`
 - `CORS_ORIGINS`
 - `TRUST_PROXY`
+- `RATE_LIMIT_MAX` (límite de solicitudes por minuto por IP en `/api`; default 300)
+- `RATE_LIMIT_LOGIN_MAX` (límite de intentos de login por IP cada 15 min; default 50)
 - `AUTH_LOGIN_MAX_ATTEMPTS`
 - `AUTH_LOGIN_LOCK_MS`
 - `AUTH_LOGIN_TRACK_WINDOW_MS`

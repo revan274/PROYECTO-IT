@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { createInsumosRouter } from './routes/insumos.js';
 import { createActivosRouter } from './routes/activos.js';
 import { createTicketsRouter } from './routes/tickets.js';
@@ -119,6 +121,34 @@ const CORS_ORIGINS = String(process.env.CORS_ORIGIN || process.env.CORS_ORIGINS 
 const CORS_ALLOW_ALL = CORS_ORIGINS.length === 0;
 const TRUST_PROXY = process.env.TRUST_PROXY;
 
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = Math.max(30, Math.trunc(Number(process.env.RATE_LIMIT_MAX || 300)));
+const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_RATE_LIMIT_MAX = Math.max(10, Math.trunc(Number(process.env.RATE_LIMIT_LOGIN_MAX || 50)));
+
+// Limitador general de la API (defensa contra abuso). Exime el health check
+// porque lo consulta el keep-alive periódicamente.
+const apiLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  limit: RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+  skip: (req) => req.originalUrl.startsWith('/api/health'),
+  message: { error: 'Demasiadas solicitudes. Intenta de nuevo en un momento.' },
+});
+
+// Limitador específico de login (defensa en profundidad junto al throttle por
+// usuario/IP del runtime de autenticación).
+const loginLimiter = rateLimit({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: LOGIN_RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+  message: { error: 'Demasiados intentos de inicio de sesión. Intenta más tarde.' },
+});
+
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
@@ -148,6 +178,14 @@ function configureTrustProxy(app) {
 }
 
 function configureCommonMiddleware(app) {
+  // Cabeceras de seguridad. Se desactiva CSP porque requiere afinado específico
+  // para el SPA (estilos/scripts inline de Vite, canvas QR) y CORP se deja en
+  // cross-origin para no romper el consumo de la API desde otro origen.
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
@@ -629,6 +667,9 @@ function registerRoutes(app, authRuntime) {
     revokeSessionsByUserId,
     writeSecurityAudit,
   } = authRuntime;
+
+app.use('/api', apiLimiter);
+app.use('/api/auth/login', loginLimiter);
 
 app.get('/api/health', (_req, res) => {
   res.json({
