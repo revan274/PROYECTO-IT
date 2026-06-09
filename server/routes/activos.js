@@ -73,6 +73,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       list = list.filter((asset) => {
         const fields = [
           asset.tag,
+          asset.identificadorSolicitante,
           asset.tipo,
           asset.marca,
           asset.modelo,

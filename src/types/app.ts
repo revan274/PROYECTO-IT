@@ -91,6 +91,7 @@ export interface TravelTripAdjustment {
 export interface Activo {
   id: number;
   tag: string;
+  identificadorSolicitante?: string;
   tipo: string;
   marca: string;
   modelo?: string;
@@ -339,6 +340,7 @@ export interface SupplyAuditMovement {
 
 export interface FormDataState {
   tag?: string;
+  identificadorSolicitante?: string;
   tipo?: string;
   marca?: string;
   modelo?: string;
@@ -476,6 +478,7 @@ export interface AssetQrResolveResponse {
   asset?: {
     id?: number;
     tag?: string;
+    identificadorSolicitante?: string;
     tipo?: string;
     marca?: string;
     modelo?: string;

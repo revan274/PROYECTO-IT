@@ -13,6 +13,7 @@ type TicketAreaLabel = typeof COMMON_TICKET_ISSUES[number]['area'];
 
 export interface TicketAssetContextSummary {
   branchCode: string;
+  displayLabel: string;
   locationLabel: string;
   locationTokens: string[];
   typeCode: string;
@@ -202,8 +203,35 @@ function normalizeAssetType(asset?: Pick<Activo, 'tipo' | 'equipo'> | null): str
     .replace(/[^A-Z0-9]/g, '');
 }
 
+export function buildRequesterAssetDisplayName(
+  asset: Partial<Pick<Activo, 'tag' | 'identificadorSolicitante' | 'tipo' | 'equipo' | 'ubicacion' | 'departamento'>> | null | undefined,
+  validBranchCodes?: ReadonlySet<string>,
+): string {
+  if (!asset) return 'EQUIPO';
+
+  const explicit = String(asset.identificadorSolicitante || '').trim().toUpperCase();
+  if (explicit) return explicit;
+
+  const typeLabel = String(asset.tipo || asset.equipo || '').trim().toUpperCase();
+  const branchCode = validBranchCodes
+    ? resolveAssetBranchCode({
+      departamento: asset.departamento || '',
+      ubicacion: asset.ubicacion || '',
+    }, validBranchCodes)
+    : '';
+  const branchKey = normalizeForCompare(branchCode);
+  const locationSegments = getLocationSegments(asset.ubicacion);
+  const locationLabel = locationSegments.find((segment) => normalizeForCompare(segment) !== branchKey)
+    || locationSegments[locationSegments.length - 1]
+    || String(asset.departamento || '').trim().toUpperCase();
+  const fallback = String(asset.tag || '').trim().toUpperCase();
+  const label = buildUniqueStrings([locationLabel, typeLabel]).join(' - ');
+
+  return label || fallback || 'EQUIPO';
+}
+
 export function buildTicketAssetContextSummary(
-  asset: Pick<Activo, 'tipo' | 'equipo' | 'ubicacion' | 'departamento'> | null | undefined,
+  asset: Pick<Activo, 'tipo' | 'equipo' | 'ubicacion' | 'departamento'> & Partial<Pick<Activo, 'tag' | 'identificadorSolicitante'>> | null | undefined,
   validBranchCodes: ReadonlySet<string>,
 ): TicketAssetContextSummary | null {
   if (!asset) return null;
@@ -220,6 +248,7 @@ export function buildTicketAssetContextSummary(
 
   return {
     branchCode,
+    displayLabel: buildRequesterAssetDisplayName(asset, validBranchCodes),
     locationLabel,
     locationTokens,
     typeCode,

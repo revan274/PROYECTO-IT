@@ -122,6 +122,7 @@ const DEFAULT_DB = {
     {
       id: 1,
       tag: 'POS-001',
+      identificadorSolicitante: 'CAJA RAPIDA 1 - POS',
       tipo: 'POS',
       marca: 'IBM SurePOS',
       ubicacion: 'Caja Rápida 1',
@@ -132,6 +133,7 @@ const DEFAULT_DB = {
     {
       id: 2,
       tag: 'POS-002',
+      identificadorSolicitante: 'CAJA RAPIDA 2 - POS',
       tipo: 'POS',
       marca: 'IBM SurePOS',
       ubicacion: 'Caja Rápida 2',
@@ -142,6 +144,7 @@ const DEFAULT_DB = {
     {
       id: 3,
       tag: 'BAS-010',
+      identificadorSolicitante: 'FRUTAS Y VERDURAS - BASCULA',
       tipo: 'Báscula',
       marca: 'Datalogic',
       ubicacion: 'Frutas y Verduras',
@@ -152,6 +155,7 @@ const DEFAULT_DB = {
     {
       id: 4,
       tag: 'SRV-001',
+      identificadorSolicitante: 'SITE - SERVIDOR',
       tipo: 'Servidor',
       marca: 'Dell PowerEdge',
       ubicacion: 'Site',
@@ -800,6 +804,7 @@ function normalizeDate(value) {
 function normalizeAsset(item) {
   const copy = { ...item };
   copy.tag = text(copy.tag).toUpperCase() || `ACT-${Math.max(0, Math.trunc(Number(copy.id) || 0))}`;
+  copy.identificadorSolicitante = text(copy.identificadorSolicitante).toUpperCase();
   copy.tipo = text(copy.tipo || copy.equipo || 'EQUIPO').toUpperCase();
   copy.marca = text(copy.marca || 'SIN MARCA');
   copy.modelo = text(copy.modelo);

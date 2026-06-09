@@ -128,6 +128,7 @@ export function buildAssetQrLookupResponse(asset) {
   return {
     id: Number(asset?.id) || 0,
     tag: asNonEmptyString(asset?.tag).toUpperCase(),
+    identificadorSolicitante: asNonEmptyString(asset?.identificadorSolicitante).toUpperCase(),
     tipo: asNonEmptyString(asset?.tipo || asset?.equipo).toUpperCase(),
     marca: asNonEmptyString(asset?.marca),
     modelo: asNonEmptyString(asset?.modelo),

@@ -88,6 +88,22 @@ export function AssetFormModal({
           </section>
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Identificacion para solicitantes</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Visible al crear tickets</p>
+            </div>
+            <input
+              placeholder="CAJA 1 - IMPRESORA"
+              value={formData.identificadorSolicitante || ''}
+              className="w-full p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+              onChange={(e) => onChange({ identificadorSolicitante: e.target.value })}
+            />
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Ejemplos: CAJA 1 - POS, CAJA 1 - IMPRESORA, ATENCION AL CLIENTE - BASCULA, SITE - SERVIDOR.
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input

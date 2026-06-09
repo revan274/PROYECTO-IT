@@ -84,6 +84,7 @@ export function useModalState({
     setEditingAssetId(asset.id);
     setFormData({
       tag: asset.tag || '',
+      identificadorSolicitante: asset.identificadorSolicitante || '',
       tipo: asset.tipo || '',
       marca: asset.marca || '',
       modelo: asset.modelo || '',

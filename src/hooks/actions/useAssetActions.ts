@@ -46,6 +46,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
 
     const activoPayload = {
       tag: formData.tag || '',
+      identificadorSolicitante: formData.identificadorSolicitante || '',
       tipo: formData.tipo || '',
       marca: formData.marca || '',
       modelo: formData.modelo || '',

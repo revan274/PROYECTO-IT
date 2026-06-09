@@ -278,6 +278,18 @@ function stripSensitiveAssetFields(asset, role) {
   return safe;
 }
 
+function buildRequesterAssetSummary(asset) {
+  const identificadorSolicitante = asNonEmptyString(asset?.identificadorSolicitante);
+  return {
+    id: asset.id,
+    tag: asset.tag,
+    tipo: asset.tipo,
+    ubicacion: asset.ubicacion,
+    departamento: asset.departamento,
+    ...(identificadorSolicitante ? { identificadorSolicitante } : {}),
+  };
+}
+
 function buildBootstrapUsers(users, role) {
   const safeUsers = users.map((user) => sanitizeUser(user)).filter(Boolean);
   if (role === 'admin') return safeUsers;
@@ -386,6 +398,13 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
 
   const normalized = {
     tag: tag || normalizeAssetTag(`${equipo || 'ACT'}-${payload?.rowNumber || Date.now()}`),
+    identificadorSolicitante: asNonEmptyString(
+      payload?.identificadorSolicitante
+      || payload?.nombreSolicitante
+      || payload?.nombreVisible
+      || payload?.aliasOperativo
+      || payload?.dispositivo,
+    ).toUpperCase(),
     tipo,
     marca,
     modelo,
@@ -416,6 +435,7 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
 function finalizeAsset(asset) {
   const copy = { ...asset };
   copy.tag = normalizeAssetTag(copy.tag) || normalizeAssetTag(`${copy.equipo || 'ACT'}-${Date.now()}`);
+  copy.identificadorSolicitante = asNonEmptyString(copy.identificadorSolicitante).toUpperCase();
   copy.tipo = asNonEmptyString(copy.tipo || copy.equipo || 'EQUIPO').toUpperCase() || 'EQUIPO';
   copy.marca = asNonEmptyString(copy.marca) || 'SIN MARCA';
   copy.modelo = asNonEmptyString(copy.modelo);
@@ -878,7 +898,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
 
     res.json({
       activos: requesterOnly
-        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento }))
+        ? db.activos.filter((a) => a.activo !== false).map(buildRequesterAssetSummary)
         : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
       tickets: visibleTickets.map(serializeTicket),
