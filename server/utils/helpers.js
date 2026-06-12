@@ -35,6 +35,18 @@ export const DEFAULT_BRANCH_CATALOG = [
   { code: 'CEDIS', name: 'CeDis', activo: true },
 ];
 
+export const DEFAULT_ALIAS_CATALOG = [
+  'Caja 1',
+  'Caja 2',
+  'Caja 3',
+  'Caja 4',
+  'Caja 5',
+  'Caja 6',
+  'Servicio al Cliente',
+  'Gerencia',
+  'Recibos',
+];
+
 export const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => branch.code));
 
 export const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
@@ -578,6 +590,18 @@ export function normalizeCatalogState(input) {
   });
   const cargos = cargoMap.size > 0 ? Array.from(cargoMap.values()) : [...DEFAULT_CARGO_CATALOG];
 
+  const aliasSource = Array.isArray(source.aliases) && source.aliases.length > 0
+    ? source.aliases
+    : DEFAULT_ALIAS_CATALOG;
+  const aliasMap = new Map();
+  aliasSource.forEach((alias) => {
+    const normalized = asNonEmptyString(alias).slice(0, 80);
+    if (!normalized) return;
+    const key = normalizeTextKey(normalized);
+    if (!aliasMap.has(key)) aliasMap.set(key, normalized);
+  });
+  const aliases = aliasMap.size > 0 ? Array.from(aliasMap.values()) : [...DEFAULT_ALIAS_CATALOG];
+
   const roleSource = Array.isArray(source.roles) && source.roles.length > 0
     ? source.roles
     : DEFAULT_ROLE_CATALOG;
@@ -594,7 +618,7 @@ export function normalizeCatalogState(input) {
     .map((role) => roleMap.get(role.value))
     .filter(Boolean);
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, aliases, roles };
 }
 
 export function getCatalogsFromDb(db) {

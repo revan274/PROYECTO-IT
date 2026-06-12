@@ -50,6 +50,17 @@ const DEFAULT_USER_CARGOS = [
   'Auxiliar de Sistemas',
   'CeDis',
 ];
+const DEFAULT_ASSET_ALIASES = [
+  'Caja 1',
+  'Caja 2',
+  'Caja 3',
+  'Caja 4',
+  'Caja 5',
+  'Caja 6',
+  'Servicio al Cliente',
+  'Gerencia',
+  'Recibos',
+];
 const TICKET_BRANCH_CODES = new Set(DEFAULT_TICKET_BRANCHES.map((branch) => branch.code));
 let pgPool = null;
 let pgInitPromise = null;
@@ -115,6 +126,7 @@ const DEFAULT_DB = {
   catalogos: {
     sucursales: DEFAULT_TICKET_BRANCHES,
     cargos: DEFAULT_USER_CARGOS,
+    aliases: DEFAULT_ASSET_ALIASES,
     roles: DEFAULT_ROLE_CATALOG,
   },
   users: DEFAULT_USERS,
@@ -376,6 +388,19 @@ function normalizeCatalogs(catalogos) {
   });
   const cargos = cargoMap.size > 0 ? Array.from(cargoMap.values()) : [...DEFAULT_USER_CARGOS];
 
+  const aliasSource = Array.isArray(source.aliases) && source.aliases.length > 0 ? source.aliases : DEFAULT_ASSET_ALIASES;
+  const aliasMap = new Map();
+  aliasSource.forEach((alias) => {
+    const normalized = text(alias);
+    if (!normalized) return;
+    const key = normalized
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase();
+    if (!aliasMap.has(key)) aliasMap.set(key, normalized);
+  });
+  const aliases = aliasMap.size > 0 ? Array.from(aliasMap.values()) : [...DEFAULT_ASSET_ALIASES];
+
   const roleSource = Array.isArray(source.roles) && source.roles.length > 0 ? source.roles : DEFAULT_ROLE_CATALOG;
   const roleMap = new Map();
   roleSource.forEach((role) => {
@@ -388,7 +413,7 @@ function normalizeCatalogs(catalogos) {
   });
   const roles = DEFAULT_ROLE_CATALOG.map((role) => roleMap.get(role.value)).filter(Boolean);
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, aliases, roles };
 }
 
 function normalizeSupply(item) {
@@ -821,6 +846,7 @@ function normalizeAsset(item) {
   copy.departamento = text(copy.departamento).toUpperCase();
   copy.edo = text(copy.edo).toUpperCase();
   copy.anydesk = text(copy.anydesk);
+  copy.alias = text(copy.alias);
   delete copy.passwordRemota;
   delete copy.pass;
   copy.aniosVida = text(copy.aniosVida);
@@ -1021,6 +1047,7 @@ export async function readDb() {
   const catalogsRequireMigration = !parsed?.catalogos
     || !Array.isArray(parsed.catalogos?.sucursales)
     || !Array.isArray(parsed.catalogos?.cargos)
+    || !Array.isArray(parsed.catalogos?.aliases)
     || !Array.isArray(parsed.catalogos?.roles);
   if (assetsRequireSecretMigration || usersRequireMigration || auditRequiresMigration || catalogsRequireMigration) {
     await writeDb(normalized, { backup: !assetsRequireSecretMigration });

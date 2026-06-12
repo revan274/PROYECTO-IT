@@ -103,6 +103,7 @@ export function useModalState({
       responsable: asset.responsable || '',
       departamento: asset.departamento || '',
       anydesk: asset.anydesk || '',
+      alias: asset.alias || '',
       aniosVida: asset.aniosVida || '',
       comentarios: asset.comentarios || '',
     });

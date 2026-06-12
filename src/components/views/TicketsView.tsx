@@ -32,6 +32,7 @@ interface TicketFormModalConfig {
   canSubmit: boolean;
   activeTicketBranches: CatalogBranch[];
   ticketAssetOptions: Array<{ tag: string; label: string }>;
+  ticketAliasOptions: Array<{ tag: string; alias: string }>;
   selectedIssueArea: string;
   issueOptionsForSelectedArea: string[];
   selectedTicketAssetContext: {
@@ -62,6 +63,7 @@ interface TicketsViewProps {
   ticketAssignmentFilter: TicketAssignmentFilter;
   ticketSlaFilter: TicketSlaFilter;
   filteredTickets: TicketRow[];
+  assetAliasByTag: Record<string, string>;
   technicians: TechnicianOption[];
   ticketStates: string[];
   ticketAttentionTypes: TicketAttentionType[];
@@ -113,6 +115,7 @@ export function TicketsView({
   ticketAssignmentFilter,
   ticketSlaFilter,
   filteredTickets,
+  assetAliasByTag,
   technicians,
   ticketStates,
   ticketAttentionTypes,
@@ -289,6 +292,11 @@ export function TicketsView({
                       {getSlaStatus(ticket).label}
                     </span>
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">#{ticket.id}</span>
+                    {assetAliasByTag[String(ticket.activoTag || '').toUpperCase()] && (
+                      <span className="rounded-full border border-[#F58220]/40 bg-[#F58220]/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#F58220]">
+                        {assetAliasByTag[String(ticket.activoTag || '').toUpperCase()]}
+                      </span>
+                    )}
                   </div>
                   <h4 className="break-words text-sm font-black uppercase text-slate-800 sm:text-md">
                     {ticket.activoTag} | {ticket.descripcion}
@@ -518,6 +526,7 @@ export function TicketsView({
         canEdit={canEdit}
         activeTicketBranches={ticketFormModal.activeTicketBranches}
         ticketAssetOptions={ticketFormModal.ticketAssetOptions}
+        ticketAliasOptions={ticketFormModal.ticketAliasOptions}
         selectedIssueArea={ticketFormModal.selectedIssueArea}
         issueOptionsForSelectedArea={ticketFormModal.issueOptionsForSelectedArea}
         selectedTicketAssetContext={ticketFormModal.selectedTicketAssetContext}

@@ -586,13 +586,45 @@ export default function App() {
         seenTags.add(tag);
         const tipo = String(asset.tipo || asset.equipo || 'EQUIPO').trim().toUpperCase() || 'EQUIPO';
         const ubicacion = String(asset.ubicacion || '').trim().toUpperCase() || 'SIN UBICACION';
+        const alias = String(asset.alias || '').trim();
+        const aliasPrefix = alias ? `${alias.toUpperCase()} · ` : '';
         return {
           tag,
-          label: `${tag} | ${tipo} | ${ubicacion}`,
+          label: `${aliasPrefix}${tag} | ${tipo} | ${ubicacion}`,
         };
       })
       .filter((item): item is { tag: string; label: string } => !!item);
   }, [activos, activeTicketBranchCodes, formData.sucursal]);
+  const ticketAliasOptions = useMemo(() => {
+    const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();
+    if (!selectedBranch) return [] as Array<{ tag: string; alias: string }>;
+
+    const seenTags = new Set<string>();
+    const seenAlias = new Set<string>();
+    return activos
+      .filter((asset) => resolveAssetBranchCode(asset, activeTicketBranchCodes) === selectedBranch)
+      .map((asset) => {
+        const tag = String(asset.tag || '').trim().toUpperCase();
+        const alias = String(asset.alias || '').trim();
+        if (!tag || !alias) return null;
+        const aliasKey = alias.toUpperCase();
+        if (seenTags.has(tag) || seenAlias.has(aliasKey)) return null;
+        seenTags.add(tag);
+        seenAlias.add(aliasKey);
+        return { tag, alias };
+      })
+      .filter((item): item is { tag: string; alias: string } => !!item)
+      .sort((left, right) => left.alias.localeCompare(right.alias));
+  }, [activos, activeTicketBranchCodes, formData.sucursal]);
+  const assetAliasByTag = useMemo(() => {
+    const map: Record<string, string> = {};
+    activos.forEach((asset) => {
+      const tag = String(asset.tag || '').trim().toUpperCase();
+      const alias = String(asset.alias || '').trim();
+      if (tag && alias && !map[tag]) map[tag] = alias;
+    });
+    return map;
+  }, [activos]);
   const selectedTicketAsset = useMemo(() => {
     const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();
     const selectedTag = String(formData.activoTag || '').trim().toUpperCase();
@@ -4327,6 +4359,7 @@ export default function App() {
                         formData,
                         isSaving: isModalSaving,
                         canSubmit: canEdit && !isModalSaving,
+                        aliasOptions: catalogos.aliases,
                         onClose: closeModal,
                         onSubmit: handleSave,
                         onChange: updateFormData,
@@ -4478,6 +4511,7 @@ export default function App() {
                     ticketAssignmentFilter={ticketAssignmentFilter}
                     ticketSlaFilter={ticketSlaFilter}
                     filteredTickets={filteredTickets}
+                    assetAliasByTag={assetAliasByTag}
                     technicians={users}
                     ticketStates={TICKET_STATES}
                     ticketAttentionTypes={TICKET_ATTENTION_TYPES}
@@ -4520,6 +4554,7 @@ export default function App() {
                       canSubmit: canCreateTickets && !isModalSaving,
                       activeTicketBranches,
                       ticketAssetOptions,
+                      ticketAliasOptions,
                       selectedIssueArea,
                       issueOptionsForSelectedArea,
                       selectedTicketAssetContext,

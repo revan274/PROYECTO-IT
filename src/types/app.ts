@@ -111,6 +111,7 @@ export interface Activo {
   departamento?: string;
   edo?: string;
   anydesk?: string;
+  alias?: string;
   aniosVida?: string;
   comentarios?: string;
 }
@@ -359,6 +360,7 @@ export interface FormDataState {
   departamento?: string;
   edo?: string;
   anydesk?: string;
+  alias?: string;
   aniosVida?: string;
   comentarios?: string;
   nombre?: string;
@@ -413,6 +415,7 @@ export interface CatalogRole {
 export interface CatalogState {
   sucursales: CatalogBranch[];
   cargos: string[];
+  aliases: string[];
   roles: CatalogRole[];
 }
 

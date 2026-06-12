@@ -48,6 +48,7 @@ interface AssetFormModalConfig {
   formData: FormDataState;
   isSaving: boolean;
   canSubmit: boolean;
+  aliasOptions: string[];
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
   onChange: (updates: Partial<FormDataState>) => void;
@@ -521,6 +522,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         formData={assetFormModal.formData}
         isSaving={assetFormModal.isSaving}
         canSubmit={assetFormModal.canSubmit}
+        aliasOptions={assetFormModal.aliasOptions}
         onClose={assetFormModal.onClose}
         onSubmit={assetFormModal.onSubmit}
         onChange={assetFormModal.onChange}

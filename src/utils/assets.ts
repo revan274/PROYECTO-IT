@@ -205,6 +205,18 @@ export function normalizeCatalogState(value?: Partial<CatalogState>): CatalogSta
   });
   const cargos = cargoMap.size > 0 ? Array.from(cargoMap.values()) : [...DEFAULT_CATALOGS.cargos];
 
+  const aliasSource = Array.isArray(value?.aliases) && value.aliases.length > 0
+    ? value.aliases
+    : DEFAULT_CATALOGS.aliases;
+  const aliasMap = new Map<string, string>();
+  aliasSource.forEach((alias) => {
+    const label = String(alias || '').trim();
+    if (!label) return;
+    const key = normalizeForCompare(label);
+    if (!aliasMap.has(key)) aliasMap.set(key, label);
+  });
+  const aliases = aliasMap.size > 0 ? Array.from(aliasMap.values()) : [...DEFAULT_CATALOGS.aliases];
+
   const roleSource = Array.isArray(value?.roles) && value.roles.length > 0
     ? value.roles
     : DEFAULT_CATALOGS.roles;
@@ -228,7 +240,7 @@ export function normalizeCatalogState(value?: Partial<CatalogState>): CatalogSta
     }
   ));
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, aliases, roles };
 }
 
 export function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {

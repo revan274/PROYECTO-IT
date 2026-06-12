@@ -14,6 +14,7 @@ interface AssetDetail {
   serial?: string;
   idInterno?: string;
   equipo?: string;
+  alias?: string;
   ubicacion?: string;
   departamento?: string;
   responsable?: string;
@@ -87,6 +88,11 @@ export function AssetDetailModal({
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Badge variant={asset.estado}>{asset.estado}</Badge>
+              {asset.alias && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider border-[#F58220]/40 bg-[#F58220]/20 text-[#F58220]">
+                  {asset.alias}
+                </span>
+              )}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider border-white/20 bg-white/10">
                 Compra: {asset.fechaCompra || 'N/D'}
               </span>
@@ -101,6 +107,10 @@ export function AssetDetailModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-slate-800">
             <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 space-y-3">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identificacion</p>
+              <div className="text-sm">
+                <p className="font-black text-slate-500 uppercase">Alias / Estación</p>
+                <p className="font-black">{asset.alias || 'N/D'}</p>
+              </div>
               <div className="text-sm">
                 <p className="font-black text-slate-500 uppercase">Serial</p>
                 <p className="font-black">{asset.serial || 'N/D'}</p>

@@ -137,9 +137,21 @@ export const USER_CARGO_LABEL_BY_VALUE: Record<string, string> = (() => {
   });
   return labels;
 })();
+export const ASSET_ALIAS_OPTIONS = [
+  'Caja 1',
+  'Caja 2',
+  'Caja 3',
+  'Caja 4',
+  'Caja 5',
+  'Caja 6',
+  'Servicio al Cliente',
+  'Gerencia',
+  'Recibos',
+] as const;
 export const DEFAULT_CATALOGS: CatalogState = {
   sucursales: TICKET_BRANCHES.map((branch) => ({ ...branch, activo: true })),
   cargos: USER_CARGO_OPTIONS.map((item) => item.label),
+  aliases: [...ASSET_ALIAS_OPTIONS],
   roles: [
     { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
     { value: 'tecnico', label: 'Técnico', permissions: 'Operación IT + tickets', activo: true },

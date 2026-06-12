@@ -162,7 +162,7 @@ const ASSET_FIELDS = [
   'tag', 'tipo', 'marca', 'modelo', 'ubicacion', 'estado', 'serial',
   'fechaCompra', 'idInterno', 'equipo', 'cpu', 'ram', 'ramTipo', 'disco',
   'tipoDisco', 'macAddress', 'ipAddress', 'responsable', 'departamento',
-  'edo', 'anydesk', 'aniosVida', 'comentarios',
+  'edo', 'anydesk', 'alias', 'aniosVida', 'comentarios',
 ];
 
 // --- App middleware setup ---
@@ -444,6 +444,7 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
     departamento: asNonEmptyString(payload?.departamento).toUpperCase(),
     edo: asNonEmptyString(payload?.edo).toUpperCase(),
     anydesk: asNonEmptyString(payload?.anydesk),
+    alias: asNonEmptyString(payload?.alias).slice(0, 80),
     aniosVida: asNonEmptyString(payload?.aniosVida),
     comentarios: asNonEmptyString(payload?.comentarios),
   };
@@ -474,6 +475,7 @@ function finalizeAsset(asset) {
   copy.departamento = asNonEmptyString(copy.departamento).toUpperCase();
   copy.edo = asNonEmptyString(copy.edo).toUpperCase();
   copy.anydesk = asNonEmptyString(copy.anydesk);
+  copy.alias = asNonEmptyString(copy.alias).slice(0, 80);
   delete copy.passwordRemota;
   delete copy.pass;
   copy.aniosVida = asNonEmptyString(copy.aniosVida);
@@ -698,8 +700,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
 
     const hasBranchUpdate = req.body?.sucursales !== undefined;
     const hasCargoUpdate = req.body?.cargos !== undefined;
+    const hasAliasUpdate = req.body?.aliases !== undefined;
     const hasRoleUpdate = req.body?.roles !== undefined;
-    if (!hasBranchUpdate && !hasCargoUpdate && !hasRoleUpdate) {
+    if (!hasBranchUpdate && !hasCargoUpdate && !hasAliasUpdate && !hasRoleUpdate) {
       return res.status(400).json({ error: 'No hay cambios de catálogos para aplicar.' });
     }
 
@@ -708,6 +711,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     }
     if (hasCargoUpdate && !Array.isArray(req.body?.cargos)) {
       return res.status(400).json({ error: 'El catálogo de cargos debe ser una lista.' });
+    }
+    if (hasAliasUpdate && !Array.isArray(req.body?.aliases)) {
+      return res.status(400).json({ error: 'El catálogo de alias debe ser una lista.' });
     }
     if (hasRoleUpdate && !Array.isArray(req.body?.roles)) {
       return res.status(400).json({ error: 'El catálogo de roles debe ser una lista.' });
@@ -718,12 +724,14 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       const nextDraft = {
         sucursales: hasBranchUpdate ? req.body.sucursales : current.sucursales,
         cargos: hasCargoUpdate ? req.body.cargos : current.cargos,
+        aliases: hasAliasUpdate ? req.body.aliases : current.aliases,
         roles: hasRoleUpdate ? req.body.roles : current.roles,
       };
       const normalized = normalizeCatalogState(nextDraft);
 
       if (hasBranchUpdate && normalized.sucursales.length === 0) return { ok: false, code: 'INVALID_BRANCHES' };
       if (hasCargoUpdate && normalized.cargos.length === 0) return { ok: false, code: 'INVALID_CARGOS' };
+      if (hasAliasUpdate && normalized.aliases.length === 0) return { ok: false, code: 'INVALID_ALIASES' };
       if (hasRoleUpdate && normalized.roles.length === 0) return { ok: false, code: 'INVALID_ROLES' };
       if (hasRoleUpdate && normalized.roles.find((role) => role.value === 'admin')?.activo === false) {
         return { ok: false, code: 'ADMIN_ROLE_DISABLED' };
@@ -732,7 +740,7 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       db.catalogos = normalized;
       pushAuditWithContext(db, req, {
         accion: 'Catálogos Actualizados',
-        item: `Sucursales: ${normalized.sucursales.length} | Cargos: ${normalized.cargos.length} | Roles: ${normalized.roles.length}`,
+        item: `Sucursales: ${normalized.sucursales.length} | Cargos: ${normalized.cargos.length} | Alias: ${normalized.aliases.length} | Roles: ${normalized.roles.length}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
@@ -746,6 +754,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     }
     if (!updated?.ok && updated?.code === 'INVALID_CARGOS') {
       return res.status(400).json({ error: 'Catálogo de cargos inválido.' });
+    }
+    if (!updated?.ok && updated?.code === 'INVALID_ALIASES') {
+      return res.status(400).json({ error: 'Catálogo de alias inválido.' });
     }
     if (!updated?.ok && updated?.code === 'INVALID_ROLES') {
       return res.status(400).json({ error: 'Catálogo de roles inválido.' });
@@ -919,7 +930,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
 
     res.json({
       activos: requesterOnly
-        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento }))
+        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, alias: a.alias, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento }))
         : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
       tickets: visibleTickets.map(serializeTicket),

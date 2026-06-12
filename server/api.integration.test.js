@@ -367,8 +367,8 @@ test('GET /api/bootstrap limita el payload para solicitantes', async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(data.activos, [
-    { id: 1, tag: 'POS-001', tipo: 'POS', ubicacion: 'Caja 1', departamento: '' },
-    { id: 2, tag: 'BAS-010', tipo: 'BÁSCULA', ubicacion: 'Frutas', departamento: '' },
+    { id: 1, tag: 'POS-001', alias: '', tipo: 'POS', ubicacion: 'Caja 1', departamento: '' },
+    { id: 2, tag: 'BAS-010', alias: '', tipo: 'BÁSCULA', ubicacion: 'Frutas', departamento: '' },
   ]);
   assert.deepEqual(data.insumos, []);
   assert.deepEqual(data.users, []);

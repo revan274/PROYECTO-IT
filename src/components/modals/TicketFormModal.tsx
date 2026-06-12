@@ -15,6 +15,11 @@ interface TicketAssetOption {
   label: string;
 }
 
+interface TicketAliasOption {
+  tag: string;
+  alias: string;
+}
+
 interface AssignableUser {
   id: number;
   nombre: string;
@@ -40,6 +45,7 @@ interface TicketFormModalProps {
   canEdit: boolean;
   activeTicketBranches: CatalogBranch[];
   ticketAssetOptions: TicketAssetOption[];
+  ticketAliasOptions: TicketAliasOption[];
   selectedIssueArea: string;
   issueOptionsForSelectedArea: string[];
   selectedTicketAssetContext: TicketAssetContext | null;
@@ -64,6 +70,7 @@ export function TicketFormModal({
   canEdit,
   activeTicketBranches,
   ticketAssetOptions,
+  ticketAliasOptions,
   selectedIssueArea,
   issueOptionsForSelectedArea,
   selectedTicketAssetContext,
@@ -81,6 +88,8 @@ export function TicketFormModal({
     () => users.filter((user) => (user.rol === 'tecnico' || user.rol === 'admin') && user.activo !== false),
     [users],
   );
+  const currentTag = String(formData.activoTag || '').trim().toUpperCase();
+  const aliasSelectValue = ticketAliasOptions.some((option) => option.tag === currentTag) ? currentTag : '';
 
   return (
     <ModalLayout isOpen={isOpen} title={title} onClose={onClose} isBusy={isSaving}>
@@ -99,26 +108,51 @@ export function TicketFormModal({
             ))
           )}
         </select>
-        <select
-          required
-          disabled={!formData.sucursal || ticketAssetOptions.length === 0}
-          className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
-          value={formData.activoTag || ''}
-          onChange={(e) => onChange({ activoTag: e.target.value.toUpperCase() })}
-        >
-          <option value="">
-            {!formData.sucursal
-              ? 'Primero selecciona sucursal...'
-              : ticketAssetOptions.length === 0
-                ? 'Sin activos registrados en esta sucursal'
-                : 'Selecciona TAG equipo...'}
-          </option>
-          {ticketAssetOptions.map((assetOption) => (
-            <option key={assetOption.tag} value={assetOption.tag}>
-              {assetOption.label}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Alias / Estación</label>
+          <select
+            disabled={!formData.sucursal || ticketAliasOptions.length === 0}
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
+            value={aliasSelectValue}
+            onChange={(e) => onChange({ activoTag: e.target.value.toUpperCase() })}
+          >
+            <option value="">
+              {!formData.sucursal
+                ? 'Primero selecciona sucursal...'
+                : ticketAliasOptions.length === 0
+                  ? 'Sin alias configurados en esta sucursal'
+                  : 'Selecciona por alias (Caja 1, Recibos...)'}
             </option>
-          ))}
-        </select>
+            {ticketAliasOptions.map((aliasOption) => (
+              <option key={aliasOption.tag} value={aliasOption.tag}>
+                {aliasOption.alias}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Folio / TAG del equipo</label>
+          <select
+            required
+            disabled={!formData.sucursal || ticketAssetOptions.length === 0}
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
+            value={formData.activoTag || ''}
+            onChange={(e) => onChange({ activoTag: e.target.value.toUpperCase() })}
+          >
+            <option value="">
+              {!formData.sucursal
+                ? 'Primero selecciona sucursal...'
+                : ticketAssetOptions.length === 0
+                  ? 'Sin activos registrados en esta sucursal'
+                  : 'Selecciona TAG equipo...'}
+            </option>
+            {ticketAssetOptions.map((assetOption) => (
+              <option key={assetOption.tag} value={assetOption.tag}>
+                {assetOption.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <p className="text-[10px] text-slate-400 font-black uppercase">
           Activos en sucursal seleccionada: {ticketAssetOptions.length}
         </p>

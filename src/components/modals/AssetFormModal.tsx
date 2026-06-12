@@ -10,6 +10,7 @@ interface AssetFormModalProps {
   formData: FormDataState;
   isSaving: boolean;
   canSubmit: boolean;
+  aliasOptions: string[];
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
   onChange: (updates: Partial<FormDataState>) => void;
@@ -22,10 +23,15 @@ export function AssetFormModal({
   formData,
   isSaving,
   canSubmit,
+  aliasOptions,
   onClose,
   onSubmit,
   onChange,
 }: AssetFormModalProps) {
+  const currentAlias = formData.alias || '';
+  const aliasChoices = currentAlias && !aliasOptions.includes(currentAlias)
+    ? [currentAlias, ...aliasOptions]
+    : aliasOptions;
   return (
     <ModalLayout
       isOpen={isOpen}
@@ -89,6 +95,24 @@ export function AssetFormModal({
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Alias / Estación</label>
+                <select
+                  value={currentAlias}
+                  className="w-full p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                  onChange={(e) => onChange({ alias: e.target.value })}
+                >
+                  <option value="">Sin alias</option>
+                  {aliasChoices.map((alias) => (
+                    <option key={alias} value={alias}>{alias}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="self-end text-[10px] font-black uppercase tracking-wider text-slate-400 pb-1">
+                Nombre amigable del equipo en tickets (p. ej. Caja 1, Recibos). Relacionado al folio del activo.
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
                 required
