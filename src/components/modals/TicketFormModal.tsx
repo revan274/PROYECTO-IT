@@ -289,5 +289,3 @@ export function TicketFormModal({
     </ModalLayout>
   );
 }
-
-export default TicketFormModal;
