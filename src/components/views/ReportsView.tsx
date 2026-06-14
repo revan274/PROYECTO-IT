@@ -850,5 +850,3 @@ export function ReportsView({
     </div>
   );
 }
-
-export default ReportsView;
