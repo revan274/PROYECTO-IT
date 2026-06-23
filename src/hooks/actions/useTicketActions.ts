@@ -146,13 +146,59 @@ export function useTicketActions({
       payload.asignadoA = formData.asignadoA || '';
     }
 
+    const isAdmin = sessionUser?.rol === 'admin';
+    const isHistorical = isAdmin && !!formData.esHistorico;
+    let endpoint = '/tickets';
+
+    if (isHistorical) {
+      const estadoHistorico = (formData.estadoHistorico || 'Cerrado') as TicketEstado;
+      const isClosedHistorico = estadoHistorico === 'Resuelto' || estadoHistorico === 'Cerrado';
+      const fechaCreacionRaw = String(formData.fechaHistorica || '').trim();
+      const fechaCierreRaw = String(formData.fechaCierreHistorica || '').trim();
+
+      if (!fechaCreacionRaw) {
+        showToast('Indica la fecha de creación del ticket pasado', 'warning');
+        return false;
+      }
+      const fechaCreacionDate = new Date(fechaCreacionRaw);
+      if (Number.isNaN(fechaCreacionDate.getTime())) {
+        showToast('La fecha de creación no es válida', 'warning');
+        return false;
+      }
+      if (fechaCreacionDate.getTime() > Date.now()) {
+        showToast('La fecha de creación no puede ser futura', 'warning');
+        return false;
+      }
+      if (isClosedHistorico && !fechaCierreRaw) {
+        showToast('Indica la fecha de cierre del ticket pasado', 'warning');
+        return false;
+      }
+      if (isClosedHistorico) {
+        const fechaCierreDate = new Date(fechaCierreRaw);
+        if (Number.isNaN(fechaCierreDate.getTime())) {
+          showToast('La fecha de cierre no es válida', 'warning');
+          return false;
+        }
+        if (fechaCierreDate.getTime() < fechaCreacionDate.getTime()) {
+          showToast('La fecha de cierre no puede ser anterior a la de creación', 'warning');
+          return false;
+        }
+        payload.fechaCierre = fechaCierreDate.toISOString();
+      }
+
+      payload.fechaCreacion = fechaCreacionDate.toISOString();
+      payload.estado = estadoHistorico;
+      payload.comentarioResolucion = String(formData.resolucionHistorica || '').trim();
+      endpoint = '/tickets/historical';
+    }
+
     try {
-      await apiRequest('/tickets', {
+      await apiRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
       await refreshData();
-      showToast('Ticket creado', 'success');
+      showToast(isHistorical ? 'Ticket histórico registrado' : 'Ticket creado', 'success');
       return true;
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'No se pudo crear el ticket', 'error');

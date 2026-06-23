@@ -380,6 +380,11 @@ export interface FormDataState {
   comentario?: string;
   ubicacionInsumo?: string;
   proveedor?: string;
+  esHistorico?: boolean;
+  fechaHistorica?: string;
+  estadoHistorico?: TicketEstado;
+  fechaCierreHistorica?: string;
+  resolucionHistorica?: string;
 }
 
 export interface UserItem {
