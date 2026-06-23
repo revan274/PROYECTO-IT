@@ -205,9 +205,10 @@ export function isLowStock(item) {
 
 // --- SLA helpers ---
 
-export function calcDueDate(prioridad) {
+export function calcDueDate(prioridad, baseMs = Date.now()) {
   const hours = SLA_HOURS[prioridad] || SLA_HOURS.MEDIA;
-  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const base = Number.isFinite(baseMs) ? baseMs : Date.now();
+  return new Date(base + hours * 60 * 60 * 1000).toISOString();
 }
 
 export function isSlaBreached(ticket) {

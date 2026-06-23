@@ -766,6 +766,108 @@ test('POST /api/tickets ignora modalidad enviada por solicitantes', { concurrenc
   assert.equal(storedTicket.trasladoRequerido, undefined);
 });
 
+test('POST /api/tickets/historical registra un ticket pasado cerrado con fechas personalizadas', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const fechaCreacion = '2026-01-10T09:00:00.000Z';
+  const fechaCierre = '2026-01-12T15:30:00.000Z';
+
+  const created = await requestJson('/api/tickets/historical', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Falla histórica registrada de forma retroactiva',
+      sucursal: 'TJ01',
+      prioridad: 'ALTA',
+      atencionTipo: 'REMOTO',
+      estado: 'Cerrado',
+      fechaCreacion,
+      fechaCierre,
+      asignadoA: TECH_USER.nombre,
+      comentarioResolucion: 'Resuelto en su momento',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.estado, 'Cerrado');
+  assert.equal(created.data.esHistorico, true);
+  assert.equal(created.data.fechaCreacion, fechaCreacion);
+  assert.equal(created.data.fechaCierre, fechaCierre);
+  assert.equal(created.data.atencionTipo, 'REMOTO');
+  assert.equal(created.data.asignadoA, TECH_USER.nombre);
+  // SLA calculado desde la fecha histórica (ALTA = 8h), no desde ahora.
+  assert.equal(created.data.fechaLimite, '2026-01-10T17:00:00.000Z');
+  assert.equal(Array.isArray(created.data.historial), true);
+  assert.equal(created.data.historial.length, 2);
+  assert.equal(created.data.historial[0].estado, 'Cerrado');
+  assert.equal(created.data.historial[1].accion, 'Ticket Creado');
+
+  const persisted = await readPersistedDb();
+  const storedTicket = persisted.tickets.find((item) => item.id === created.data.id);
+  assert.ok(storedTicket);
+  assert.equal(storedTicket.esHistorico, true);
+  assert.equal(storedTicket.fechaCreacion, fechaCreacion);
+  assert.equal(storedTicket.fechaCierre, fechaCierre);
+  // Un histórico cerrado no debe alterar el estado operativo actual del activo.
+  const storedAsset = persisted.activos.find((item) => item.tag === 'POS-001');
+  assert.ok(storedAsset);
+  assert.equal(storedAsset.estado, 'Operativo');
+  assert.equal(persisted.auditoria.some((entry) => entry.accion === 'Ticket Histórico'), true);
+});
+
+test('POST /api/tickets/historical rechaza no administradores y datos inválidos', { concurrency: false }, async () => {
+  const techSession = await login(TECH_USER.username, TECH_PASSWORD);
+  const forbidden = await requestJson('/api/tickets/historical', {
+    method: 'POST',
+    token: techSession.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Intento de histórico por técnico',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      estado: 'Cerrado',
+      fechaCreacion: '2026-01-10T09:00:00.000Z',
+      fechaCierre: '2026-01-11T09:00:00.000Z',
+    },
+  });
+  assert.equal(forbidden.response.status, 403, JSON.stringify(forbidden.data));
+
+  const adminSession = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const future = await requestJson('/api/tickets/historical', {
+    method: 'POST',
+    token: adminSession.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Histórico con fecha futura',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      estado: 'Cerrado',
+      fechaCreacion: futureDate,
+      fechaCierre: futureDate,
+    },
+  });
+  assert.equal(future.response.status, 400, JSON.stringify(future.data));
+
+  const missingClose = await requestJson('/api/tickets/historical', {
+    method: 'POST',
+    token: adminSession.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Histórico cerrado sin fecha de cierre',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      estado: 'Cerrado',
+      fechaCreacion: '2026-01-10T09:00:00.000Z',
+    },
+  });
+  assert.equal(missingClose.response.status, 400, JSON.stringify(missingClose.data));
+});
+
 test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { concurrency: false }, async () => {
   const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
 

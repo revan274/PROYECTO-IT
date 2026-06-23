@@ -93,6 +93,7 @@ Revisa `.env.example`. Variables principales:
 - `DELETE /api/insumos/:id`
 - `GET /api/tickets`
 - `POST /api/tickets`
+- `POST /api/tickets/historical` (admin) — registro retroactivo de tickets pasados
 - `PATCH /api/tickets/:id`
 - `PATCH /api/tickets/:id/resolve`
 - `POST /api/tickets/:id/comments`

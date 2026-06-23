@@ -1,14 +1,23 @@
 import React, { useMemo } from 'react';
 import { Save } from 'lucide-react';
-import { SLA_POLICY, TICKET_AREA_OPTIONS, TICKET_ATTENTION_TYPES } from '../../constants/app';
+import { SLA_POLICY, TICKET_AREA_OPTIONS, TICKET_ATTENTION_TYPES, TICKET_STATES } from '../../constants/app';
 import type {
   CatalogBranch,
   FormDataState,
   PrioridadTicket,
   TicketAttentionType,
+  TicketEstado,
   UserSession,
 } from '../../types/app';
 import { ModalLayout } from './ModalLayout';
+
+const CLOSED_TICKET_STATES: TicketEstado[] = ['Resuelto', 'Cerrado'];
+
+function toDateTimeLocalMax(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
 interface TicketAssetOption {
   tag: string;
@@ -81,6 +90,11 @@ export function TicketFormModal({
     () => users.filter((user) => (user.rol === 'tecnico' || user.rol === 'admin') && user.activo !== false),
     [users],
   );
+  const isAdmin = sessionUser?.rol === 'admin';
+  const isHistorical = isAdmin && !!formData.esHistorico;
+  const historicalEstado = formData.estadoHistorico || 'Cerrado';
+  const historicalIsClosed = CLOSED_TICKET_STATES.includes(historicalEstado);
+  const dateTimeMax = useMemo(() => toDateTimeLocalMax(), []);
 
   return (
     <ModalLayout isOpen={isOpen} title={title} onClose={onClose} isBusy={isSaving}>
@@ -277,6 +291,95 @@ export function TicketFormModal({
         <p className="text-[10px] text-slate-400 font-black uppercase">
           SLA estimado: {SLA_POLICY[formData.prioridad || 'MEDIA']} horas
         </p>
+
+        {isAdmin && (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
+            <label className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                  Registro retroactivo
+                </p>
+                <p className="text-xs font-black uppercase text-indigo-700">
+                  Ticket pasado (histórico)
+                </p>
+              </div>
+              <span className="relative inline-flex h-7 w-12 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={!!formData.esHistorico}
+                  onChange={(e) =>
+                    onChange({
+                      esHistorico: e.target.checked,
+                      ...(e.target.checked
+                        ? { estadoHistorico: formData.estadoHistorico || 'Cerrado' }
+                        : {}),
+                    })
+                  }
+                  className="peer sr-only"
+                />
+                <span className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-indigo-500" />
+                <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white toggle-thumb shadow-sm transition-transform peer-checked:translate-x-5" />
+              </span>
+            </label>
+
+            {isHistorical && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Fecha de creación (pasada)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    max={dateTimeMax}
+                    value={formData.fechaHistorica || ''}
+                    onChange={(e) => onChange({ fechaHistorica: e.target.value })}
+                    className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Estado final
+                  </label>
+                  <select
+                    value={historicalEstado}
+                    onChange={(e) => onChange({ estadoHistorico: e.target.value as TicketEstado })}
+                    className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-100"
+                  >
+                    {TICKET_STATES.map((state) => (
+                      <option key={`hist-estado-${state}`} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+                {historicalIsClosed && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Fecha de cierre
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      max={dateTimeMax}
+                      min={formData.fechaHistorica || undefined}
+                      value={formData.fechaCierreHistorica || ''}
+                      onChange={(e) => onChange({ fechaCierreHistorica: e.target.value })}
+                      className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </div>
+                )}
+                <textarea
+                  placeholder="RESOLUCIÓN / COMENTARIO (OPCIONAL)"
+                  value={formData.resolucionHistorica || ''}
+                  onChange={(e) => onChange({ resolucionHistorica: e.target.value })}
+                  className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase h-20 outline-none focus:ring-4 focus:ring-indigo-100"
+                />
+                <p className="text-[10px] text-indigo-400 font-black uppercase">
+                  El ticket se registrará con la fecha indicada y quedará marcado como histórico.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           disabled={!canSubmit}

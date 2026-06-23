@@ -7,6 +7,7 @@ import { readDb, updateDb, now, nextId } from '../store.js';
 export function createTicketsRouter({
   requireAuth,
   ensureCanCreateTickets,
+  ensureAdmin,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
@@ -172,6 +173,155 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     if (!created?.ok) {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
+    }
+
+    res.status(201).json(serializeTicket(created.ticket));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Registro de tickets pasados (histórico). Solo admin.
+router.post('/historical', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensureAdmin(req, res)) return;
+
+    const formatLocal = (iso) => new Date(iso).toLocaleString('es-MX', { hour12: false });
+    const parseDate = (value) => {
+      const text = asNonEmptyString(value);
+      if (!text) return null;
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+
+    const activoTag = asNonEmptyString(req.body?.activoTag);
+    const descripcion = asNonEmptyString(req.body?.descripcion);
+    const sucursalInput = req.body?.sucursal;
+    const prioridad = normalizePrioridad(req.body?.prioridad);
+    const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
+    const hasTrasladoField = req.body?.trasladoRequerido !== undefined;
+    const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
+    const asignadoA = asNonEmptyString(req.body?.asignadoA);
+    const estado = normalizeEstadoTicket(req.body?.estado) || 'Cerrado';
+    const comentarioResolucion = asNonEmptyString(req.body?.comentarioResolucion);
+    const { usuario, departamento } = getRequestActor(req);
+
+    const fechaCreacion = parseDate(req.body?.fechaCreacion);
+    const fechaCierreInput = parseDate(req.body?.fechaCierre);
+    const nowMs = Date.now();
+    const isClosedState = CLOSED_STATES.has(estado);
+
+    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || !atencionTipo) {
+      return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
+    }
+    if (hasTrasladoField && trasladoRequerido === undefined) {
+      return res.status(400).json({ error: 'Indicador de traslado no válido.' });
+    }
+    if (req.body?.estado && !normalizeEstadoTicket(req.body?.estado)) {
+      return res.status(400).json({ error: 'Estado de ticket no válido.' });
+    }
+    if (!fechaCreacion) {
+      return res.status(400).json({ error: 'Fecha de creación inválida.' });
+    }
+    if (fechaCreacion.getTime() > nowMs) {
+      return res.status(400).json({ error: 'La fecha de creación no puede ser futura.' });
+    }
+    if (isClosedState) {
+      if (!fechaCierreInput) {
+        return res.status(400).json({ error: 'La fecha de cierre es requerida para tickets resueltos o cerrados.' });
+      }
+      if (fechaCierreInput.getTime() > nowMs) {
+        return res.status(400).json({ error: 'La fecha de cierre no puede ser futura.' });
+      }
+      if (fechaCierreInput.getTime() < fechaCreacion.getTime()) {
+        return res.status(400).json({ error: 'La fecha de cierre no puede ser anterior a la de creación.' });
+      }
+    }
+
+    const createdAtIso = fechaCreacion.toISOString();
+    const closedAtIso = isClosedState ? fechaCierreInput.toISOString() : null;
+
+    const created = await updateDb((db) => {
+      const branchCodes = getBranchCodesFromCatalog(db);
+      const sucursal = normalizeTicketBranch(sucursalInput, branchCodes);
+      if (!sucursal) return { ok: false, code: 'INVALID_BRANCH' };
+      let assignedUser = null;
+      if (asignadoA) {
+        assignedUser = findTicketAssignee(db.users, asignadoA);
+        if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
+      }
+
+      const historial = [
+        {
+          fecha: formatLocal(createdAtIso),
+          usuario,
+          accion: 'Ticket Creado',
+          estado: 'Abierto',
+          comentario: 'Registro histórico',
+        },
+      ];
+      if (estado !== 'Abierto') {
+        historial.unshift({
+          fecha: formatLocal(closedAtIso || createdAtIso),
+          usuario,
+          accion: ticketAuditAction(estado),
+          estado,
+          comentario: comentarioResolucion || 'Registro histórico',
+        });
+      }
+
+      const ticket = {
+        id: nextId(db),
+        activoTag,
+        descripcion,
+        sucursal,
+        prioridad,
+        atencionTipo,
+        ...(hasTrasladoField ? { trasladoRequerido } : {}),
+        estado,
+        fecha: formatLocal(createdAtIso),
+        fechaCreacion: createdAtIso,
+        fechaLimite: calcDueDate(prioridad, fechaCreacion.getTime()),
+        ...(closedAtIso ? { fechaCierre: closedAtIso } : {}),
+        asignadoA: assignedUser ? assignedUser.nombre : '',
+        solicitadoPor: usuario,
+        solicitadoPorId: Number(req.authUser?.id) || null,
+        solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
+        departamento,
+        esHistorico: true,
+        insumosUsados: [],
+        attachments: [],
+        historial,
+      };
+      db.tickets.push(ticket);
+
+      // Solo recalculamos el estado del activo si el ticket histórico queda activo;
+      // un histórico cerrado no debe sobrescribir el estado operativo actual del activo.
+      if (ACTIVE_ASSET_TICKET_STATES.has(estado)) {
+        syncAssetOperationalState(db, activoTag);
+      }
+
+      pushAuditWithContext(db, req, {
+        accion: 'Ticket Histórico',
+        item: `${activoTag} | ${sucursal} | ${estado}`,
+        cantidad: 1,
+        usuario,
+        modulo: 'tickets',
+        entidad: 'ticket',
+        entidadId: ticket.id,
+        after: ticket,
+      });
+      return { ok: true, ticket };
+    });
+
+    if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
+      return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
+    }
+    if (!created?.ok && created?.code === 'INVALID_BRANCH') {
+      return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
+    }
+    if (!created?.ok) {
+      return res.status(500).json({ error: 'No se pudo registrar el ticket histórico.' });
     }
 
     res.status(201).json(serializeTicket(created.ticket));

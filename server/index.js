@@ -1171,6 +1171,7 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
 const ticketRouteDeps = {
   requireAuth,
   ensureCanCreateTickets,
+  ensureAdmin,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
