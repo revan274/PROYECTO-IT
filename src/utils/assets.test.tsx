@@ -26,6 +26,7 @@ describe('humanizeAssetType', () => {
   test('traduce siglas conocidas', () => {
     expect(humanizeAssetType({ tipo: 'IMP' })).toBe('IMPRESORA');
     expect(humanizeAssetType({ tipo: 'DSK' })).toBe('COMPUTADORA');
+    expect(humanizeAssetType({ tipo: 'BSC' })).toBe('BASCULA');
   });
   test('usa el código tal cual si no hay traducción', () => {
     expect(humanizeAssetType({ tipo: 'XYZ' })).toBe('XYZ');
