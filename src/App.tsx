@@ -27,6 +27,9 @@ import { ConfirmDialog } from './components/modals/ConfirmDialog';
 import { PromptDialog } from './components/modals/PromptDialog';
 import { LoginView } from './components/views/LoginView';
 import { TicketsView } from './components/views/TicketsView';
+import { TicketsScreen } from './features/tickets/TicketsScreen';
+import { adaptTicketsForScreen } from './features/tickets/ticketsScreenAdapter';
+import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
@@ -3948,6 +3951,7 @@ export default function App() {
   const closeSidebar = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
   const openSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
   const logoutHandler = useCallback(() => { void handleLogout(); }, [handleLogout]);
+  const [openedTicketId, setOpenedTicketId] = useState<number | null>(null);
   const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
 
   const handleTicketStateFilterChange = useCallback(
@@ -4463,6 +4467,9 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.tickets}
                 element={(
+                  openedTicketId !== null ? (
+                  <div className="space-y-3">
+                  <UiButton variant="secondary" size="sm" onClick={() => setOpenedTicketId(null)}>← Volver a la lista</UiButton>
                   <TicketsView
                     canCreateTickets={canCreateTickets}
                     canCreateComments={canCreateTickets}
@@ -4477,7 +4484,7 @@ export default function App() {
                     ticketPriorityFilter={ticketPriorityFilter}
                     ticketAssignmentFilter={ticketAssignmentFilter}
                     ticketSlaFilter={ticketSlaFilter}
-                    filteredTickets={filteredTickets}
+                    filteredTickets={filteredTickets.filter((ticket) => ticket.id === openedTicketId)}
                     technicians={users}
                     ticketStates={TICKET_STATES}
                     ticketAttentionTypes={TICKET_ATTENTION_TYPES}
@@ -4529,6 +4536,16 @@ export default function App() {
                       onChange: updateFormData,
                     }}
                   />
+                  </div>
+                  ) : (
+                    <TicketsScreen
+                      tickets={adaptTicketsForScreen(filteredTickets, getSlaStatusForCurrentTime)}
+                      initialSearch={searchTerm}
+                      canCreate={canCreateTickets}
+                      onNew={openTicketModal}
+                      onOpen={(id) => setOpenedTicketId(id)}
+                    />
+                  )
                 )}
               />
               <Route path="*" element={<Navigate to={defaultViewPath} replace />} />

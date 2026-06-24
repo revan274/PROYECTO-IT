@@ -313,11 +313,11 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByText('Tickets IT');
+    await screen.findByRole('button', { name: /Nuevo ticket/i });
 
-    expect(screen.getByRole('button', { name: /Nuevo Ticket/i })).toBeTruthy();
-    expect(screen.getByText(/POS-001\s+\|\s+Impresora fiscal desconectada/i)).toBeTruthy();
-    expect(screen.getByText(/BAS-010\s+\|\s+Báscula sin comunicación con caja/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nuevo ticket/i })).toBeTruthy();
+    expect(screen.getByText('Impresora fiscal desconectada')).toBeTruthy();
+    expect(screen.getByText('Báscula sin comunicación con caja')).toBeTruthy();
   });
 
   test('un solicitante entra directo a tickets y no ve navegacion administrativa', async () => {
@@ -342,13 +342,13 @@ describe('App UI flow', () => {
 
     fillLoginForm(REQUESTER_USER.username, 'Solicitante.Ui.123');
 
-    await screen.findByText('Tickets IT');
+    await screen.findByRole('button', { name: /Nuevo ticket/i });
 
     expect(screen.queryByRole('link', { name: /^Dashboard$/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /^Usuarios$/i })).toBeNull();
     expect(screen.queryByText('Estado del Sistema')).toBeNull();
-    expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexión al servidor/i)).toBeTruthy();
-    expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
+    expect(screen.getByText('Terminal sin conexión al servidor')).toBeTruthy();
+    expect(screen.queryByText('Báscula sin comunicación con caja')).toBeNull();
   });
 
   test('un usuario de consulta ve operacion en lectura y no puede generar tickets', async () => {
@@ -381,9 +381,9 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByText('Tickets IT');
+    await screen.findByRole('button', { name: /Nuevo ticket/i });
 
-    const newTicketButton = screen.getByRole('button', { name: /Nuevo Ticket/i }) as HTMLButtonElement;
+    const newTicketButton = screen.getByRole('button', { name: /Nuevo ticket/i }) as HTMLButtonElement;
     expect(newTicketButton.disabled).toBe(true);
   });
 
@@ -417,9 +417,9 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByText('Tickets IT');
-    expect(await screen.findByText(/No hay tickets que requieran tu atención con los filtros actuales/i)).toBeTruthy();
-    expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
+    await screen.findByRole('button', { name: /Nuevo ticket/i });
+    expect(await screen.findByText('Sin tickets')).toBeTruthy();
+    expect(screen.queryByText('Impresora fiscal desconectada')).toBeNull();
   });
 
   test('rechaza QR locales y solo acepta tokens firmados', async () => {
