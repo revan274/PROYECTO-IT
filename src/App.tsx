@@ -29,6 +29,8 @@ import { LoginView } from './components/views/LoginView';
 import { TicketsView } from './components/views/TicketsView';
 import { TicketsScreen } from './features/tickets/TicketsScreen';
 import { adaptTicketsForScreen } from './features/tickets/ticketsScreenAdapter';
+import { InventoryScreen } from './features/inventory/InventoryScreen';
+import { adaptInsumosForScreen } from './features/inventory/inventoryScreenAdapter';
 import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
@@ -3952,6 +3954,7 @@ export default function App() {
   const openSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
   const logoutHandler = useCallback(() => { void handleLogout(); }, [handleLogout]);
   const [openedTicketId, setOpenedTicketId] = useState<number | null>(null);
+  const [openedInsumoId, setOpenedInsumoId] = useState<number | null>(null);
   const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
 
   const handleTicketStateFilterChange = useCallback(
@@ -4343,8 +4346,11 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.supplies}
                 element={renderProtectedView(
+                  openedInsumoId !== null ? (
                   renderLazyView(
                     'Cargando Insumos...',
+                    <div className="space-y-3">
+                    <UiButton variant="secondary" size="sm" onClick={() => setOpenedInsumoId(null)}>← Volver a la lista</UiButton>
                     <LazySuppliesView
                       canEdit={canEdit}
                       openModal={openModal}
@@ -4356,7 +4362,7 @@ export default function App() {
                       supplyCategoryOptions={supplyCategoryOptions}
                       supplyStatusFilter={supplyStatusFilter}
                       setSupplyStatusFilter={setSupplyStatusFilter}
-                      filteredSupplies={filteredSupplies}
+                      filteredSupplies={filteredSupplies.filter((insumo) => insumo.id === openedInsumoId)}
                       insumos={insumos}
                       reponerCriticos={reponerCriticos}
                       getSupplyHealthStatus={getSupplyHealthStatus}
@@ -4385,7 +4391,19 @@ export default function App() {
                         onChange: updateFormData,
                         onTouchField: markInsumoTouched,
                       }}
-                    />,
+                    />
+                    </div>,
+                  )
+                  ) : (
+                    <InventoryScreen
+                      supplies={adaptInsumosForScreen(insumos, getSupplyHealthStatus)}
+                      categories={supplyCategoryOptions}
+                      canEdit={canEdit}
+                      initialSearch={supplySearchTerm}
+                      onNew={() => openModal('insumo')}
+                      onAdjust={ajustarStock}
+                      onOpen={(id) => setOpenedInsumoId(id)}
+                    />
                   ),
                   protectedViewOptions,
                 )}
