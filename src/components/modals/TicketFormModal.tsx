@@ -125,7 +125,7 @@ export function TicketFormModal({
               ? 'Primero selecciona sucursal...'
               : ticketAssetOptions.length === 0
                 ? 'Sin activos registrados en esta sucursal'
-                : 'Selecciona TAG equipo...'}
+                : 'Selecciona el equipo (ej. CAJA 1, IMPRESORA)...'}
           </option>
           {ticketAssetOptions.map((assetOption) => (
             <option key={assetOption.tag} value={assetOption.tag}>

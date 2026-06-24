@@ -50,6 +50,7 @@ export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}
       marca: formData.marca || '',
       modelo: formData.modelo || '',
       ubicacion: formData.ubicacion || '',
+      nombreVisible: formData.nombreVisible || '',
       serial: formData.serial || '',
       fechaCompra: formData.fechaCompra || '',
       estado: formData.estado || 'Operativo',

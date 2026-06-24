@@ -95,6 +95,7 @@ export interface Activo {
   marca: string;
   modelo?: string;
   ubicacion: string;
+  nombreVisible?: string;
   estado: EstadoActivo;
   serial: string;
   fechaCompra: string;
@@ -343,6 +344,7 @@ export interface FormDataState {
   marca?: string;
   modelo?: string;
   ubicacion?: string;
+  nombreVisible?: string;
   serial?: string;
   fechaCompra?: string;
   estado?: EstadoActivo;

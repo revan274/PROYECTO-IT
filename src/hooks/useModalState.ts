@@ -88,6 +88,7 @@ export function useModalState({
       marca: asset.marca || '',
       modelo: asset.modelo || '',
       ubicacion: asset.ubicacion || '',
+      nombreVisible: asset.nombreVisible || '',
       serial: asset.serial || '',
       fechaCompra: asset.fechaCompra || '',
       estado: asset.estado || 'Operativo',

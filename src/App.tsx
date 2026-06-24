@@ -90,6 +90,7 @@ import {
 import {
   assetRequiresNetworkIdentity,
   assetRequiresResponsible,
+  buildAssetDisplayOptions,
   calculateAssetRiskSummary,
   enrichAssetsWithNetworkSheet,
   formatTicketBranch,
@@ -577,21 +578,20 @@ export default function App() {
     if (!selectedBranch) return [] as Array<{ tag: string; label: string }>;
 
     const seenTags = new Set<string>();
-    return activos
-      .filter((asset) => resolveAssetBranchCode(asset, activeTicketBranchCodes) === selectedBranch)
-      .sort((left, right) => String(left.tag || '').localeCompare(String(right.tag || '')))
-      .map((asset) => {
-        const tag = String(asset.tag || '').trim().toUpperCase();
-        if (!tag || seenTags.has(tag)) return null;
-        seenTags.add(tag);
-        const tipo = String(asset.tipo || asset.equipo || 'EQUIPO').trim().toUpperCase() || 'EQUIPO';
-        const ubicacion = String(asset.ubicacion || '').trim().toUpperCase() || 'SIN UBICACION';
-        return {
-          tag,
-          label: `${tag} | ${tipo} | ${ubicacion}`,
-        };
-      })
-      .filter((item): item is { tag: string; label: string } => !!item);
+    const branchAssets = activos.filter((asset) => {
+      if (resolveAssetBranchCode(asset, activeTicketBranchCodes) !== selectedBranch) return false;
+      const tag = String(asset.tag || '').trim().toUpperCase();
+      if (!tag || seenTags.has(tag)) return false;
+      seenTags.add(tag);
+      return true;
+    });
+
+    // El solicitante elige por nombre amigable ("CAJA 1", "IMPRESORA"); el folio (tag)
+    // viaja como value, así que se autoselecciona al elegir la opción.
+    return buildAssetDisplayOptions(branchAssets).map((option) => ({
+      tag: option.tag,
+      label: `${option.displayName} · FOLIO ${option.tag}`,
+    }));
   }, [activos, activeTicketBranchCodes, formData.sucursal]);
   const selectedTicketAsset = useMemo(() => {
     const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();

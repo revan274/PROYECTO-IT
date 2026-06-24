@@ -129,7 +129,7 @@ const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const HAS_CLIENT_DIST = existsSync(CLIENT_INDEX_FILE);
 
 const ASSET_FIELDS = [
-  'tag', 'tipo', 'marca', 'modelo', 'ubicacion', 'estado', 'serial',
+  'tag', 'tipo', 'marca', 'modelo', 'ubicacion', 'nombreVisible', 'estado', 'serial',
   'fechaCompra', 'idInterno', 'equipo', 'cpu', 'ram', 'ramTipo', 'disco',
   'tipoDisco', 'macAddress', 'ipAddress', 'responsable', 'departamento',
   'edo', 'anydesk', 'aniosVida', 'comentarios',
@@ -390,6 +390,7 @@ function normalizeAssetPayload(payload, { mode = 'create' } = {}) {
     marca,
     modelo,
     ubicacion,
+    nombreVisible: asNonEmptyString(payload?.nombreVisible).toUpperCase(),
     estado: hasRawEstado ? normalizeAssetStatus(payload?.estado || payload?.edo) : fromImport ? '' : 'Operativo',
     serial: serial || idInterno || (tag ? `${tag}-SN` : ''),
     fechaCompra: hasRawFechaCompra ? normalizeDateInput(payload?.fechaCompra, false) : fromImport ? '' : normalizeDateInput('', true),
@@ -420,6 +421,7 @@ function finalizeAsset(asset) {
   copy.marca = asNonEmptyString(copy.marca) || 'SIN MARCA';
   copy.modelo = asNonEmptyString(copy.modelo);
   copy.ubicacion = asNonEmptyString(copy.ubicacion) || 'SIN UBICACION';
+  copy.nombreVisible = asNonEmptyString(copy.nombreVisible).toUpperCase();
   copy.estado = normalizeAssetStatus(copy.estado || copy.edo);
   copy.serial = asNonEmptyString(copy.serial || copy.idInterno || `${copy.tag}-SN`).toUpperCase();
   copy.fechaCompra = normalizeDateInput(copy.fechaCompra, true);
@@ -878,7 +880,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
 
     res.json({
       activos: requesterOnly
-        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento }))
+        ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento, nombreVisible: a.nombreVisible }))
         : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
       tickets: visibleTickets.map(serializeTicket),

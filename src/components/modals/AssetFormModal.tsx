@@ -89,6 +89,17 @@ export function AssetFormModal({
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
+            <div className="space-y-1">
+              <input
+                placeholder="NOMBRE VISIBLE PARA SOLICITANTES (EJ. CAJA 1, IMPRESORA MOSTRADOR)"
+                value={formData.nombreVisible || ''}
+                className="w-full p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                onChange={(e) => onChange({ nombreVisible: e.target.value })}
+              />
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                Es el nombre que verá el solicitante al levantar el ticket. Si lo dejas vacío se genera automático (ej. COMPUTADORA 1).
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
                 required

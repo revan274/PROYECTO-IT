@@ -19,6 +19,86 @@ import { USER_ROLE_ORDER, isUserRole } from './roles';
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
+// Traducción de siglas de tipo de activo a un nombre que un solicitante reconozca.
+const ASSET_TYPE_FRIENDLY_NAMES: Record<string, string> = {
+  DSK: 'COMPUTADORA',
+  PC: 'COMPUTADORA',
+  CPU: 'COMPUTADORA',
+  AIO: 'COMPUTADORA',
+  LPT: 'LAPTOP',
+  NB: 'LAPTOP',
+  IMP: 'IMPRESORA',
+  PRN: 'IMPRESORA',
+  TCK: 'IMPRESORA DE TICKETS',
+  MON: 'MONITOR',
+  BSC: 'LECTOR DE CODIGO',
+  AUD: 'AUDIO',
+  VPR: 'PROYECTOR',
+  VDP: 'PANTALLA',
+  SRV: 'SERVIDOR',
+  RTR: 'RUTEADOR',
+  SW: 'SWITCH',
+  UPS: 'UPS / NO BREAK',
+  TEL: 'TELEFONO',
+  TAB: 'TABLET',
+};
+
+/** Devuelve un nombre de tipo legible (IMP -> IMPRESORA). Si no hay traducción, usa el código tal cual. */
+export function humanizeAssetType(asset?: Pick<Activo, 'tipo' | 'equipo'> | null): string {
+  const raw = String(asset?.tipo || asset?.equipo || '').trim().toUpperCase();
+  const code = raw.replace(/[^A-Z0-9]/g, '');
+  return ASSET_TYPE_FRIENDLY_NAMES[code] || raw || 'EQUIPO';
+}
+
+export interface AssetDisplayOption {
+  tag: string;
+  displayName: string;
+  ubicacion: string;
+  /** true si el nombre lo cargó un humano (nombreVisible); false si es autogenerado. */
+  custom: boolean;
+}
+
+/**
+ * Construye nombres amigables para una lista de activos (típicamente de una sucursal).
+ * Usa `nombreVisible` cuando existe; si no, autogenera traduciendo el tipo y
+ * numerando los repetidos del mismo tipo (COMPUTADORA 1, COMPUTADORA 2, IMPRESORA...).
+ * Garantiza nombres únicos dentro de la lista para que el selector no sea ambiguo.
+ */
+export function buildAssetDisplayOptions(
+  assets: Array<Pick<Activo, 'tag' | 'tipo' | 'equipo' | 'ubicacion' | 'nombreVisible'>>,
+): AssetDisplayOption[] {
+  const sorted = assets
+    .filter((asset) => String(asset?.tag || '').trim() !== '')
+    .slice()
+    .sort((left, right) => String(left.tag || '').localeCompare(String(right.tag || '')));
+
+  // Cuántos hay de cada tipo autogenerado, para decidir si numerar.
+  const typeCounts = new Map<string, number>();
+  for (const asset of sorted) {
+    if (String(asset?.nombreVisible || '').trim()) continue;
+    const type = humanizeAssetType(asset);
+    typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+  }
+
+  const typeSeq = new Map<string, number>();
+  return sorted.map((asset) => {
+    const tag = String(asset.tag || '').trim().toUpperCase();
+    const ubicacion = String(asset.ubicacion || '').trim().toUpperCase() || 'SIN UBICACION';
+    const custom = String(asset?.nombreVisible || '').trim() !== '';
+
+    if (custom) {
+      return { tag, displayName: String(asset.nombreVisible).trim().toUpperCase(), ubicacion, custom: true };
+    }
+
+    const type = humanizeAssetType(asset);
+    const total = typeCounts.get(type) || 0;
+    const seq = (typeSeq.get(type) || 0) + 1;
+    typeSeq.set(type, seq);
+    const displayName = total > 1 ? `${type} ${seq}` : type;
+    return { tag, displayName, ubicacion, custom: false };
+  });
+}
+
 type NetworkSheetRow = unknown[];
 
 export function formatTicketBranch(value?: string, labels: Record<string, string> = TICKET_BRANCH_LABEL_BY_CODE): string {
