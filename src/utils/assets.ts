@@ -50,6 +50,33 @@ export function humanizeAssetType(asset?: Pick<Activo, 'tipo' | 'equipo'> | null
   return ASSET_TYPE_FRIENDLY_NAMES[code] || raw || 'EQUIPO';
 }
 
+// Códigos de puesto (van en el folio/responsable, ej. "CJ1") que se expanden a un nombre reconocible.
+const ASSET_STATION_PREFIXES: Record<string, string> = {
+  CJ: 'CAJA',
+  CAJA: 'CAJA',
+};
+
+/** Expande un código de puesto: "CJ1" -> "CAJA 1", "CJ" -> "CAJA". Devuelve null si no lo reconoce. */
+export function expandStationCode(code?: string | null): string | null {
+  const raw = String(code || '').trim().toUpperCase();
+  if (!raw) return null;
+  const match = raw.match(/^([A-Z]+)\s*0*(\d+)$/);
+  if (match && ASSET_STATION_PREFIXES[match[1]]) {
+    return `${ASSET_STATION_PREFIXES[match[1]]} ${Number(match[2])}`;
+  }
+  return ASSET_STATION_PREFIXES[raw] || null;
+}
+
+/** Busca un código de puesto reconocible dentro del folio (ej. "TJ01-TJ01-IMP-CJ1-40" -> "CAJA 1"). */
+export function extractStationFromTag(tag?: string | null): string | null {
+  const segments = String(tag || '').toUpperCase().split(/[-_\s]+/).filter(Boolean);
+  for (const segment of segments) {
+    const expanded = expandStationCode(segment);
+    if (expanded) return expanded;
+  }
+  return null;
+}
+
 export interface AssetDisplayOption {
   tag: string;
   displayName: string;
@@ -60,9 +87,11 @@ export interface AssetDisplayOption {
 
 /**
  * Construye nombres amigables para una lista de activos (típicamente de una sucursal).
- * Usa `nombreVisible` cuando existe; si no, autogenera traduciendo el tipo y
- * numerando los repetidos del mismo tipo (COMPUTADORA 1, COMPUTADORA 2, IMPRESORA...).
- * Garantiza nombres únicos dentro de la lista para que el selector no sea ambiguo.
+ * Prioridad del nombre:
+ *  1. `nombreVisible` cargado por un humano.
+ *  2. Puesto reconocido en el folio + tipo (ej. "CAJA 1 - IMPRESORA").
+ *  3. Tipo traducido y numerado si se repite (COMPUTADORA 1, COMPUTADORA 2, IMPRESORA...).
+ * Apunta a nombres únicos dentro de la lista para que el selector no sea ambiguo.
  */
 export function buildAssetDisplayOptions(
   assets: Array<Pick<Activo, 'tag' | 'tipo' | 'equipo' | 'ubicacion' | 'nombreVisible'>>,
@@ -72,10 +101,11 @@ export function buildAssetDisplayOptions(
     .slice()
     .sort((left, right) => String(left.tag || '').localeCompare(String(right.tag || '')));
 
-  // Cuántos hay de cada tipo autogenerado, para decidir si numerar.
+  // Solo numeramos los autogenerados SIN puesto reconocido (los de puesto ya son únicos por "CAJA n").
   const typeCounts = new Map<string, number>();
   for (const asset of sorted) {
     if (String(asset?.nombreVisible || '').trim()) continue;
+    if (extractStationFromTag(asset.tag)) continue;
     const type = humanizeAssetType(asset);
     typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
   }
@@ -91,6 +121,11 @@ export function buildAssetDisplayOptions(
     }
 
     const type = humanizeAssetType(asset);
+    const station = extractStationFromTag(tag);
+    if (station) {
+      return { tag, displayName: `${station} - ${type}`, ubicacion, custom: false };
+    }
+
     const total = typeCounts.get(type) || 0;
     const seq = (typeSeq.get(type) || 0) + 1;
     typeSeq.set(type, seq);
