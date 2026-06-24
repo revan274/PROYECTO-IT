@@ -448,11 +448,14 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Inventario$/i }));
 
-    await screen.findByText('Activos IT');
-
+    // La lista nueva (AssetsScreen) expone "Escanear QR"; al pulsarlo se entra a la
+    // vista de inventario legacy con el escáner abierto.
+    await screen.findByRole('button', { name: /Escanear QR/i });
     fireEvent.click(screen.getByRole('button', { name: /Escanear QR/i }));
 
-    fireEvent.change(screen.getByPlaceholderText(/mtiqr1 del QR firmado/i), {
+    await screen.findByText('Activos IT');
+
+    fireEvent.change(await screen.findByPlaceholderText(/mtiqr1 del QR firmado/i), {
       target: { value: 'mtiqr0.1.POS-001' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Resolver QR/i }));

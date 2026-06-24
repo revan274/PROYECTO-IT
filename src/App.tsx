@@ -32,6 +32,8 @@ import { adaptTicketsForScreen } from './features/tickets/ticketsScreenAdapter';
 import { InventoryScreen } from './features/inventory/InventoryScreen';
 import { adaptInsumosForScreen } from './features/inventory/inventoryScreenAdapter';
 import { AuditScreen } from './features/audit/AuditScreen';
+import { AssetsScreen } from './features/assets/AssetsScreen';
+import { adaptActivosForScreen } from './features/assets/assetsScreenAdapter';
 import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
@@ -3954,6 +3956,7 @@ export default function App() {
   const logoutHandler = useCallback(() => { void handleLogout(); }, [handleLogout]);
   const [openedTicketId, setOpenedTicketId] = useState<number | null>(null);
   const [openedInsumoId, setOpenedInsumoId] = useState<number | null>(null);
+  const [showAssetsLegacy, setShowAssetsLegacy] = useState(false);
   const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
 
   const handleTicketStateFilterChange = useCallback(
@@ -4244,8 +4247,11 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.inventory}
                 element={renderProtectedView(
+                  showAssetsLegacy ? (
                   renderLazyView(
                     'Cargando Inventario...',
+                    <div className="space-y-3">
+                    <UiButton variant="secondary" size="sm" onClick={() => { setShowAssetsLegacy(false); setSelectedAsset(null); }}>← Volver a la lista</UiButton>
                     <LazyInventoryView
                       inventoryImportInputRef={inventoryImportInputRef}
                       handleImportInventory={handleImportInventory}
@@ -4337,7 +4343,19 @@ export default function App() {
                         onSubmit: handleSave,
                         onChange: updateFormData,
                       }}
-                    />,
+                    />
+                    </div>,
+                  )
+                  ) : (
+                    <AssetsScreen
+                      assets={adaptActivosForScreen(activos)}
+                      canEdit={canEdit}
+                      initialSearch={searchTerm}
+                      onNew={() => { openModal('activo'); setShowAssetsLegacy(true); }}
+                      onImport={() => setShowAssetsLegacy(true)}
+                      onScanQr={() => { setShowQrScanner(true); setShowAssetsLegacy(true); }}
+                      onOpen={(id) => { setSelectedAsset(activos.find((asset) => asset.id === id) || null); setShowAssetsLegacy(true); }}
+                    />
                   ),
                   protectedViewOptions,
                 )}
