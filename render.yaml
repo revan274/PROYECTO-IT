@@ -10,6 +10,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      # 1 salto de proxy (Render). NUNCA "true": permitiría falsificar req.ip vía X-Forwarded-For.
+      - key: TRUST_PROXY
+        value: "1"
       - key: AUTH_DISALLOW_DEMO_PASSWORDS
         value: "true"
       - key: DB_FILE

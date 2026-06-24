@@ -275,24 +275,23 @@ export function canCreateTicketsByRole(role) {
 
 export function ticketBelongsToUser(ticket, user) {
   if (!ticket || !user) return false;
+
+  // El id es la autoridad: si el ticket tiene solicitadoPorId, decide solo el id.
   const userId = Number(user.id);
   const ticketUserId = Number(ticket.solicitadoPorId);
-  if (Number.isFinite(userId) && Number.isFinite(ticketUserId) && userId === ticketUserId) {
-    return true;
+  if (Number.isFinite(ticketUserId)) {
+    return Number.isFinite(userId) && userId === ticketUserId;
   }
 
+  // Sin id: identidad fuerte por username (no por nombre visible, ambiguo por homonimia).
   const usernameKey = normalizeTextKey(user.username);
   const ticketUsernameKey = normalizeTextKey(ticket.solicitadoPorUsername);
-  if (usernameKey && ticketUsernameKey && usernameKey === ticketUsernameKey) {
-    return true;
+  if (ticketUsernameKey) {
+    return !!usernameKey && usernameKey === ticketUsernameKey;
   }
 
-  const nameKey = normalizeTextKey(user.nombre);
-  const ticketNameKey = normalizeTextKey(ticket.solicitadoPor);
-  if (nameKey && ticketNameKey && nameKey === ticketNameKey) {
-    return true;
-  }
-
+  // Registros legacy sin id NI username: se niega el acceso (fail-closed) en lugar de
+  // confiar en el nombre visible, que es forjable por colisión de homónimos.
   return false;
 }
 

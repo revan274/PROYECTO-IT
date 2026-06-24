@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { createInsumosRouter } from './routes/insumos.js';
 import { createActivosRouter } from './routes/activos.js';
 import { createTicketsRouter } from './routes/tickets.js';
@@ -116,8 +118,29 @@ const CORS_ORIGINS = String(process.env.CORS_ORIGIN || process.env.CORS_ORIGINS 
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
-const CORS_ALLOW_ALL = CORS_ORIGINS.length === 0;
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+// CORS fail-closed: en producción se exige una allowlist explícita; nunca reflejar cualquier origen.
+const CORS_ALLOW_ALL = CORS_ORIGINS.length === 0 && !IS_PRODUCTION;
+if (IS_PRODUCTION && CORS_ORIGINS.length === 0) {
+  throw new Error('CORS_ORIGINS es obligatorio en producción: define los orígenes permitidos (fail-closed).');
+}
 const TRUST_PROXY = process.env.TRUST_PROXY;
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Math.max(10, Math.trunc(Number(process.env.AUTH_RATE_LIMIT_MAX || 30))),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de autenticación. Intenta más tarde.' },
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Math.max(5, Math.trunc(Number(process.env.UPLOAD_RATE_LIMIT_MAX || 12))),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas cargas de adjuntos. Intenta más tarde.' },
+});
 
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
@@ -148,6 +171,25 @@ function configureTrustProxy(app) {
 }
 
 function configureCommonMiddleware(app) {
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:', 'blob:'],
+        'font-src': ["'self'", 'data:'],
+        'connect-src': ["'self'", ...CORS_ORIGINS],
+        'object-src': ["'none'"],
+        'frame-ancestors': ["'self'"],
+        'base-uri': ["'self'"],
+        'form-action': ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    hsts: IS_PRODUCTION ? { maxAge: 15552000, includeSubDomains: true } : false,
+  }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
@@ -156,6 +198,13 @@ function configureCommonMiddleware(app) {
       callback(new Error('Origen no permitido por CORS.'));
     },
     credentials: true,
+  }));
+  app.use('/api', rateLimit({
+    windowMs: 60 * 1000,
+    max: Math.max(60, Math.trunc(Number(process.env.RATE_LIMIT_MAX || 240))),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes. Intenta más tarde.' },
   }));
   app.use(express.json({ limit: '8mb' }));
   app.use((req, res, next) => {
@@ -727,7 +776,7 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res, next) => {
+app.post('/api/auth/login', authLimiter, async (req, res, next) => {
   try {
     const username = asNonEmptyString(req.body?.username).toLowerCase();
     const password = asNonEmptyString(req.body?.password);
@@ -1259,6 +1308,7 @@ const usersRouteDeps = {
   revokeSessionsByUserId,
 };
 
+app.use('/api/tickets/:id/attachments', uploadLimiter);
 app.use('/api/tickets', createTicketsRouter(ticketRouteDeps));
 app.use('/api/activos', createActivosRouter(activosRouteDeps));
 app.use('/api/insumos', createInsumosRouter(insumosRouteDeps));
