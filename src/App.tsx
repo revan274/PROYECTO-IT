@@ -31,6 +31,7 @@ import { TicketsScreen } from './features/tickets/TicketsScreen';
 import { adaptTicketsForScreen } from './features/tickets/ticketsScreenAdapter';
 import { InventoryScreen } from './features/inventory/InventoryScreen';
 import { adaptInsumosForScreen } from './features/inventory/inventoryScreenAdapter';
+import { AuditScreen } from './features/audit/AuditScreen';
 import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
@@ -186,7 +187,6 @@ const LazyDashboardView = lazy(() => import('./components/views/DashboardView'))
 const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
 const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
 const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
-const LazyAuditView = lazy(() => import('./components/views/AuditView'));
 
 const VIEW_PATHS: Record<ViewType, string> = {
   dashboard: '/dashboard',
@@ -293,7 +293,6 @@ export default function App() {
     setAuditSummary,
     auditIntegrity,
     setAuditIntegrity,
-    auditAlerts,
     setAuditAlerts,
     isAuditLoading,
     setIsAuditLoading,
@@ -4411,28 +4410,21 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.history}
                 element={renderProtectedView(
-                  renderLazyView(
-                    'Cargando Historial...',
-                    <LazyAuditView
-                      isAuditLoading={isAuditLoading}
-                      auditRowsForGrouping={auditRowsForGrouping}
-                      resetAuditFilters={resetAuditFilters}
-                      fetchAuditHistory={fetchAuditHistory}
-                      descargarAuditoria={descargarAuditoria}
-                      auditFilters={auditFilters}
-                      updateAuditFilters={updateAuditFilters}
-                      auditModuleTotals={auditModuleTotals}
-                      auditResultTotals={auditResultTotals}
-                      auditIntegrity={auditIntegrity}
-                      auditAlerts={auditAlerts}
-                      auditByModule={auditByModule}
-                      backendConnected={backendConnected}
-                      isRequesterOnlyUser={isRequesterOnlyUser}
-                      setAuditPage={setAuditPage}
-                      auditPagination={auditPagination}
-                      auditPageSize={auditPageSize}
-                      setAuditPageSize={setAuditPageSize}
-                    />,
+                  (
+                    <AuditScreen
+                      rows={auditRowsForGrouping}
+                      loading={isAuditLoading}
+                      filters={auditFilters}
+                      onFilterChange={updateAuditFilters}
+                      onReset={resetAuditFilters}
+                      onRefresh={() => { void fetchAuditHistory(); }}
+                      onExport={() => descargarAuditoria()}
+                      integrity={auditIntegrity}
+                      moduleTotals={auditModuleTotals}
+                      resultTotals={auditResultTotals}
+                      pagination={auditPagination}
+                      onPageChange={(page) => setAuditPage(page)}
+                    />
                   ),
                   protectedViewOptions,
                 )}
