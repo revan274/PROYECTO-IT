@@ -15,6 +15,10 @@ interface LoginViewProps {
   setToast: (toast: { message: string; type: 'success' | 'warning' | 'error' } | null) => void;
 }
 
+const INPUT_CLASS =
+  'w-full h-11 px-3.5 bg-surface border border-border rounded-lg text-sm text-fg placeholder:text-fg-subtle ' +
+  'outline-none transition-colors focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/30';
+
 export function LoginView({
   theme,
   toggleTheme,
@@ -27,44 +31,47 @@ export function LoginView({
   setToast,
 }: LoginViewProps) {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-bg flex items-center justify-center p-4 font-sans text-fg">
       <button
         type="button"
         onClick={toggleTheme}
         title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 flex items-center justify-center transition-colors"
+        aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+        className="fixed top-4 right-4 z-20 w-9 h-9 rounded-lg border border-border bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg flex items-center justify-center transition-colors"
       >
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
-      <div className="bg-white w-full max-w-md rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 p-8 sm:p-12 text-center">
-        <div className="flex justify-center mb-6">
-          <LogoGigantes className="w-20 h-20 sm:w-24 sm:h-24 animate-bounce" />
+      <div className="bg-surface w-full max-w-sm rounded-2xl shadow-pop border border-border p-8 sm:p-10 text-center">
+        <div className="flex justify-center mb-5">
+          <LogoGigantes className="w-16 h-16 sm:w-20 sm:h-20" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-[#F58220]">LOS GIGANTES</h1>
-        <p className="text-[#8CC63F] font-bold text-sm tracking-[0.2em] uppercase mb-8">
+        <h1 className="text-2xl font-semibold text-brand tracking-tight">LOS GIGANTES</h1>
+        <p className="text-fg-subtle text-xs tracking-[0.18em] uppercase mt-1 mb-8">
           IT Management System
         </p>
 
         <form onSubmit={handleLogin} className="space-y-4 text-left">
-          <div>
-            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">
+          <div className="space-y-1.5">
+            <label htmlFor="login-username" className="block text-[13px] font-medium text-fg">
               Usuario
             </label>
             <input
-              className="w-full p-4 bg-slate-50 glass-input rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
+              id="login-username"
+              className={INPUT_CLASS}
               value={loginForm.username || ''}
               onChange={(e) => setLoginForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="admin"
               autoComplete="username"
             />
           </div>
-          <div>
-            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">
+          <div className="space-y-1.5">
+            <label htmlFor="login-password" className="block text-[13px] font-medium text-fg">
               Password
             </label>
             <input
+              id="login-password"
               type="password"
-              className="w-full p-4 bg-slate-50 glass-input rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
+              className={INPUT_CLASS}
               value={loginForm.password || ''}
               onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Ingresa tu password"
@@ -74,15 +81,15 @@ export function LoginView({
           <button
             type="submit"
             disabled={loginLoading}
-            className="w-full bg-[#F58220] text-white font-black py-4 rounded-3xl shadow-xl hover:scale-[1.02] transition-all uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full h-11 bg-brand text-brand-fg font-medium rounded-lg shadow-card hover:bg-brand-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <User size={18} /> {loginLoading ? 'Entrando...' : 'Iniciar Sesión'}
           </button>
         </form>
 
-        <div className="mt-6 text-left text-[10px] text-slate-400 font-black uppercase tracking-wider">
+        <div className="mt-6 text-left text-xs text-fg-subtle">
           <p>Solicita tus credenciales al administrador del sistema.</p>
-          <p className="mt-2 text-[9px] font-semibold normal-case tracking-normal text-slate-300">
+          <p className="mt-2 text-[11px] text-fg-subtle">
             {AUTHOR_SIGNATURE}
           </p>
         </div>
