@@ -296,4 +296,3 @@ export const AuditView: React.FC<AuditViewProps> = ({
   );
 };
 
-export default AuditView;
