@@ -489,14 +489,12 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Usuarios$/i }));
 
-    await screen.findByText('Usuarios Registrados');
-    await screen.findByText(/Mostrando 4 de 4/i);
+    await screen.findByText('Usuarios registrados');
+    await screen.findByText(/4 de 4/i);
 
-    fireEvent.change(screen.getByDisplayValue('Todos los roles'), {
-      target: { value: 'solicitante' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Solicitante' }));
 
-    await screen.findByText(/Mostrando 1 de 4/i);
+    await screen.findByText(/1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.nombre)).toBeTruthy();
     expect(screen.queryByText(ADMIN_USER.username)).toBeNull();
 
@@ -504,7 +502,7 @@ describe('App UI flow', () => {
       target: { value: 'integration' },
     });
 
-    await screen.findByText(/Mostrando 1 de 4/i);
+    await screen.findByText(/1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.username)).toBeTruthy();
   });
 });

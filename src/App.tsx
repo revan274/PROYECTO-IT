@@ -35,6 +35,7 @@ import { AuditScreen } from './features/audit/AuditScreen';
 import { AssetsScreen } from './features/assets/AssetsScreen';
 import { adaptActivosForScreen } from './features/assets/assetsScreenAdapter';
 import { DashboardScreen } from './features/dashboard/DashboardScreen';
+import { UsersScreen } from './features/users/UsersScreen';
 import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
@@ -3957,6 +3958,7 @@ export default function App() {
   const [openedTicketId, setOpenedTicketId] = useState<number | null>(null);
   const [openedInsumoId, setOpenedInsumoId] = useState<number | null>(null);
   const [showAssetsLegacy, setShowAssetsLegacy] = useState(false);
+  const [showUsersLegacy, setShowUsersLegacy] = useState(false);
   const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
 
   const handleTicketStateFilterChange = useCallback(
@@ -4449,8 +4451,11 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.users}
                 element={renderProtectedView(
+                  showUsersLegacy ? (
                   renderLazyView(
                     'Cargando Usuarios...',
+                    <div className="space-y-3">
+                    <UiButton variant="secondary" size="sm" onClick={() => setShowUsersLegacy(false)}>← Volver a la lista</UiButton>
                     <LazyUsersView
                       canManageUsers={canManageUsers}
                       users={users}
@@ -4486,7 +4491,23 @@ export default function App() {
                       handleDeleteUser={async (user) => {
                         await handleDeleteUser(user);
                       }}
-                    />,
+                    />
+                    </div>,
+                  )
+                  ) : (
+                    <UsersScreen
+                      users={users}
+                      roleLabel={roleLabelByValue}
+                      roleFilters={roleFilterOptions}
+                      formatCargo={formatCargoFromCatalog}
+                      currentUserId={sessionUser?.id}
+                      loadingId={userActionLoadingId}
+                      onNew={() => { resetNewUserForm(); setShowUsersLegacy(true); }}
+                      onEdit={(user) => { handleEditUser(user); setShowUsersLegacy(true); }}
+                      onToggleActive={(user) => { void handleToggleUserActive(user); }}
+                      onDelete={(user) => { void handleDeleteUser(user); }}
+                      initialSearch={userSearchTerm}
+                    />
                   ),
                   { ...protectedViewOptions, requiresUserManagement: true },
                 )}
