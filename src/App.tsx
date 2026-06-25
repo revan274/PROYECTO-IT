@@ -34,6 +34,7 @@ import { adaptInsumosForScreen } from './features/inventory/inventoryScreenAdapt
 import { AuditScreen } from './features/audit/AuditScreen';
 import { AssetsScreen } from './features/assets/AssetsScreen';
 import { adaptActivosForScreen } from './features/assets/assetsScreenAdapter';
+import { DashboardScreen } from './features/dashboard/DashboardScreen';
 import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
@@ -185,7 +186,6 @@ import {
 } from './utils/appHelpers';
 
 const LazyUsersView = lazy(() => import('./components/views/UsersView'));
-const LazyDashboardView = lazy(() => import('./components/views/DashboardView'));
 const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
 const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
 const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
@@ -4092,43 +4092,42 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.dashboard}
                 element={renderProtectedView(
-                  renderLazyView(
-                    'Cargando Dashboard...',
-                    <LazyDashboardView
-                      dashboardWindow={dashboardWindow}
-                      dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
-                      dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
-                      dashboardUnassignedCount={dashboardUnassignedCount}
-                      dashboardRange={dashboardRange}
-                      setDashboardRange={setDashboardRange}
-                      systemHealth={systemHealth}
-                      insumos={insumos}
-                      dashboardOpenTrend={dashboardOpenTrend}
-                      activos={activos}
-                      dashboardCriticalTrend={dashboardCriticalTrend}
-                      dashboardSlaExpiredCount={dashboardSlaExpiredCount}
-                      dashboardSlaTrend={dashboardSlaTrend}
-                      setView={setView}
-                      applyTicketFocus={applyTicketFocus}
-                      dashboardRecentTickets={dashboardRecentTickets}
-                      setSearchTerm={setGlobalSearchTerm}
-                      dashboardTopOwners={dashboardTopOwners}
-                      dashboardOwnerMax={dashboardOwnerMax}
-                      dashboardInProcessCount={dashboardInProcessCount}
-                      applyInventoryFocus={applyInventoryFocus}
-                      activosSinResponsable={activosSinResponsable}
-                      activosVidaAlta={activosVidaAlta}
-                      effectiveRiskSummary={localRiskSummary}
-                      dashboardStateBars={dashboardStateBars}
-                      dashboardStateMax={dashboardStateMax}
-                      dashboardBranchBars={dashboardBranchBars}
-                      dashboardBranchMax={dashboardBranchMax}
-                      dashboardSlaCompliancePct={dashboardSlaCompliancePct}
-                      dashboardSlaCompliantCount={dashboardSlaCompliantCount}
-                      dashboardSlaTotalCount={dashboardSlaTotalCount}
-                      dashboardAgingBars={dashboardAgingBars}
-                      dashboardAgingMax={dashboardAgingMax}
-                    />,
+                  (
+                    <DashboardScreen
+                      role={sessionUser?.rol || ''}
+                      periodLabel={dashboardWindow.label}
+                      range={dashboardRange}
+                      onRangeChange={(value) => setDashboardRange(value as typeof dashboardRange)}
+                      health={systemHealth}
+                      openCount={dashboardOpenTicketsCurrent.length}
+                      criticalCount={dashboardCriticalTicketsCurrent.length}
+                      unassignedCount={dashboardUnassignedCount}
+                      inProcessCount={dashboardInProcessCount}
+                      slaExpiredCount={dashboardSlaExpiredCount}
+                      openTrend={dashboardOpenTrend}
+                      criticalTrend={dashboardCriticalTrend}
+                      slaTrend={dashboardSlaTrend}
+                      slaCompliancePct={dashboardSlaCompliancePct}
+                      slaCompliantCount={dashboardSlaCompliantCount}
+                      slaTotalCount={dashboardSlaTotalCount}
+                      lowStockCount={insumos.filter((item) => getSupplyHealthStatus(item) !== 'OK').length}
+                      assetsNoOwner={activosSinResponsable}
+                      assetsHighLife={activosVidaAlta}
+                      duplicateNet={localRiskSummary.duplicateIpCount + localRiskSummary.duplicateMacCount}
+                      recentTickets={dashboardRecentTickets}
+                      topOwners={dashboardTopOwners}
+                      ownerMax={dashboardOwnerMax}
+                      stateBars={dashboardStateBars}
+                      stateMax={dashboardStateMax}
+                      branchBars={dashboardBranchBars}
+                      branchMax={dashboardBranchMax}
+                      agingBars={dashboardAgingBars}
+                      agingMax={dashboardAgingMax}
+                      onFocusTicket={applyTicketFocus}
+                      onFocusInventory={(focus) => { setView('inventory'); applyInventoryFocus(focus); }}
+                      onView={setView}
+                      onOpenRecent={(ticket) => { setView('tickets'); setGlobalSearchTerm(ticket.activoTag); }}
+                    />
                   ),
                   protectedViewOptions,
                 )}
