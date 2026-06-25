@@ -393,4 +393,3 @@ export function TicketFormModal({
   );
 }
 
-export default TicketFormModal;
