@@ -51,25 +51,33 @@ export function createAuthRuntime() {
     return session;
   }
 
-  function getLoginThrottle(req, username) {
-    gcLoginAttempts();
-    const key = getLoginAttemptKey(req, username);
-    const item = loginAttempts.get(key);
-    if (!item) return null;
-    if (item.lockedUntil && item.lockedUntil > Date.now()) {
-      return {
-        key,
-        lockedUntil: item.lockedUntil,
-        retryAfterSec: Math.max(1, Math.ceil((item.lockedUntil - Date.now()) / 1000)),
-      };
-    }
-    return null;
+  // Clave por-usuario independiente de la IP: evita el bypass del lockout
+  // rotando X-Forwarded-For cuando hay un proxy de confianza.
+  function getUsernameAttemptKey(username) {
+    return `user::${String(username || '').trim().toLowerCase() || '*'}`;
   }
 
-  function registerLoginFailure(req, username) {
+  function getLoginThrottle(req, username) {
     gcLoginAttempts();
-    const key = getLoginAttemptKey(req, username);
+    const keys = [getLoginAttemptKey(req, username), getUsernameAttemptKey(username)];
     const nowTs = Date.now();
+    let throttle = null;
+    for (const key of keys) {
+      const item = loginAttempts.get(key);
+      if (item?.lockedUntil && item.lockedUntil > nowTs) {
+        if (!throttle || item.lockedUntil > throttle.lockedUntil) {
+          throttle = {
+            key,
+            lockedUntil: item.lockedUntil,
+            retryAfterSec: Math.max(1, Math.ceil((item.lockedUntil - nowTs) / 1000)),
+          };
+        }
+      }
+    }
+    return throttle;
+  }
+
+  function bumpLoginFailure(key, nowTs) {
     const current = loginAttempts.get(key);
     const windowExpired = !current || nowTs - Number(current.windowStartedAt || 0) > LOGIN_TRACK_WINDOW_MS;
 
@@ -88,15 +96,25 @@ export function createAuthRuntime() {
     }
 
     loginAttempts.set(key, next);
+    return next;
+  }
+
+  function registerLoginFailure(req, username) {
+    gcLoginAttempts();
+    const nowTs = Date.now();
+    const ipResult = bumpLoginFailure(getLoginAttemptKey(req, username), nowTs);
+    const userResult = bumpLoginFailure(getUsernameAttemptKey(username), nowTs);
+    const lockedUntil = Math.max(Number(ipResult.lockedUntil || 0), Number(userResult.lockedUntil || 0));
+
     return {
-      locked: next.lockedUntil > nowTs,
-      retryAfterSec: next.lockedUntil > nowTs ? Math.max(1, Math.ceil((next.lockedUntil - nowTs) / 1000)) : 0,
+      locked: lockedUntil > nowTs,
+      retryAfterSec: lockedUntil > nowTs ? Math.max(1, Math.ceil((lockedUntil - nowTs) / 1000)) : 0,
     };
   }
 
   function clearLoginFailures(req, username) {
-    const key = getLoginAttemptKey(req, username);
-    loginAttempts.delete(key);
+    loginAttempts.delete(getLoginAttemptKey(req, username));
+    loginAttempts.delete(getUsernameAttemptKey(username));
   }
 
   async function writeSecurityAudit(req, payload) {

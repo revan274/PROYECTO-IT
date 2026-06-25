@@ -41,6 +41,16 @@ export function createTicketsRouter({
 }) {
   const router = express.Router();
   const ACTIVE_ASSET_TICKET_STATES = new Set(['Abierto', 'En Proceso']);
+  const SAFE_DOWNLOAD_MIME_TYPES = new Set([
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'text/plain',
+    'application/zip',
+    'application/octet-stream',
+  ]);
 
   function syncAssetOperationalState(db, activoTag) {
     const tagKey = normalizeTextKey(activoTag);
@@ -67,10 +77,13 @@ router.post('/', requireAuth, async (req, res, next) => {
     const atencionTipo = isEditorRole ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const hasTrasladoField = isEditorRole && req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
-    const insumosUsados = Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
+    const insumosUsados = isEditorRole && Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
     const asignadoA = isEditorRole ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
+    if (!isEditorRole && Array.isArray(req.body?.insumosUsados) && req.body.insumosUsados.length > 0) {
+      return res.status(403).json({ error: 'No autorizado para registrar consumo de insumos.' });
+    }
     if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (isEditorRole && !atencionTipo)) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
     }
@@ -147,8 +160,10 @@ router.post('/', requireAuth, async (req, res, next) => {
         }
       }
 
-      if (prioridad === 'CRITICA') {
-        const activo = db.activos.find((a) => a.tag.toUpperCase() === activoTag.toUpperCase());
+      // Solo roles editores (técnico/admin) pueden derivar el estado operativo del activo
+      // desde un ticket; un solicitante no debe poder marcar activos como "Falla".
+      if (prioridad === 'CRITICA' && isEditorRole) {
+        const activo = db.activos.find((a) => normalizeTextKey(a.tag) === normalizeTextKey(activoTag));
         if (activo) activo.estado = 'Falla';
       }
 
@@ -845,7 +860,10 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
     }
 
     const fileName = sanitizeUploadFileName(attachment.fileName || `adjunto_${attachmentId}`);
-    res.setHeader('Content-Type', asNonEmptyString(attachment.mimeType) || 'application/octet-stream');
+    const rawMime = asNonEmptyString(attachment.mimeType).toLowerCase();
+    const safeMime = SAFE_DOWNLOAD_MIME_TYPES.has(rawMime) ? rawMime : 'application/octet-stream';
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Type', safeMime);
     res.setHeader('Content-Length', String(content.length));
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
     res.send(content);

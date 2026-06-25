@@ -1028,3 +1028,114 @@ test('GET /api/bootstrap limita la auditoría incluida para reducir payload inic
   assert.equal(Array.isArray(bootstrap.data.auditoria), true);
   assert.equal(bootstrap.data.auditoria.length, 25);
 });
+
+// --- Regresión de hallazgos ofensivos (H1, H2, H4) ---
+
+test('H1: un solicitante no puede consumir insumos al crear ticket (403, stock intacto)', { concurrency: false }, async () => {
+  const before = await readPersistedDb();
+  const supplyBefore = before.insumos.find((item) => item.id === 11);
+  assert.ok(supplyBefore, 'El insumo de prueba (11) debe existir en el fixture.');
+  const stockBefore = supplyBefore.stock;
+
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Intento de consumir insumos como solicitante',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      insumosUsados: [{ insumoId: 11, cantidad: 5 }],
+    },
+  });
+
+  assert.equal(created.response.status, 403, JSON.stringify(created.data));
+  assert.equal(created.data.error, 'No autorizado para registrar consumo de insumos.');
+
+  const after = await readPersistedDb();
+  const supplyAfter = after.insumos.find((item) => item.id === 11);
+  assert.ok(supplyAfter);
+  assert.equal(supplyAfter.stock, stockBefore, 'El stock no debe cambiar ante un intento bloqueado.');
+});
+
+test('H2: solo un rol editor (no el solicitante) puede marcar el activo como Falla con CRÍTICA', { concurrency: false }, async () => {
+  // Estado determinista: forzamos el activo a Operativo antes de la prueba.
+  const seed = await readPersistedDb();
+  const seedAsset = seed.activos.find((item) => item.tag === 'POS-001');
+  assert.ok(seedAsset, 'El activo POS-001 debe existir.');
+  seedAsset.estado = 'Operativo';
+  await writeFile(dbFilePath, JSON.stringify(seed, null, 2), 'utf8');
+
+  // Solicitante: CRÍTICA NO debe voltear el activo a Falla.
+  const requesterSession = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const byRequester = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: requesterSession.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Ticket crítico creado por solicitante',
+      sucursal: 'TJ01',
+      prioridad: 'CRITICA',
+    },
+  });
+  assert.equal(byRequester.response.status, 201, JSON.stringify(byRequester.data));
+
+  const afterRequester = await readPersistedDb();
+  const assetAfterRequester = afterRequester.activos.find((item) => item.tag === 'POS-001');
+  assert.equal(assetAfterRequester.estado, 'Operativo', 'Un solicitante no debe poder marcar el activo como Falla.');
+
+  // Control positivo: un admin con CRÍTICA sí preserva la derivación a Falla.
+  const adminSession = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const byAdmin = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: adminSession.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Ticket crítico creado por admin',
+      sucursal: 'TJ01',
+      prioridad: 'CRITICA',
+      atencionTipo: 'PRESENCIAL',
+    },
+  });
+  assert.equal(byAdmin.response.status, 201, JSON.stringify(byAdmin.data));
+
+  const afterAdmin = await readPersistedDb();
+  const assetAfterAdmin = afterAdmin.activos.find((item) => item.tag === 'POS-001');
+  assert.equal(assetAfterAdmin.estado, 'Falla', 'Un rol editor sí debe poder derivar el estado del activo a Falla.');
+});
+
+test('H4: un solicitante no accede a tickets legacy sin id/username aunque coincida el nombre', { concurrency: false }, async () => {
+  const persisted = await readPersistedDb();
+  // Ticket legacy: solo nombre visible homónimo, sin solicitadoPorId ni solicitadoPorUsername.
+  persisted.tickets.push({
+    id: 950,
+    activoTag: 'POS-001',
+    descripcion: 'Ticket legacy de otro usuario homónimo',
+    prioridad: 'MEDIA',
+    estado: 'Abierto',
+    atencionTipo: 'REMOTO',
+    fecha: '2026-02-01 09:00',
+    fechaCreacion: '2026-02-01T09:00:00.000Z',
+    fechaLimite: '2026-02-02T09:00:00.000Z',
+    sucursal: 'TJ01',
+    solicitadoPor: REQUESTER_USER.nombre,
+    departamento: 'VENTAS',
+    attachments: [],
+    historial: [
+      { fecha: '2026-02-01 09:00', usuario: REQUESTER_USER.nombre, accion: 'Ticket Creado', estado: 'Abierto', comentario: 'Legacy' },
+    ],
+  });
+  await writeFile(dbFilePath, JSON.stringify(persisted, null, 2), 'utf8');
+
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const list = await requestJson('/api/tickets', { token: session.token });
+
+  assert.equal(list.response.status, 200, JSON.stringify(list.data));
+  assert.equal(Array.isArray(list.data), true);
+  const ids = list.data.map((ticket) => ticket.id);
+  // El ticket legacy homónimo NO debe ser visible (fail-closed).
+  assert.equal(ids.includes(950), false, 'El ticket legacy homónimo no debe ser accesible.');
+  // Control positivo: el ticket propio por id (701) sí debe verse.
+  assert.equal(ids.includes(701), true, 'El solicitante debe seguir viendo sus tickets propios por id.');
+});

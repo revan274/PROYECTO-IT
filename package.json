@@ -20,6 +20,8 @@
     "@tailwindcss/vite": "^4.1.18",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
     "lucide-react": "^0.574.0",
     "pg": "^8.20.0",
     "qrcode.react": "^4.2.0",
@@ -27,7 +29,7 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.14.0",
     "tailwindcss": "^4.1.18",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
