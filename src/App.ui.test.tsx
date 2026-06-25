@@ -313,11 +313,11 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByRole('button', { name: /Nuevo ticket/i });
+    await screen.findByText('Tickets IT');
 
-    expect(screen.getByRole('button', { name: /Nuevo ticket/i })).toBeTruthy();
-    expect(screen.getByText('Impresora fiscal desconectada')).toBeTruthy();
-    expect(screen.getByText('Báscula sin comunicación con caja')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nuevo Ticket/i })).toBeTruthy();
+    expect(screen.getByText(/POS-001\s+\|\s+Impresora fiscal desconectada/i)).toBeTruthy();
+    expect(screen.getByText(/BAS-010\s+\|\s+Báscula sin comunicación con caja/i)).toBeTruthy();
   });
 
   test('un solicitante entra directo a tickets y no ve navegacion administrativa', async () => {
@@ -342,13 +342,13 @@ describe('App UI flow', () => {
 
     fillLoginForm(REQUESTER_USER.username, 'Solicitante.Ui.123');
 
-    await screen.findByRole('button', { name: /Nuevo ticket/i });
+    await screen.findByText('Tickets IT');
 
     expect(screen.queryByRole('link', { name: /^Dashboard$/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /^Usuarios$/i })).toBeNull();
     expect(screen.queryByText('Estado del Sistema')).toBeNull();
-    expect(screen.getByText('Terminal sin conexión al servidor')).toBeTruthy();
-    expect(screen.queryByText('Báscula sin comunicación con caja')).toBeNull();
+    expect(screen.getByText(/POS-001\s+\|\s+Terminal sin conexión al servidor/i)).toBeTruthy();
+    expect(screen.queryByText(/BAS-010\s+\|/i)).toBeNull();
   });
 
   test('un usuario de consulta ve operacion en lectura y no puede generar tickets', async () => {
@@ -381,9 +381,9 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByRole('button', { name: /Nuevo ticket/i });
+    await screen.findByText('Tickets IT');
 
-    const newTicketButton = screen.getByRole('button', { name: /Nuevo ticket/i }) as HTMLButtonElement;
+    const newTicketButton = screen.getByRole('button', { name: /Nuevo Ticket/i }) as HTMLButtonElement;
     expect(newTicketButton.disabled).toBe(true);
   });
 
@@ -417,9 +417,9 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 
-    await screen.findByRole('button', { name: /Nuevo ticket/i });
-    expect(await screen.findByText('Sin tickets')).toBeTruthy();
-    expect(screen.queryByText('Impresora fiscal desconectada')).toBeNull();
+    await screen.findByText('Tickets IT');
+    expect(await screen.findByText(/No hay tickets que requieran tu atención con los filtros actuales/i)).toBeTruthy();
+    expect(screen.queryByText(/POS-001\s+\|/i)).toBeNull();
   });
 
   test('rechaza QR locales y solo acepta tokens firmados', async () => {
@@ -448,14 +448,11 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Inventario$/i }));
 
-    // La lista nueva (AssetsScreen) expone "Escanear QR"; al pulsarlo se entra a la
-    // vista de inventario legacy con el escáner abierto.
-    await screen.findByRole('button', { name: /Escanear QR/i });
-    fireEvent.click(screen.getByRole('button', { name: /Escanear QR/i }));
-
     await screen.findByText('Activos IT');
 
-    fireEvent.change(await screen.findByPlaceholderText(/mtiqr1 del QR firmado/i), {
+    fireEvent.click(screen.getByRole('button', { name: /Escanear QR/i }));
+
+    fireEvent.change(screen.getByPlaceholderText(/mtiqr1 del QR firmado/i), {
       target: { value: 'mtiqr0.1.POS-001' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Resolver QR/i }));
@@ -489,12 +486,14 @@ describe('App UI flow', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /^Usuarios$/i }));
 
-    await screen.findByText('Usuarios registrados');
-    await screen.findByText(/4 de 4/i);
+    await screen.findByText('Usuarios Registrados');
+    await screen.findByText(/Mostrando 4 de 4/i);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Solicitante' }));
+    fireEvent.change(screen.getByDisplayValue('Todos los roles'), {
+      target: { value: 'solicitante' },
+    });
 
-    await screen.findByText(/1 de 4/i);
+    await screen.findByText(/Mostrando 1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.nombre)).toBeTruthy();
     expect(screen.queryByText(ADMIN_USER.username)).toBeNull();
 
@@ -502,7 +501,7 @@ describe('App UI flow', () => {
       target: { value: 'integration' },
     });
 
-    await screen.findByText(/1 de 4/i);
+    await screen.findByText(/Mostrando 1 de 4/i);
     expect(screen.getByText(REQUESTER_USER.username)).toBeTruthy();
   });
 });

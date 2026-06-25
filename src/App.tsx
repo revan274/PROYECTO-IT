@@ -27,16 +27,6 @@ import { ConfirmDialog } from './components/modals/ConfirmDialog';
 import { PromptDialog } from './components/modals/PromptDialog';
 import { LoginView } from './components/views/LoginView';
 import { TicketsView } from './components/views/TicketsView';
-import { TicketsScreen } from './features/tickets/TicketsScreen';
-import { adaptTicketsForScreen } from './features/tickets/ticketsScreenAdapter';
-import { InventoryScreen } from './features/inventory/InventoryScreen';
-import { adaptInsumosForScreen } from './features/inventory/inventoryScreenAdapter';
-import { AuditScreen } from './features/audit/AuditScreen';
-import { AssetsScreen } from './features/assets/AssetsScreen';
-import { adaptActivosForScreen } from './features/assets/assetsScreenAdapter';
-import { DashboardScreen } from './features/dashboard/DashboardScreen';
-import { UsersScreen } from './features/users/UsersScreen';
-import { Button as UiButton } from './ui';
 import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
@@ -187,9 +177,11 @@ import {
 } from './utils/appHelpers';
 
 const LazyUsersView = lazy(() => import('./components/views/UsersView'));
+const LazyDashboardView = lazy(() => import('./components/views/DashboardView'));
 const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
 const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
 const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
+const LazyAuditView = lazy(() => import('./components/views/AuditView'));
 
 const VIEW_PATHS: Record<ViewType, string> = {
   dashboard: '/dashboard',
@@ -296,6 +288,7 @@ export default function App() {
     setAuditSummary,
     auditIntegrity,
     setAuditIntegrity,
+    auditAlerts,
     setAuditAlerts,
     isAuditLoading,
     setIsAuditLoading,
@@ -3955,10 +3948,6 @@ export default function App() {
   const closeSidebar = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
   const openSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
   const logoutHandler = useCallback(() => { void handleLogout(); }, [handleLogout]);
-  const [openedTicketId, setOpenedTicketId] = useState<number | null>(null);
-  const [openedInsumoId, setOpenedInsumoId] = useState<number | null>(null);
-  const [showAssetsLegacy, setShowAssetsLegacy] = useState(false);
-  const [showUsersLegacy, setShowUsersLegacy] = useState(false);
   const openTicketModal = useCallback(() => openModal('ticket'), [openModal]);
 
   const handleTicketStateFilterChange = useCallback(
@@ -4094,42 +4083,43 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.dashboard}
                 element={renderProtectedView(
-                  (
-                    <DashboardScreen
-                      role={sessionUser?.rol || ''}
-                      periodLabel={dashboardWindow.label}
-                      range={dashboardRange}
-                      onRangeChange={(value) => setDashboardRange(value as typeof dashboardRange)}
-                      health={systemHealth}
-                      openCount={dashboardOpenTicketsCurrent.length}
-                      criticalCount={dashboardCriticalTicketsCurrent.length}
-                      unassignedCount={dashboardUnassignedCount}
-                      inProcessCount={dashboardInProcessCount}
-                      slaExpiredCount={dashboardSlaExpiredCount}
-                      openTrend={dashboardOpenTrend}
-                      criticalTrend={dashboardCriticalTrend}
-                      slaTrend={dashboardSlaTrend}
-                      slaCompliancePct={dashboardSlaCompliancePct}
-                      slaCompliantCount={dashboardSlaCompliantCount}
-                      slaTotalCount={dashboardSlaTotalCount}
-                      lowStockCount={insumos.filter((item) => getSupplyHealthStatus(item) !== 'OK').length}
-                      assetsNoOwner={activosSinResponsable}
-                      assetsHighLife={activosVidaAlta}
-                      duplicateNet={localRiskSummary.duplicateIpCount + localRiskSummary.duplicateMacCount}
-                      recentTickets={dashboardRecentTickets}
-                      topOwners={dashboardTopOwners}
-                      ownerMax={dashboardOwnerMax}
-                      stateBars={dashboardStateBars}
-                      stateMax={dashboardStateMax}
-                      branchBars={dashboardBranchBars}
-                      branchMax={dashboardBranchMax}
-                      agingBars={dashboardAgingBars}
-                      agingMax={dashboardAgingMax}
-                      onFocusTicket={applyTicketFocus}
-                      onFocusInventory={(focus) => { setView('inventory'); applyInventoryFocus(focus); setShowAssetsLegacy(true); }}
-                      onView={setView}
-                      onOpenRecent={(ticket) => { setView('tickets'); setGlobalSearchTerm(ticket.activoTag); }}
-                    />
+                  renderLazyView(
+                    'Cargando Dashboard...',
+                    <LazyDashboardView
+                      dashboardWindow={dashboardWindow}
+                      dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
+                      dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
+                      dashboardUnassignedCount={dashboardUnassignedCount}
+                      dashboardRange={dashboardRange}
+                      setDashboardRange={setDashboardRange}
+                      systemHealth={systemHealth}
+                      insumos={insumos}
+                      dashboardOpenTrend={dashboardOpenTrend}
+                      activos={activos}
+                      dashboardCriticalTrend={dashboardCriticalTrend}
+                      dashboardSlaExpiredCount={dashboardSlaExpiredCount}
+                      dashboardSlaTrend={dashboardSlaTrend}
+                      setView={setView}
+                      applyTicketFocus={applyTicketFocus}
+                      dashboardRecentTickets={dashboardRecentTickets}
+                      setSearchTerm={setGlobalSearchTerm}
+                      dashboardTopOwners={dashboardTopOwners}
+                      dashboardOwnerMax={dashboardOwnerMax}
+                      dashboardInProcessCount={dashboardInProcessCount}
+                      applyInventoryFocus={applyInventoryFocus}
+                      activosSinResponsable={activosSinResponsable}
+                      activosVidaAlta={activosVidaAlta}
+                      effectiveRiskSummary={localRiskSummary}
+                      dashboardStateBars={dashboardStateBars}
+                      dashboardStateMax={dashboardStateMax}
+                      dashboardBranchBars={dashboardBranchBars}
+                      dashboardBranchMax={dashboardBranchMax}
+                      dashboardSlaCompliancePct={dashboardSlaCompliancePct}
+                      dashboardSlaCompliantCount={dashboardSlaCompliantCount}
+                      dashboardSlaTotalCount={dashboardSlaTotalCount}
+                      dashboardAgingBars={dashboardAgingBars}
+                      dashboardAgingMax={dashboardAgingMax}
+                    />,
                   ),
                   protectedViewOptions,
                 )}
@@ -4248,11 +4238,8 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.inventory}
                 element={renderProtectedView(
-                  showAssetsLegacy ? (
                   renderLazyView(
                     'Cargando Inventario...',
-                    <div className="space-y-3">
-                    <UiButton variant="secondary" size="sm" onClick={() => { setShowAssetsLegacy(false); setSelectedAsset(null); }}>← Volver a la lista</UiButton>
                     <LazyInventoryView
                       inventoryImportInputRef={inventoryImportInputRef}
                       handleImportInventory={handleImportInventory}
@@ -4344,19 +4331,7 @@ export default function App() {
                         onSubmit: handleSave,
                         onChange: updateFormData,
                       }}
-                    />
-                    </div>,
-                  )
-                  ) : (
-                    <AssetsScreen
-                      assets={adaptActivosForScreen(activos)}
-                      canEdit={canEdit}
-                      initialSearch={searchTerm}
-                      onNew={() => { openModal('activo'); setShowAssetsLegacy(true); }}
-                      onImport={() => setShowAssetsLegacy(true)}
-                      onScanQr={() => { setShowQrScanner(true); setShowAssetsLegacy(true); }}
-                      onOpen={(id) => { setSelectedAsset(activos.find((asset) => asset.id === id) || null); setShowAssetsLegacy(true); }}
-                    />
+                    />,
                   ),
                   protectedViewOptions,
                 )}
@@ -4364,11 +4339,8 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.supplies}
                 element={renderProtectedView(
-                  openedInsumoId !== null ? (
                   renderLazyView(
                     'Cargando Insumos...',
-                    <div className="space-y-3">
-                    <UiButton variant="secondary" size="sm" onClick={() => setOpenedInsumoId(null)}>← Volver a la lista</UiButton>
                     <LazySuppliesView
                       canEdit={canEdit}
                       openModal={openModal}
@@ -4380,7 +4352,7 @@ export default function App() {
                       supplyCategoryOptions={supplyCategoryOptions}
                       supplyStatusFilter={supplyStatusFilter}
                       setSupplyStatusFilter={setSupplyStatusFilter}
-                      filteredSupplies={filteredSupplies.filter((insumo) => insumo.id === openedInsumoId)}
+                      filteredSupplies={filteredSupplies}
                       insumos={insumos}
                       reponerCriticos={reponerCriticos}
                       getSupplyHealthStatus={getSupplyHealthStatus}
@@ -4409,19 +4381,7 @@ export default function App() {
                         onChange: updateFormData,
                         onTouchField: markInsumoTouched,
                       }}
-                    />
-                    </div>,
-                  )
-                  ) : (
-                    <InventoryScreen
-                      supplies={adaptInsumosForScreen(insumos, getSupplyHealthStatus)}
-                      categories={supplyCategoryOptions}
-                      canEdit={canEdit}
-                      initialSearch={supplySearchTerm}
-                      onNew={() => openModal('insumo')}
-                      onAdjust={ajustarStock}
-                      onOpen={(id) => setOpenedInsumoId(id)}
-                    />
+                    />,
                   ),
                   protectedViewOptions,
                 )}
@@ -4429,21 +4389,28 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.history}
                 element={renderProtectedView(
-                  (
-                    <AuditScreen
-                      rows={auditRowsForGrouping}
-                      loading={isAuditLoading}
-                      filters={auditFilters}
-                      onFilterChange={updateAuditFilters}
-                      onReset={resetAuditFilters}
-                      onRefresh={() => { void fetchAuditHistory(); }}
-                      onExport={() => descargarAuditoria()}
-                      integrity={auditIntegrity}
-                      moduleTotals={auditModuleTotals}
-                      resultTotals={auditResultTotals}
-                      pagination={auditPagination}
-                      onPageChange={(page) => setAuditPage(page)}
-                    />
+                  renderLazyView(
+                    'Cargando Historial...',
+                    <LazyAuditView
+                      isAuditLoading={isAuditLoading}
+                      auditRowsForGrouping={auditRowsForGrouping}
+                      resetAuditFilters={resetAuditFilters}
+                      fetchAuditHistory={fetchAuditHistory}
+                      descargarAuditoria={descargarAuditoria}
+                      auditFilters={auditFilters}
+                      updateAuditFilters={updateAuditFilters}
+                      auditModuleTotals={auditModuleTotals}
+                      auditResultTotals={auditResultTotals}
+                      auditIntegrity={auditIntegrity}
+                      auditAlerts={auditAlerts}
+                      auditByModule={auditByModule}
+                      backendConnected={backendConnected}
+                      isRequesterOnlyUser={isRequesterOnlyUser}
+                      setAuditPage={setAuditPage}
+                      auditPagination={auditPagination}
+                      auditPageSize={auditPageSize}
+                      setAuditPageSize={setAuditPageSize}
+                    />,
                   ),
                   protectedViewOptions,
                 )}
@@ -4451,11 +4418,8 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.users}
                 element={renderProtectedView(
-                  showUsersLegacy ? (
                   renderLazyView(
                     'Cargando Usuarios...',
-                    <div className="space-y-3">
-                    <UiButton variant="secondary" size="sm" onClick={() => setShowUsersLegacy(false)}>← Volver a la lista</UiButton>
                     <LazyUsersView
                       canManageUsers={canManageUsers}
                       users={users}
@@ -4491,23 +4455,7 @@ export default function App() {
                       handleDeleteUser={async (user) => {
                         await handleDeleteUser(user);
                       }}
-                    />
-                    </div>,
-                  )
-                  ) : (
-                    <UsersScreen
-                      users={users}
-                      roleLabel={roleLabelByValue}
-                      roleFilters={roleFilterOptions}
-                      formatCargo={formatCargoFromCatalog}
-                      currentUserId={sessionUser?.id}
-                      loadingId={userActionLoadingId}
-                      onNew={() => { resetNewUserForm(); setShowUsersLegacy(true); }}
-                      onEdit={(user) => { handleEditUser(user); setShowUsersLegacy(true); }}
-                      onToggleActive={(user) => { void handleToggleUserActive(user); }}
-                      onDelete={(user) => { void handleDeleteUser(user); }}
-                      initialSearch={userSearchTerm}
-                    />
+                    />,
                   ),
                   { ...protectedViewOptions, requiresUserManagement: true },
                 )}
@@ -4515,9 +4463,6 @@ export default function App() {
               <Route
                 path={VIEW_PATHS.tickets}
                 element={(
-                  openedTicketId !== null ? (
-                  <div className="space-y-3">
-                  <UiButton variant="secondary" size="sm" onClick={() => setOpenedTicketId(null)}>← Volver a la lista</UiButton>
                   <TicketsView
                     canCreateTickets={canCreateTickets}
                     canCreateComments={canCreateTickets}
@@ -4532,7 +4477,7 @@ export default function App() {
                     ticketPriorityFilter={ticketPriorityFilter}
                     ticketAssignmentFilter={ticketAssignmentFilter}
                     ticketSlaFilter={ticketSlaFilter}
-                    filteredTickets={filteredTickets.filter((ticket) => ticket.id === openedTicketId)}
+                    filteredTickets={filteredTickets}
                     technicians={users}
                     ticketStates={TICKET_STATES}
                     ticketAttentionTypes={TICKET_ATTENTION_TYPES}
@@ -4584,16 +4529,6 @@ export default function App() {
                       onChange: updateFormData,
                     }}
                   />
-                  </div>
-                  ) : (
-                    <TicketsScreen
-                      tickets={adaptTicketsForScreen(filteredTickets, getSlaStatusForCurrentTime)}
-                      initialSearch={searchTerm}
-                      canCreate={canCreateTickets}
-                      onNew={openTicketModal}
-                      onOpen={(id) => setOpenedTicketId(id)}
-                    />
-                  )
                 )}
               />
               <Route path="*" element={<Navigate to={defaultViewPath} replace />} />
