@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import App from './App';
+import { App } from './App';
 import { useAppStore } from './store/useAppStore';
 import { readStoredSession } from './utils/app';
 
