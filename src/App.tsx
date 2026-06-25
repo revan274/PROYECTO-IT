@@ -4126,7 +4126,7 @@ export default function App() {
                       agingBars={dashboardAgingBars}
                       agingMax={dashboardAgingMax}
                       onFocusTicket={applyTicketFocus}
-                      onFocusInventory={(focus) => { setView('inventory'); applyInventoryFocus(focus); }}
+                      onFocusInventory={(focus) => { setView('inventory'); applyInventoryFocus(focus); setShowAssetsLegacy(true); }}
                       onView={setView}
                       onOpenRecent={(ticket) => { setView('tickets'); setGlobalSearchTerm(ticket.activoTag); }}
                     />
