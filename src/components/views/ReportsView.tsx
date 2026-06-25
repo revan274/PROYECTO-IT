@@ -261,28 +261,28 @@ export function ReportsView({
 }: ReportsViewProps) {
   return (
     <div className="space-y-6">
-      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
-        <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="bg-surface rounded-xl shadow-card border border-border overflow-hidden">
+        <div className="p-8 border-b border-slate-50 bg-surface-2/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Analitica Operativa</p>
-            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Reporteria Ejecutiva</h3>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Analitica Operativa</p>
+            <h3 className="font-semibold font-['Outfit'] text-fg uppercase tracking-tight text-2xl">Reporteria Ejecutiva</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={openReportExecutivePresentation}
-              className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
+              className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-semibold uppercase text-indigo-700 hover:bg-indigo-100"
             >
               Abrir Presentacion
             </button>
             <button
               onClick={exportReportExcel}
-              className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase text-emerald-700 hover:bg-emerald-100"
+              className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-semibold uppercase text-emerald-700 hover:bg-emerald-100"
             >
               Exportar Excel
             </button>
             <button
               onClick={exportReportPdf}
-              className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-xs font-black uppercase text-blue-700 hover:bg-blue-100"
+              className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-xs font-semibold uppercase text-blue-700 hover:bg-blue-100"
             >
               Exportar PDF
             </button>
@@ -295,18 +295,18 @@ export function ReportsView({
               type="date"
               value={reportDateFrom}
               onChange={(event) => setReportDateFrom(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <input
               type="date"
               value={reportDateTo}
               onChange={(event) => setReportDateTo(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <select
               value={reportBranchFilter}
               onChange={(event) => setReportBranchFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODAS">Sucursal: todas</option>
               {reportBranchOptions.map((code) => (
@@ -318,7 +318,7 @@ export function ReportsView({
             <select
               value={reportAreaFilter}
               onChange={(event) => setReportAreaFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODAS">Area: todas</option>
               {reportAreaOptions.map((area) => (
@@ -330,7 +330,7 @@ export function ReportsView({
             <select
               value={reportStateFilter}
               onChange={(event) => setReportStateFilter(event.target.value as ReportStateFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODOS">Estado: todos</option>
               {ticketStates.map((state) => (
@@ -342,7 +342,7 @@ export function ReportsView({
             <select
               value={reportPriorityFilter}
               onChange={(event) => setReportPriorityFilter(event.target.value as ReportPriorityFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODAS">Prioridad: todas</option>
               <option value="MEDIA">Media</option>
@@ -352,7 +352,7 @@ export function ReportsView({
             <select
               value={reportAttentionFilter}
               onChange={(event) => setReportAttentionFilter(event.target.value as ReportAttentionFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODAS">Atención: todas</option>
               {ticketAttentionTypes.map((type) => (
@@ -364,7 +364,7 @@ export function ReportsView({
             <select
               value={reportTechnicianFilter}
               onChange={(event) => setReportTechnicianFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODOS">Técnico: todos</option>
               <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
@@ -376,7 +376,7 @@ export function ReportsView({
             </select>
             <button
               onClick={resetReportFilters}
-              className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted hover:bg-surface-2"
             >
               Limpiar
             </button>
@@ -389,39 +389,39 @@ export function ReportsView({
                 value={reportPresetName}
                 onChange={(event) => setReportPresetName(event.target.value)}
                 placeholder="Nombre del preset"
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+                className="flex-1 px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
               />
               <button
                 onClick={saveCurrentReportFilterPreset}
-                className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
+                className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-semibold uppercase text-indigo-700 hover:bg-indigo-100"
               >
                 Guardar Preset
               </button>
             </div>
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 self-center">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle self-center">
               Presets guardados: {reportFilterPresets.length}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {reportFilterPresets.map((preset) => (
-              <div key={preset.id} className="flex items-center rounded-2xl border border-slate-200 overflow-hidden bg-white">
+              <div key={preset.id} className="flex items-center rounded-2xl border border-border overflow-hidden bg-surface">
                 <button
                   onClick={() => applyReportFilterPreset(preset)}
-                  className="px-3 py-2 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50"
+                  className="px-3 py-2 text-[10px] font-semibold uppercase text-fg hover:bg-surface-2"
                 >
                   {preset.name}
                 </button>
                 <button
                   onClick={() => deleteReportFilterPreset(preset)}
-                  className="px-3 py-2 text-[10px] font-black uppercase text-red-500 border-l border-slate-200 hover:bg-red-50"
+                  className="px-3 py-2 text-[10px] font-semibold uppercase text-red-500 border-l border-border hover:bg-red-50"
                 >
                   Eliminar
                 </button>
               </div>
             ))}
             {reportFilterPresets.length === 0 && (
-              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
                 No hay presets guardados para este usuario.
               </div>
             )}
@@ -429,22 +429,22 @@ export function ReportsView({
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl overflow-hidden">
+      <div className="bg-surface border border-border rounded-xl shadow-card overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-amber-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Movilidad y combustible</p>
-            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Formato Mensual de Viajes IT</h3>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">Movilidad y combustible</p>
+            <h3 className="font-semibold font-['Outfit'] text-fg uppercase tracking-tight text-2xl">Formato Mensual de Viajes IT</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={openTravelMovementSheet}
-              className="px-4 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-xs font-black uppercase text-amber-800 hover:bg-amber-200"
+              className="px-4 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-xs font-semibold uppercase text-amber-800 hover:bg-amber-200"
             >
               Abrir Formato
             </button>
             <button
               onClick={printTravelMovementSheet}
-              className="px-4 py-3 rounded-2xl border border-orange-300 bg-orange-100 text-xs font-black uppercase text-orange-800 hover:bg-orange-200"
+              className="px-4 py-3 rounded-2xl border border-orange-300 bg-orange-100 text-xs font-semibold uppercase text-orange-800 hover:bg-orange-200"
             >
               Imprimir Formato
             </button>
@@ -456,12 +456,12 @@ export function ReportsView({
               type="month"
               value={travelReportMonth}
               onChange={(event) => setTravelReportMonth(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <select
               value={travelReportTechnician}
               onChange={(event) => setTravelReportTechnician(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             >
               <option value="TODOS">Técnico: todos</option>
               <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
@@ -476,50 +476,50 @@ export function ReportsView({
               value={travelReportName}
               onChange={(event) => setTravelReportName(event.target.value)}
               placeholder="Nombre en formato"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <input
               type="text"
               value={travelReportDepartment}
               onChange={(event) => setTravelReportDepartment(event.target.value.toUpperCase())}
               placeholder="Departamento"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <input
               type="text"
               value={travelReportFuelEfficiency}
               onChange={(event) => setTravelReportFuelEfficiency(event.target.value)}
               placeholder="Rendimiento km/l"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <input
               type="text"
               value={travelReportAuthorizer}
               onChange={(event) => setTravelReportAuthorizer(event.target.value.toUpperCase())}
               placeholder="Autoriza"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
             <input
               type="text"
               value={travelReportFinance}
               onChange={(event) => setTravelReportFinance(event.target.value.toUpperCase())}
               placeholder="Finanzas"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              className="px-4 py-3 rounded-2xl border border-border bg-surface text-xs font-semibold uppercase text-fg-muted"
             />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <div className="rounded-2xl border border-border bg-surface-2/60 p-4 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-muted">
                 Tabla de rutas / kms base
               </p>
               <div className="space-y-2">
                 {travelDestinationRules.map((row) => (
-                  <div key={`travel-kms-${row.code}`} className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-[42px_minmax(0,1fr)_88px_76px] sm:items-center">
-                    <div className="text-xs font-black uppercase text-slate-500 text-center">#{row.index}</div>
-                    <div className="text-xs font-black uppercase text-slate-700">{row.label}</div>
-                    <div className="px-3 py-2 text-xs font-black uppercase text-slate-700 text-center">{row.kms} km</div>
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 text-left sm:text-right">
+                  <div key={`travel-kms-${row.code}`} className="grid grid-cols-1 gap-2 rounded-2xl border border-border bg-surface p-3 sm:grid-cols-[42px_minmax(0,1fr)_88px_76px] sm:items-center">
+                    <div className="text-xs font-semibold uppercase text-fg-muted text-center">#{row.index}</div>
+                    <div className="text-xs font-semibold uppercase text-fg">{row.label}</div>
+                    <div className="px-3 py-2 text-xs font-semibold uppercase text-fg text-center">{row.kms} km</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle text-left sm:text-right">
                       {travelSuggestedTripsByCode.get(row.code) || 0} viajes
                     </div>
                   </div>
@@ -527,35 +527,35 @@ export function ReportsView({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-amber-50/50 p-5 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Resumen del formato</p>
+            <div className="rounded-2xl border border-border bg-amber-50/50 p-5 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">Resumen del formato</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Mes</p>
-                  <p className="text-sm font-black uppercase text-slate-800">{travelMonthLabel}</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Mes</p>
+                  <p className="text-sm font-semibold uppercase text-fg">{travelMonthLabel}</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Reporta</p>
-                  <p className="text-sm font-black uppercase text-slate-800">{effectiveTravelReporterName}</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Reporta</p>
+                  <p className="text-sm font-semibold uppercase text-fg">{effectiveTravelReporterName}</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total viajes</p>
-                  <p className="text-2xl font-black text-slate-800">{travelTotalTrips}</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Total viajes</p>
+                  <p className="text-2xl font-semibold text-fg">{travelTotalTrips}</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total kms</p>
-                  <p className="text-2xl font-black text-slate-800">{formatTravelNumber(travelTotalKms)}</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Total kms</p>
+                  <p className="text-2xl font-semibold text-fg">{formatTravelNumber(travelTotalKms)}</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Rendimiento</p>
-                  <p className="text-sm font-black uppercase text-slate-800">{travelFuelEfficiencyValue} km/l</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Rendimiento</p>
+                  <p className="text-sm font-semibold uppercase text-fg">{travelFuelEfficiencyValue} km/l</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Litros</p>
-                  <p className="text-2xl font-black text-slate-800">{travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D'}</p>
+                <div className="rounded-xl bg-surface border border-amber-100 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Litros</p>
+                  <p className="text-2xl font-semibold text-fg">{travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D'}</p>
                 </div>
               </div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">
                 El formato toma tickets del mes seleccionado y respeta filtros de sucursal, área, estado y prioridad.
               </p>
             </div>
@@ -564,70 +564,70 @@ export function ReportsView({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tickets</p>
-          <p className="text-3xl font-black text-slate-800">{reportTicketsCount}</p>
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Tickets</p>
+          <p className="text-3xl font-semibold text-fg">{reportTicketsCount}</p>
           {hasReportComparison && (
-            <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
+            <p className={`text-[10px] font-semibold uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
           )}
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
-          <p className="text-3xl font-black text-blue-600">{reportOpenCount}</p>
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Abiertos</p>
+          <p className="text-3xl font-semibold text-blue-600">{reportOpenCount}</p>
           {hasReportComparison && (
-            <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
+            <p className={`text-[10px] font-semibold uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
           )}
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cerrados</p>
-          <p className="text-3xl font-black text-green-600">{reportClosedCount}</p>
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Cerrados</p>
+          <p className="text-3xl font-semibold text-green-600">{reportClosedCount}</p>
         </div>
         <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Cumplimiento SLA</p>
-          <p className="text-3xl font-black text-green-700">{reportSlaCompliancePct}%</p>
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-600">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-green-700">Cumplimiento SLA</p>
+          <p className="text-3xl font-semibold text-green-700">{reportSlaCompliancePct}%</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-green-600">
             {reportSlaCompliantCount}/{reportSlaTotalCount} en tiempo
           </p>
           {hasReportComparison && (
-            <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>
               {reportSlaComplianceTrend.label}
             </p>
           )}
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Vencido</p>
-          <p className="text-3xl font-black text-red-600">{reportSlaExpiredCount}</p>
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">SLA Vencido</p>
+          <p className="text-3xl font-semibold text-red-600">{reportSlaExpiredCount}</p>
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Traslados Req.</p>
-          <p className="text-3xl font-black text-amber-600">{reportTravelCount}</p>
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Traslados Req.</p>
+          <p className="text-3xl font-semibold text-amber-600">{reportTravelCount}</p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
+      <div className="bg-surface border border-border rounded-xl p-8 space-y-5 shadow-card">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div>
-            <h4 className="text-base font-black uppercase text-slate-800">
+            <h4 className="text-base font-semibold uppercase text-fg">
               Tendencia {reportTrendMode === 'SEMANAL' ? 'Semanal' : 'Diaria'}: Creados vs Cerrados
             </h4>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">
               Creado por fecha de alta y cerrado por fecha de cierre
             </p>
           </div>
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
             Creados: {reportCreatedInPeriodCount} | Cerrados: {reportClosedInPeriodCount}
           </div>
         </div>
         <div className="space-y-4">
           {reportLifecycleTrend.map((item) => (
             <div key={`report-trend-${item.key}`} className="space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
                 <span>{item.label}</span>
                 <span>Cre: {item.created} | Cer: {item.closed}</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-2">
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-blue-700">
+                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-blue-700">
                     <span>Creados</span>
                     <span>{item.created}</span>
                   </div>
@@ -639,7 +639,7 @@ export function ReportsView({
                   </div>
                 </div>
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-2">
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
                     <span>Cerrados</span>
                     <span>{item.closed}</span>
                   </div>
@@ -654,7 +654,7 @@ export function ReportsView({
             </div>
           ))}
           {reportLifecycleTrend.length === 0 && (
-            <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+            <div className="border border-dashed border-border rounded-2xl p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
               Sin datos para tendencia en este periodo.
             </div>
           )}
@@ -662,10 +662,10 @@ export function ReportsView({
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
+        <div className="bg-surface border border-border rounded-xl p-8 space-y-5 shadow-card">
           <div className="flex items-center justify-between">
-            <h4 className="text-base font-black uppercase text-slate-800">Tickets por Estado</h4>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
+            <h4 className="text-base font-semibold uppercase text-fg">Tickets por Estado</h4>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Drill-down</span>
           </div>
           {reportStateBars.map((item) => (
             <button
@@ -673,13 +673,13 @@ export function ReportsView({
               onClick={() => applyReportDrillDown({ estado: item.label as TicketEstado })}
               className="w-full text-left space-y-1"
             >
-              <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
                 <span>{item.label}</span>
                 <span>{item.count}</span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className="h-full bg-[#F58220]"
+                  className="h-full bg-brand"
                   style={{ width: `${Math.round((item.count / reportStateMax) * 100)}%` }}
                 />
               </div>
@@ -687,10 +687,10 @@ export function ReportsView({
           ))}
         </div>
 
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
+        <div className="bg-surface border border-border rounded-xl p-8 space-y-5 shadow-card">
           <div className="flex items-center justify-between">
-            <h4 className="text-base font-black uppercase text-slate-800">Tickets por Sucursal</h4>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
+            <h4 className="text-base font-semibold uppercase text-fg">Tickets por Sucursal</h4>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Drill-down</span>
           </div>
           {reportBranchBars.map((item) => (
             <button
@@ -698,7 +698,7 @@ export function ReportsView({
               onClick={() => applyReportDrillDown({ sucursalCode: item.code })}
               className="w-full text-left space-y-1"
             >
-              <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
                 <span>{item.label}</span>
                 <span>{item.count}</span>
               </div>
@@ -711,7 +711,7 @@ export function ReportsView({
             </button>
           ))}
           {reportBranchBars.length === 0 && (
-            <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+            <div className="border border-dashed border-border rounded-2xl p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
               Sin datos de sucursal para este periodo.
             </div>
           )}
@@ -719,15 +719,15 @@ export function ReportsView({
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-          <h4 className="text-base font-black uppercase text-slate-800">Top Areas</h4>
+        <div className="bg-surface border border-border rounded-xl p-8 space-y-4 shadow-card">
+          <h4 className="text-base font-semibold uppercase text-fg">Top Areas</h4>
           {reportAreaBars.slice(0, 8).map((item) => (
             <button
               key={`report-area-${item.label}`}
               onClick={() => applyReportDrillDown({ area: item.label })}
               className="w-full text-left space-y-1"
             >
-              <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
                 <span>{item.label}</span>
                 <span>{item.count}</span>
               </div>
@@ -738,8 +738,8 @@ export function ReportsView({
           ))}
         </div>
 
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-          <h4 className="text-base font-black uppercase text-slate-800">Carga por Técnico</h4>
+        <div className="bg-surface border border-border rounded-xl p-8 space-y-4 shadow-card">
+          <h4 className="text-base font-semibold uppercase text-fg">Carga por Técnico</h4>
           {reportTechBars.slice(0, 8).map((item) => (
             <button
               key={`report-tech-${item.label}`}
@@ -747,7 +747,7 @@ export function ReportsView({
               className="w-full text-left space-y-1 disabled:cursor-not-allowed"
               disabled={item.label === 'SIN ASIGNAR'}
             >
-              <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
                 <span>{item.label}</span>
                 <span>{item.count}</span>
               </div>
@@ -758,11 +758,11 @@ export function ReportsView({
           ))}
         </div>
 
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-          <h4 className="text-base font-black uppercase text-slate-800">Auditoría por Módulo</h4>
+        <div className="bg-surface border border-border rounded-xl p-8 space-y-4 shadow-card">
+          <h4 className="text-base font-semibold uppercase text-fg">Auditoría por Módulo</h4>
           {reportAuditModuleBars.map((item) => (
             <div key={`report-audit-${item.module}`} className="space-y-1">
-              <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
                 <span>{item.label}</span>
                 <span>{item.count}</span>
               </div>
@@ -771,17 +771,17 @@ export function ReportsView({
               </div>
             </div>
           ))}
-          <div className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+          <div className="pt-2 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
             Logs filtrados: {reportAuditRowsCount} | Total auditoría: {reportAuditTotalCount}
           </div>
         </div>
       </div>
 
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
+      <div className="bg-surface border border-border rounded-xl p-8 space-y-4 shadow-card">
         <div className="flex items-center justify-between">
-          <h4 className="text-base font-black uppercase text-slate-800">Top Causas Recurrentes</h4>
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Area + Falla</span>
+          <h4 className="text-base font-semibold uppercase text-fg">Top Causas Recurrentes</h4>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Area + Falla</span>
         </div>
         {reportIncidentCauseBars.map((item) => (
           <button
@@ -789,8 +789,8 @@ export function ReportsView({
             onClick={() => applyReportIncidentCauseDrillDown(item.area, item.cause)}
             className="w-full text-left space-y-1"
           >
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.area}</p>
-            <div className="flex items-center justify-between gap-3 text-xs font-black text-slate-700">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">{item.area}</p>
+            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-fg">
               <span>{item.cause}</span>
               <span>{item.count}</span>
             </div>
@@ -803,17 +803,17 @@ export function ReportsView({
           </button>
         ))}
         {reportIncidentCauseBars.length === 0 && (
-          <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+          <div className="border border-dashed border-border rounded-2xl p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
             Sin incidencias recurrentes para este periodo.
           </div>
         )}
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
-        <h4 className="text-base font-black uppercase text-slate-800">Tipos de Atención</h4>
+      <div className="bg-surface border border-border rounded-xl p-8 space-y-4 shadow-card">
+        <h4 className="text-base font-semibold uppercase text-fg">Tipos de Atención</h4>
         {reportAttentionBars.map((item) => (
           <div key={`report-attention-${item.label}`} className="w-full text-left space-y-1">
-            <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase text-fg-muted">
               <span>{item.label}</span>
               <span>{item.count}</span>
             </div>
@@ -826,7 +826,7 @@ export function ReportsView({
           </div>
         ))}
         {reportAttentionBars.length === 0 && (
-          <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+          <div className="border border-dashed border-border rounded-2xl p-4 text-center text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
             Sin datos de atención para este período.
           </div>
         )}
@@ -834,15 +834,15 @@ export function ReportsView({
     </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inventario</p>
-          <p className="text-sm font-black text-slate-700">
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Inventario</p>
+          <p className="text-sm font-semibold text-fg">
             Activos: {reportInventorySnapshot.totalActivos} | En falla: {reportInventorySnapshot.activosEnFalla} | Sin responsable: {reportInventorySnapshot.sinResponsable}
           </p>
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl p-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Insumos</p>
-          <p className="text-sm font-black text-slate-700">
+        <div className="bg-surface border border-border rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">Insumos</p>
+          <p className="text-sm font-semibold text-fg">
             Total: {reportSupplySnapshot.total} | Agotados: {reportSupplySnapshot.agotados} | Bajo mínimo: {reportSupplySnapshot.bajoMinimo}
           </p>
         </div>
