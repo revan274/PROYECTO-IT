@@ -95,7 +95,7 @@ export function sanitizeFileToken(value: string): string {
   return compact || 'activo';
 }
 
-export function formatRetryDelay(seconds: number): string {
+function formatRetryDelay(seconds: number): string {
   const totalSeconds = Math.max(1, Math.trunc(seconds));
   if (totalSeconds < 60) {
     return `${totalSeconds} segundo${totalSeconds === 1 ? '' : 's'}`;

@@ -84,7 +84,7 @@ export const SLA_POLICY: Record<PrioridadTicket, number> = {
   ALTA: 8,
   CRITICA: 2,
 };
-export const TICKET_BRANCHES = [
+const TICKET_BRANCHES = [
   { code: 'TJ01', name: 'Sucursal Estrella' },
   { code: 'TC01', name: 'Sucursal Camargo' },
   { code: 'TJ02', name: 'Sucursal CBtis' },
@@ -122,7 +122,7 @@ export const USER_ROLE_PERMISSIONS: Record<UserRole, string> = {
   consulta: 'Solo consulta',
   solicitante: 'Crear y dar seguimiento a tickets',
 };
-export const USER_CARGO_OPTIONS = [
+const USER_CARGO_OPTIONS = [
   { value: 'COORDINADOR DE SISTEMAS', label: 'Coordinador de Sistemas' },
   { value: 'GERENTE', label: 'Gerente' },
   { value: 'DIRECTOR', label: 'Director' },
@@ -212,7 +212,7 @@ export const COMMON_TICKET_ISSUES = [
   },
 ] as const;
 
-export function parsePositiveInt(value: unknown, fallback: number): number {
+function parsePositiveInt(value: unknown, fallback: number): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
   return Math.trunc(numeric);
@@ -220,8 +220,8 @@ export function parsePositiveInt(value: unknown, fallback: number): number {
 
 export const AUTHOR_BRAND = String(import.meta.env.VITE_AUTHOR_BRAND || 'Inge Juan Carlos R. P.').trim() || 'Inge Juan Carlos R. P.';
 export const AUTHOR_SIGNATURE = `Desarrollado por ${AUTHOR_BRAND}`;
-export const DEFAULT_API_BASE_URL = import.meta.env.DEV ? 'http://localhost:4000/api' : '/api';
-export const API_BASE_URL = String(import.meta.env.VITE_API_URL || DEFAULT_API_BASE_URL).trim();
+const DEFAULT_API_BASE_URL = import.meta.env.DEV ? 'http://localhost:4000/api' : '/api';
+const API_BASE_URL = String(import.meta.env.VITE_API_URL || DEFAULT_API_BASE_URL).trim();
 export const NORMALIZED_API_BASE_URL = API_BASE_URL.replace(/\/+$/, '');
 export const API_REQUEST_TIMEOUT_MS = parsePositiveInt(import.meta.env.VITE_API_TIMEOUT_MS, 15000);
 export const CLIENT_ATTACHMENT_MAX_BYTES = Math.max(

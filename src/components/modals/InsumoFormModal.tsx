@@ -206,4 +206,3 @@ export function InsumoFormModal({
   );
 }
 
-export default InsumoFormModal;
