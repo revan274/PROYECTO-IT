@@ -77,7 +77,7 @@ export interface TravelReportRow {
   motivo: string;
 }
 
-export interface TravelTripAdjustment {
+interface TravelTripAdjustment {
   id: number;
   month: string;
   technicianScopeKey: string;
@@ -454,14 +454,9 @@ export interface LoginResponse {
   loggedAt: string;
 }
 
-export interface TravelTripAdjustmentResponse {
-  adjustment: TravelTripAdjustment | null;
-}
 
-export interface TicketAttachmentUploadResponse {
-  attachment: TicketAttachment;
-  ticket: TicketItem;
-}
+
+
 
 export interface AssetQrTokenResponse {
   token: string;

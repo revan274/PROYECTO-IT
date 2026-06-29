@@ -1,4 +1,4 @@
-export const USER_ROLE_ORDER = ['admin', 'tecnico', 'consulta', 'solicitante'];
+const USER_ROLE_ORDER = ['admin', 'tecnico', 'consulta', 'solicitante'];
 
 export const USER_ROLES = new Set(USER_ROLE_ORDER);
 
@@ -28,10 +28,10 @@ export function canCreateTicketsByRole(role) {
   return canEditByRole(normalized) || normalized === 'solicitante';
 }
 
-export function canManageUsersByRole(role) {
+function canManageUsersByRole(role) {
   return normalizeKnownUserRole(role) === 'admin';
 }
 
-export function isRequesterOnlyRole(role) {
+function isRequesterOnlyRole(role) {
   return normalizeKnownUserRole(role) === 'solicitante';
 }

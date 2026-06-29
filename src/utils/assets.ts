@@ -273,7 +273,7 @@ export function parseAssetLifeYears(value?: string): number | null {
   return years;
 }
 
-export function getAssetRiskTypeKey(asset: Pick<Activo, 'tipo' | 'equipo'>): string {
+function getAssetRiskTypeKey(asset: Pick<Activo, 'tipo' | 'equipo'>): string {
   return String(asset.tipo || asset.equipo || '')
     .trim()
     .toUpperCase();

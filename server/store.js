@@ -572,7 +572,7 @@ function buildAuditHashSource(entry) {
   };
 }
 
-export function computeAuditEntryHash(entry, prevHash = 'genesis') {
+function computeAuditEntryHash(entry, prevHash = 'genesis') {
   const previous = normalizeAuditPrevHash(prevHash) || AUDIT_GENESIS_HASH;
   const source = buildAuditHashSource(entry);
   const digest = createHash('sha256');

@@ -230,4 +230,3 @@ export function AssetFormModal({
   );
 }
 
-export default AssetFormModal;

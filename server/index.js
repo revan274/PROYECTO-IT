@@ -1353,7 +1353,7 @@ app.use((error, _req, res, _next) => {
 
 // --- App factory & entry point ---
 
-export function createApp() {
+function createApp() {
   const app = express();
   const authRuntime = createAuthRuntime();
   configureTrustProxy(app);
@@ -1363,6 +1363,8 @@ export function createApp() {
 }
 
 const app = createApp();
+
+
 
 export { app };
 
