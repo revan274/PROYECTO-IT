@@ -14,7 +14,8 @@ const QR_SIGNING_SECRET = String(
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 
 if (IS_PRODUCTION && INSECURE_QR_SECRETS.has(QR_SIGNING_SECRET)) {
-  throw new Error('QR_SIGNING_SECRET es obligatorio en producción y no puede usar un valor por defecto.');
+  // Advertencia, NO crash: un valor por defecto no debe tirar el servidor en producción.
+  console.warn('[SEGURIDAD] QR_SIGNING_SECRET no está definido o usa un valor por defecto inseguro. Define QR_SIGNING_SECRET en las variables de entorno.');
 }
 
 function asNonEmptyString(value) {

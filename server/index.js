@@ -122,7 +122,8 @@ const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() ==
 // CORS fail-closed: en producción se exige una allowlist explícita; nunca reflejar cualquier origen.
 const CORS_ALLOW_ALL = CORS_ORIGINS.length === 0 && !IS_PRODUCTION;
 if (IS_PRODUCTION && CORS_ORIGINS.length === 0) {
-  throw new Error('CORS_ORIGINS es obligatorio en producción: define los orígenes permitidos (fail-closed).');
+  // Advertencia, NO crash: sin CORS_ORIGINS se niega cross-origin (CORS_ALLOW_ALL=false), pero el server arranca.
+  console.warn('[SEGURIDAD] CORS_ORIGINS vacío en producción: se rechazarán orígenes cruzados. Define CORS_ORIGINS con tu dominio público.');
 }
 const TRUST_PROXY = process.env.TRUST_PROXY;
 
