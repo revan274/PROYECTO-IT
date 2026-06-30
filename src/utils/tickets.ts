@@ -1,7 +1,6 @@
-import { COMMON_TICKET_ISSUES, SLA_POLICY } from '../constants/app';
+import { COMMON_TICKET_ISSUES } from '../constants/app';
 import type {
   Activo,
-  PrioridadTicket,
   TicketAttentionType,
   TicketEstado,
   TicketItem,
@@ -254,21 +253,8 @@ export function buildSuggestedTicketIssues(
   return buildUniqueStrings(output);
 }
 
-export function calculateSlaDeadline(prioridad: PrioridadTicket): string {
-  const hours = SLA_POLICY[prioridad] || SLA_POLICY.MEDIA;
-  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-}
-
 export function isTicketClosed(ticket: Pick<TicketItem, 'estado'>): boolean {
   return ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado';
-}
-
-export function ticketAuditActionLabel(estado: TicketEstado): string {
-  if (estado === 'Resuelto') return 'Ticket Resuelto';
-  if (estado === 'Cerrado') return 'Ticket Cerrado';
-  if (estado === 'En Proceso') return 'Ticket En Proceso';
-  if (estado === 'En Espera') return 'Ticket En Espera';
-  return 'Ticket Actualizado';
 }
 
 export function buildTicketHistoryEntry(
@@ -359,10 +345,6 @@ export function normalizeTicketTravelRequired(value: unknown): boolean | null {
   if (['1', 'true', 'si', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
   return null;
-}
-
-export function formatTicketTravelRequired(value: unknown): string {
-  return normalizeTicketTravelRequired(value) ? 'Sí' : 'No';
 }
 
 export function ticketRequiresTravel(

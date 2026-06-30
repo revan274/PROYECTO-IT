@@ -461,5 +461,3 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
     </>
   );
 };
-
-export default SuppliesView;
