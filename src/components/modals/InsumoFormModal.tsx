@@ -205,5 +205,3 @@ export function InsumoFormModal({
     </ModalLayout>
   );
 }
-
-export default InsumoFormModal;

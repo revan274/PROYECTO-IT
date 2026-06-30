@@ -229,5 +229,3 @@ export function AssetFormModal({
     </ModalLayout>
   );
 }
-
-export default AssetFormModal;

@@ -454,15 +454,6 @@ export interface LoginResponse {
   loggedAt: string;
 }
 
-export interface TravelTripAdjustmentResponse {
-  adjustment: TravelTripAdjustment | null;
-}
-
-export interface TicketAttachmentUploadResponse {
-  attachment: TicketAttachment;
-  ticket: TicketItem;
-}
-
 export interface AssetQrTokenResponse {
   token: string;
   scheme?: string;
