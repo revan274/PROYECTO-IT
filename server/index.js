@@ -1369,8 +1369,10 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
-    const publicUrl = process.env.PUBLIC_URL || 'https://proyecto-it.onrender.com';
-    startKeepAlive(`${publicUrl}/api/health`);
+    // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
+    // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
+    const publicUrl = process.env.PUBLIC_URL;
+    if (publicUrl) startKeepAlive(`${publicUrl}/api/health`);
   });
 }
 
