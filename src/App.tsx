@@ -1,5 +1,12 @@
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
+import { downloadAuditCsv } from './exports/auditCsv';
+import { downloadInventoryCsv } from './exports/inventoryCsv';
+import { downloadReportExcelWorkbook } from './exports/reportExcel';
+import { buildExecutiveReportHtml } from './reports/executiveReport';
+import { openAutoPrintLabelWindow, openHtmlReportWindow } from './reports/openPrintWindow';
+import { buildAssetQrLabelHtml } from './reports/qrLabelReport';
+import { buildTravelSheetHtml } from './reports/travelSheetReport';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from './store/useAppStore';
 import { AppHeader } from './components/layout/AppHeader';
@@ -15,7 +22,9 @@ import { useReportState } from './hooks/useReportState';
 import { useTicketUiState } from './hooks/useTicketUiState';
 import { useUserUiState } from './hooks/useUserUiState';
 import { useAssetActions } from './hooks/actions/useAssetActions';
+import { useAuditActions } from './hooks/actions/useAuditActions';
 import { useAuthActions } from './hooks/actions/useAuthActions';
+import { useInventoryImport } from './hooks/actions/useInventoryImport';
 import { useSessionActions } from './hooks/actions/useSessionActions';
 import { useSupplyActions } from './hooks/actions/useSupplyActions';
 import { useTicketActions } from './hooks/actions/useTicketActions';
@@ -35,12 +44,8 @@ import {
   NAV_ITEMS,
   TICKET_ATTENTION_TYPES,
   TICKET_STATES,
-  TRAVEL_DEFAULT_AUTHORIZER,
-  TRAVEL_DEFAULT_DEPARTMENT,
-  TRAVEL_DEFAULT_FINANCE,
   TRAVEL_DEFAULT_FUEL_EFFICIENCY,
   TRAVEL_DESTINATION_PRESETS,
-  TRAVEL_REPORT_MIN_ROWS,
   USER_ROLE_LABEL,
   USER_ROLE_PERMISSIONS,
 } from './constants/app';
@@ -48,12 +53,9 @@ import type {
   Activo,
   AssetQrTokenResponse,
   AuditFiltersState,
-  AuditHistoryResponse,
   AuditModule,
   CatalogBranch,
   DashboardRange,
-  ImportAssetDetail,
-  ImportAssetsResponse,
   InventoryRiskFilter,
   InventorySortField,
   ModalType,
@@ -74,7 +76,6 @@ import {
   apiRequest,
   applyThemeToDocument,
   buildDefaultAuditFilters,
-  buildDefaultAuditPagination,
   buildDefaultReportFilterSnapshot,
   normalizeReportFilterSnapshot,
   readStoredReportFilterPresets,
@@ -92,13 +93,10 @@ import {
   assetRequiresResponsible,
   buildAssetDisplayOptions,
   calculateAssetRiskSummary,
-  enrichAssetsWithNetworkSheet,
   formatTicketBranch,
   formatUserCargo,
-  parseNetworkSheetRows,
   parseAssetLifeYears,
   resolveAssetBranchCode,
-  spreadsheetCellToText,
 } from './utils/assets';
 import {
   canCreateTicketsByRole,
@@ -109,13 +107,10 @@ import {
   roleCanGenerateTickets,
 } from './utils/roles';
 import {
-  escapeHtml,
   formatBytes,
   formatDateTime,
   getApiErrorMessage,
   includesAllSearchTokens,
-  isRouteNotFoundApiError,
-  isSessionRejectedApiError,
   normalizeForCompare,
   parseDateToTimestamp,
   sanitizeFileToken,
@@ -173,7 +168,6 @@ import {
   getModalSubmitLabel,
   getSupplyHealthStatus,
   getSupplyCriticalityRank,
-  parseInventoryRow,
 } from './utils/appHelpers';
 
 const LazyUsersView = lazy(() => import('./components/views/UsersView'));
@@ -203,9 +197,6 @@ function getViewFromPathname(pathname: string): ViewType | null {
     .find(([, path]) => path === normalized);
   return match?.[0] || null;
 }
-
-type SpreadsheetRow = Record<string, unknown>;
-type NetworkSheetRow = unknown[];
 
 const LazyQRCodeCanvas = lazy(async () => {
   const module = await import('qrcode.react');
@@ -936,471 +927,33 @@ export default function App() {
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=580,height=420');
-    if (!printWindow) {
+    const html = buildAssetQrLabelHtml(selectedAsset, qrCanvas.toDataURL('image/png'), activeTicketBranchCodes);
+    if (!openAutoPrintLabelWindow(html)) {
       showToast('Permite ventanas emergentes para imprimir etiquetas', 'warning');
-      return;
     }
-
-    const qrDataUrl = qrCanvas.toDataURL('image/png');
-    const tagRaw = String(selectedAsset.tag || `ID-${selectedAsset.id}`).trim();
-    const ubicacionRaw = String(selectedAsset.ubicacion || '').trim() || 'Ubicación no registrada';
-    const serialRaw = String(selectedAsset.serial || '').trim() || 'Sin serie';
-    const equipmentRaw = [
-      String(selectedAsset.equipo || '').trim(),
-      String(selectedAsset.marca || '').trim(),
-      String(selectedAsset.modelo || '').trim(),
-    ].filter(Boolean).join(' ') || 'Sin especificacion';
-    const branchCode = resolveAssetBranchCode(selectedAsset, activeTicketBranchCodes);
-    const branchRaw = branchCode || String(selectedAsset.departamento || '').trim().toUpperCase();
-    const ubicacionFullRaw = [branchRaw, ubicacionRaw]
-      .filter((value, index, values) => value && values.indexOf(value) === index)
-      .join(' | ') || ubicacionRaw;
-    const idAssetRaw = String(selectedAsset.id || 'N/D');
-    const internalCodeSourceRaw = String(selectedAsset.idInterno || '').trim() || idAssetRaw;
-    const internalCodeDigits = (internalCodeSourceRaw.match(/\d+/g) || []).join('');
-    const internalCodeRaw = (internalCodeDigits || String(selectedAsset.id || '0')).slice(-2).padStart(2, '0');
-    const headerLabelRaw = 'Activo IT';
-    const brandLabelRaw = 'Los Gigantes';
-    const footerNoteRaw = 'Escanea para identificar';
-
-    const tag = escapeHtml(tagRaw);
-    const ubicacion = escapeHtml(ubicacionFullRaw);
-    const serial = escapeHtml(serialRaw);
-    const equipo = escapeHtml(equipmentRaw);
-    const idAsset = escapeHtml(idAssetRaw);
-    const headerLabel = escapeHtml(headerLabelRaw);
-    const brandLabel = escapeHtml(brandLabelRaw);
-    const footerNote = escapeHtml(footerNoteRaw);
-    const internalCode = escapeHtml(internalCodeRaw);
-
-    printWindow.document.write(`<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Etiqueta QR ${tag}</title>
-  <style>
-    @page { size: 60mm 40mm; margin: 0; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 60mm;
-      height: 40mm;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #ffffff;
-      color: #0f172a;
-    }
-    * {
-      box-sizing: border-box;
-    }
-    .label {
-      width: 60mm;
-      height: 40mm;
-      padding: 1.3mm 1.35mm 1.15mm;
-      border: 0.25mm solid #111827;
-      border-radius: 1.2mm;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background:
-        linear-gradient(180deg, #fff7ed 0, #fff7ed 5.8mm, #ffffff 5.8mm, #ffffff 100%);
-    }
-    .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 1mm;
-      margin-bottom: 1mm;
-    }
-    .header-copy {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35mm;
-    }
-    .eyebrow {
-      margin: 0;
-      font-size: 2.95pt;
-      font-weight: 900;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: #f97316;
-      line-height: 1;
-    }
-    .brand {
-      margin: 0;
-      font-size: 5.8pt;
-      line-height: 1;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #0f172a;
-    }
-    .brand-sub {
-      margin: 0;
-      font-size: 3pt;
-      line-height: 1;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #64748b;
-    }
-    .code-chip {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 10.8mm;
-      height: 4.9mm;
-      padding: 0 1.35mm;
-      border-radius: 999px;
-      background: #111827;
-      color: #ffffff;
-      font-size: 3.25pt;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .main {
-      flex: 1;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 21.2mm;
-      gap: 1.3mm;
-      align-items: stretch;
-    }
-    .details {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.65mm;
-    }
-    .tag-wrap {
-      min-width: 0;
-      padding: 0.75mm 0.95mm 0.8mm;
-      border: 0.18mm solid #e2e8f0;
-      border-radius: 0.95mm;
-      background: #ffffff;
-    }
-    .tag-caption {
-      margin: 0 0 0.35mm;
-      font-size: 2.7pt;
-      line-height: 1;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: #94a3b8;
-    }
-    .tag {
-      margin: 0;
-      font-size: 10.9pt;
-      font-weight: 900;
-      line-height: 0.92;
-      letter-spacing: 0.01em;
-      text-transform: uppercase;
-      word-break: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      min-height: 10.6mm;
-      max-height: 11.8mm;
-      color: #0f172a;
-    }
-    .detail-grid {
-      min-width: 0;
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 0.55mm;
-    }
-    .detail-card {
-      min-width: 0;
-      border: 0.18mm solid #dbe2ea;
-      border-radius: 0.9mm;
-      padding: 0.7mm 0.85mm;
-      background: #f8fafc;
-    }
-    .detail-k {
-      margin: 0 0 0.28mm;
-      font-size: 2.75pt;
-      line-height: 1;
-      font-weight: 900;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #64748b;
-    }
-    .detail-v {
-      margin: 0;
-      font-size: 4.55pt;
-      line-height: 1.04;
-      font-weight: 900;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: #0f172a;
-    }
-    .equipment {
-      min-width: 0;
-      margin: 0;
-      font-size: 3.35pt;
-      line-height: 1.1;
-      font-weight: 900;
-      text-transform: uppercase;
-      color: #475569;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      min-height: 4.2mm;
-    }
-    .qr-panel {
-      min-height: 0;
-      border: 0.22mm solid #111827;
-      border-radius: 1.05mm;
-      background: #ffffff;
-      padding: 0.8mm;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.6mm;
-    }
-    .qr-frame {
-      flex: 1;
-      width: 100%;
-      min-height: 0;
-      border: 0.16mm solid #cbd5e1;
-      border-radius: 0.8mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.55mm;
-      background: #ffffff;
-    }
-    .qr {
-      width: 19.2mm;
-      height: 19.2mm;
-      object-fit: contain;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-    .qr-label {
-      margin: 0;
-      font-size: 2.8pt;
-      line-height: 1;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: #64748b;
-    }
-    .scan-pill {
-      width: 100%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 4.1mm;
-      padding: 0 1mm;
-      border-radius: 999px;
-      background: #f97316;
-      color: #ffffff;
-      font-size: 2.95pt;
-      font-weight: 900;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-    .footer {
-      margin-top: auto;
-      padding-top: 0.6mm;
-      border-top: 0.16mm solid #cbd5e1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.8mm;
-    }
-    .footer-note {
-      flex: 1;
-      min-width: 0;
-      margin: 0;
-      font-size: 3.1pt;
-      line-height: 1.05;
-      font-weight: 900;
-      text-transform: uppercase;
-      color: #475569;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .id-chip {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 11.1mm;
-      height: 4.5mm;
-      padding: 0 1.25mm;
-      border-radius: 999px;
-      background: #111827;
-      color: #ffffff;
-      font-size: 3.25pt;
-      font-weight: 900;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-  </style>
-</head>
-<body>
-  <div class="label">
-    <div class="header">
-      <div class="header-copy">
-        <p class="eyebrow">${headerLabel}</p>
-        <p class="brand">${brandLabel}</p>
-        <p class="brand-sub">Mesa IT</p>
-      </div>
-      <span class="code-chip">#${internalCode}</span>
-    </div>
-    <div class="main">
-      <div class="details">
-        <div class="tag-wrap">
-          <p class="tag-caption">Tag del activo</p>
-          <p class="tag">${tag}</p>
-        </div>
-        <div class="detail-grid">
-          <div class="detail-card">
-            <p class="detail-k">Serie</p>
-            <p class="detail-v">${serial}</p>
-          </div>
-          <div class="detail-card">
-            <p class="detail-k">Ubicación</p>
-            <p class="detail-v">${ubicacion}</p>
-          </div>
-        </div>
-        <p class="equipment">${equipo}</p>
-      </div>
-      <div class="qr-panel">
-        <p class="qr-label">QR firmado</p>
-        <div class="qr-frame">
-          <img class="qr" src="${qrDataUrl}" alt="QR ${tag}" />
-        </div>
-        <span class="scan-pill">Escanear</span>
-      </div>
-    </div>
-    <div class="footer">
-      <p class="footer-note">${footerNote}</p>
-      <span class="id-chip">ID ${idAsset}</span>
-    </div>
-  </div>
-</body>
-</html>`);
-    printWindow.document.close();
-
-    let didPrint = false;
-    const triggerPrint = () => {
-      if (didPrint) return;
-      didPrint = true;
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    };
-
-    printWindow.onload = triggerPrint;
-    window.setTimeout(triggerPrint, 450);
   }, [activeTicketBranchCodes, selectedAssetQrValue, selectedAsset, selectedAssetQrMode, showToast]);
 
-  const fetchAllAuditRows = useCallback(async (filters: Record<string, string | number | undefined>) => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      const normalized = String(value).trim();
-      if (!normalized) return;
-      params.set(key, normalized);
-    });
-    params.set('all', '1');
-    params.set('includeDiagnostics', '0');
-
-    const query = params.toString();
-    const data = await apiRequest<AuditHistoryResponse>(`/auditoria${query ? `?${query}` : ''}`);
-    return Array.isArray(data.items) ? data.items : [];
-  }, []);
-
-  const fetchAuditHistory = useCallback(async (options?: { force?: boolean }) => {
-    const force = options?.force ?? false;
-    if (!sessionUser) return;
-    if (!backendConnected && !force) return;
-    if (isRequesterOnlyUser) return;
-    if (view !== 'history') return;
-
-    setIsAuditLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (auditFilters.module) params.set('module', auditFilters.module);
-      if (auditFilters.result) params.set('result', auditFilters.result);
-      if (auditFilters.user.trim()) params.set('user', auditFilters.user.trim());
-      if (auditFilters.entity.trim()) params.set('entity', auditFilters.entity.trim());
-      if (auditFilters.action.trim()) params.set('action', auditFilters.action.trim());
-      if (auditFilters.q.trim()) params.set('q', auditFilters.q.trim());
-      if (auditFilters.from) params.set('from', auditFilters.from);
-      if (auditFilters.to) params.set('to', auditFilters.to);
-      params.set('page', String(auditPage));
-      params.set('pageSize', String(auditPageSize));
-
-      const query = params.toString();
-      const data = await apiRequest<AuditHistoryResponse>(`/auditoria${query ? `?${query}` : ''}`);
-      setAuditRemoteRows(Array.isArray(data.items) ? data.items : []);
-      setAuditPagination(data.pagination || buildDefaultAuditPagination(auditPageSize));
-      setAuditSummary(data.summary || null);
-      setAuditIntegrity(data.integrity || null);
-      setAuditAlerts(data.alerts || null);
-    } catch (error) {
-      if (isSessionRejectedApiError(error)) {
-        clearSession();
-        showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
-        return;
-      }
-      if (!isRouteNotFoundApiError(error)) {
-        showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría', 'warning');
-      }
-      setAuditRemoteRows(null);
-      setAuditPagination(buildDefaultAuditPagination(auditPageSize));
-      setAuditSummary(null);
-      setAuditIntegrity(null);
-      setAuditAlerts(null);
-    } finally {
-      setIsAuditLoading(false);
-    }
-  }, [
-    auditFilters.action,
-    auditFilters.entity,
-    auditFilters.from,
-    auditFilters.module,
-    auditFilters.q,
-    auditFilters.result,
-    auditFilters.to,
-    auditFilters.user,
+  const { fetchAuditHistory, loadAllAuditRows } = useAuditActions({
+    hasSession: Boolean(sessionUser),
+    backendConnected,
+    isRequesterOnlyUser,
+    view,
+    auditFilters,
     auditPage,
     auditPageSize,
-    backendConnected,
     clearSession,
-    isRequesterOnlyUser,
-    sessionUser,
-    setAuditAlerts,
-    setAuditIntegrity,
-    setAuditPagination,
-    setAuditRemoteRows,
-    setAuditSummary,
-    setIsAuditLoading,
     showToast,
-    view,
-  ]);
+    setAuditRemoteRows,
+    setAuditPagination,
+    setAuditSummary,
+    setAuditIntegrity,
+    setAuditAlerts,
+    setIsAuditLoading,
+  });
 
   useEffect(() => {
     fetchAuditHistoryRef.current = fetchAuditHistory;
   }, [fetchAuditHistory]);
-
-  useEffect(() => {
-    if (view !== 'history') return;
-    void fetchAuditHistory();
-  }, [view, fetchAuditHistory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1413,23 +966,14 @@ export default function App() {
     }
 
     void (async () => {
-      try {
-        const rows = await fetchAllAuditRows({
-          from: reportDateFrom,
-          to: reportDateTo,
-        });
-        if (cancelled) return;
-        setReportAuditRowsRemote(rows);
-      } catch (error) {
-        if (cancelled) return;
-        if (isSessionRejectedApiError(error)) {
-          clearSession();
-          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
-          return;
-        }
-        if (!isRouteNotFoundApiError(error)) {
-          showToast(getApiErrorMessage(error) || 'No se pudo cargar la auditoría', 'warning');
-        }
+      const result = await loadAllAuditRows(
+        { from: reportDateFrom, to: reportDateTo },
+        { notifyGenericError: true },
+      );
+      if (cancelled) return;
+      if (result.status === 'ok') {
+        setReportAuditRowsRemote(result.rows);
+      } else if (result.status === 'error') {
         setReportAuditRowsRemote(null);
       }
     })();
@@ -1439,14 +983,12 @@ export default function App() {
     };
   }, [
     backendConnected,
-    clearSession,
-    fetchAllAuditRows,
     isRequesterOnlyUser,
+    loadAllAuditRows,
     reportDateFrom,
     reportDateTo,
     sessionUser,
     setReportAuditRowsRemote,
-    showToast,
     view,
   ]);
 
@@ -1473,22 +1015,16 @@ export default function App() {
     }
 
     void (async () => {
-      try {
-        const rows = await fetchAllAuditRows({
-          module: 'insumos',
-          entity: 'insumo',
-          entityId: selectedSupplyHistoryItem.id,
-        });
-        if (cancelled) return;
-        const grouped = buildSupplyAuditMovementsByInsumoId(rows, insumos);
+      const result = await loadAllAuditRows({
+        module: 'insumos',
+        entity: 'insumo',
+        entityId: selectedSupplyHistoryItem.id,
+      });
+      if (cancelled) return;
+      if (result.status === 'ok') {
+        const grouped = buildSupplyAuditMovementsByInsumoId(result.rows, insumos);
         setSelectedSupplyHistoryRemoteMovements(grouped[selectedSupplyHistoryItem.id] || []);
-      } catch (error) {
-        if (cancelled) return;
-        if (isSessionRejectedApiError(error)) {
-          clearSession();
-          showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
-          return;
-        }
+      } else if (result.status === 'error') {
         setSelectedSupplyHistoryRemoteMovements(null);
       }
     })();
@@ -1498,14 +1034,12 @@ export default function App() {
     };
   }, [
     backendConnected,
-    clearSession,
-    fetchAllAuditRows,
     insumos,
     isRequesterOnlyUser,
+    loadAllAuditRows,
     selectedSupplyHistoryItem,
     sessionUser,
     setSelectedSupplyHistoryRemoteMovements,
-    showToast,
   ]);
 
   useEffect(() => {
@@ -1560,189 +1094,22 @@ export default function App() {
     resetNewUserForm,
   });
 
-  const handleImportInventory = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (isReadOnly) {
-      showToast('Tu rol no permite importar inventario', 'warning');
-      return;
-    }
-
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    if (!ensureBackendConnected('Importar inventario')) return;
-
-    setIsImportingInventory(true);
-    setImportDraft(null);
-
-    try {
-      const XLSX = await import('xlsx');
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      if (!firstSheetName) {
-        showToast('El archivo no tiene hojas para importar', 'warning');
-        return;
-      }
-
-      const sheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json<SpreadsheetRow>(sheet, { defval: '' });
-      if (rows.length === 0) {
-        showToast('El archivo está vacío', 'warning');
-        return;
-      }
-
-      let parsedRows: Array<{ rowNumber: number; item: Omit<Activo, 'id'> }> = [];
-      let invalidRows = 0;
-      const localInvalidDetails: ImportAssetDetail[] = [];
-
-      rows.forEach((row, index) => {
-        const rowNumber = index + 2;
-        const item = parseInventoryRow(row, rowNumber);
-        if (!item) {
-          invalidRows += 1;
-          localInvalidDetails.push({
-            rowNumber,
-            status: 'invalid',
-            reason: 'Fila inválida o sin identificador utilizable.',
-          });
-          return;
-        }
-        parsedRows.push({ rowNumber, item });
-      });
-
-      const candidateSheetNames = workbook.SheetNames.slice(1);
-      const sheetByName = candidateSheetNames.find((name) => {
-        const normalized = normalizeForCompare(name);
-        return normalized.includes('hoja2') || normalized.includes('red') || normalized.includes('network');
-      });
-      const sheetByHeader = candidateSheetNames.find((name) => {
-        const sheet = workbook.Sheets[name];
-        if (!sheet) return false;
-        const rows = XLSX.utils.sheet_to_json<NetworkSheetRow>(sheet, { header: 1, defval: '' });
-        const header = Array.isArray(rows[0]) ? rows[0] : [];
-        const normalizedHeader = header.map((cell) => normalizeForCompare(spreadsheetCellToText(cell))).join(' ');
-        return normalizedHeader.includes('mac') && normalizedHeader.includes('ip');
-      });
-      const secondSheetName = sheetByName || sheetByHeader;
-      if (secondSheetName) {
-        const secondSheet = workbook.Sheets[secondSheetName];
-        const secondRows = XLSX.utils.sheet_to_json<NetworkSheetRow>(secondSheet, { header: 1, defval: '' });
-        const networkRows = parseNetworkSheetRows(secondRows);
-        parsedRows = enrichAssetsWithNetworkSheet(parsedRows, networkRows);
-      }
-
-      if (parsedRows.length === 0) {
-        showToast(
-          invalidRows > 0
-            ? `No se importaron filas válidas. Inválidas: ${invalidRows}`
-            : 'No se encontraron equipos validos',
-          'warning',
-        );
-        return;
-      }
-
-      const payloadItems = parsedRows.map(({ rowNumber, item }) => ({ ...item, rowNumber }));
-      const preview = await apiRequest<ImportAssetsResponse>('/activos/import', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: payloadItems,
-          dryRun: true,
-          upsert: true,
-          fileName: file.name,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      setImportDraft({
-        fileName: file.name,
-        payloadItems,
-        preview,
-        localInvalidDetails,
-      });
-      const summary = [
-        `Vista previa lista`,
-        `nuevos: ${preview.created}`,
-        `actualizados: ${preview.updated}`,
-        `omitidos: ${preview.skipped}`,
-        `inválidos: ${preview.invalid + invalidRows}`,
-      ];
-      showToast(summary.join(' | '), preview.created + preview.updated > 0 ? 'success' : 'warning');
-    } catch (error) {
-      const message = getApiErrorMessage(error) || 'No se pudo leer/importar el archivo';
-      showToast(message, 'error');
-    } finally {
-      setIsImportingInventory(false);
-    }
-  }, [ensureBackendConnected, isReadOnly, sessionUser, setImportDraft, setIsImportingInventory, showToast]);
-
-  const exportImportIssuesCsv = useCallback(() => {
-    if (!importDraft) return;
-
-    const issues = [
-      ...(importDraft.preview.details || []),
-      ...importDraft.localInvalidDetails,
-    ].filter((detail) => detail.status === 'invalid' || detail.status === 'skipped');
-
-    if (issues.length === 0) {
-      showToast('No hay incidencias para exportar', 'warning');
-      return;
-    }
-
-    const headers = ['Fila', 'Estado', 'TAG', 'Motivo'];
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const rows = issues.map((issue) => [
-      String(issue.rowNumber || ''),
-      issue.status || '',
-      issue.tag || '',
-      issue.reason || '',
-    ]);
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `import_issues_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-  }, [importDraft, showToast]);
-
-  const applyImportDraft = useCallback(async () => {
-    if (!importDraft || isApplyingImport) return;
-    const draft = importDraft;
-    setIsApplyingImport(true);
-
-    try {
-      const result = await apiRequest<ImportAssetsResponse>('/activos/import', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: draft.payloadItems,
-          dryRun: false,
-          upsert: true,
-          fileName: draft.fileName,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
-        }),
-      });
-      await refreshData(true);
-      const invalidTotal = result.invalid + draft.localInvalidDetails.length;
-      const parts = [
-        `Creados: ${result.created}`,
-        `actualizados: ${result.updated}`,
-        `omitidos: ${result.skipped}`,
-        `inválidos: ${invalidTotal}`,
-      ];
-      showToast(parts.join(' | '), invalidTotal > 0 ? 'warning' : 'success');
-      setImportDraft(null);
-    } catch (error) {
-      const message = getApiErrorMessage(error) || 'No se pudo confirmar la importación';
-      showToast(message, 'error');
-    } finally {
-      setIsApplyingImport(false);
-    }
-  }, [importDraft, isApplyingImport, refreshData, sessionUser, setImportDraft, setIsApplyingImport, showToast]);
+  const {
+    handleImportInventory,
+    exportImportIssuesCsv,
+    applyImportDraft,
+  } = useInventoryImport({
+    isReadOnly,
+    sessionUser,
+    importDraft,
+    isApplyingImport,
+    ensureBackendConnected,
+    refreshData,
+    showToast,
+    setImportDraft,
+    setIsApplyingImport,
+    setIsImportingInventory,
+  });
 
   const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1997,56 +1364,7 @@ export default function App() {
       return;
     }
 
-    const headers = [
-      'TAG',
-      'SERIAL',
-      'ID_INTERNO',
-      'TIPO',
-      'MARCA',
-      'MODELO',
-      'ESTADO',
-      'RESPONSABLE',
-      'DEPARTAMENTO',
-      'UBICACION',
-      'IP',
-      'MAC',
-      'CPU',
-      'RAM',
-      'DISCO',
-      'ANIOS_VIDA',
-      'COMENTARIOS',
-    ];
-    const rows = filteredActivos.map((asset) => [
-      asset.tag,
-      asset.serial,
-      asset.idInterno || '',
-      asset.tipo,
-      asset.marca,
-      asset.modelo || '',
-      asset.estado,
-      asset.responsable || '',
-      asset.departamento || '',
-      asset.ubicacion || '',
-      asset.ipAddress || '',
-      asset.macAddress || '',
-      asset.cpu || '',
-      asset.ram || '',
-      asset.disco || '',
-      asset.aniosVida || '',
-      asset.comentarios || '',
-    ]);
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `inventario_filtrado_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    downloadInventoryCsv(filteredActivos);
   }, [filteredActivos, showToast]);
 
   const sortedFilteredActivos = useMemo(() => {
@@ -2197,31 +1515,7 @@ export default function App() {
       return;
     }
 
-    const headers = ['Módulo', 'Fecha', 'Usuario', 'Acción', 'Item', 'Cantidad', 'Resultado', 'Entidad', 'RequestId'];
-    const rows = rowsSource.map((log) => [
-      auditModuleLabel(log.modulo || 'otros'),
-      log.fecha,
-      log.usuario,
-      log.accion,
-      log.item,
-      String(log.cantidad),
-      log.resultado || 'ok',
-      log.entidad || '',
-      log.requestId || '',
-    ]);
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const suffix = module ? `_${module}` : '_general';
-    link.download = `auditoria_it${suffix}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    downloadAuditCsv(rowsSource, module);
   }, [auditRowsForHistory, normalizedAuditRows, showToast, view]);
 
   const auditRowsForGrouping = useMemo(
@@ -3210,250 +2504,51 @@ export default function App() {
     });
     showToast('Preset eliminado', 'success');
   }, [sessionUser, setReportFilterPresets, showConfirm, showToast]);
-  const buildReportPresentationHtml = (): string => {
-    const periodLabel = `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}`;
-    const branchLabel = reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter);
-    const areaLabel = reportAreaFilter === 'TODAS' ? 'Todas las áreas' : reportAreaFilter;
-    const stateLabel = reportStateFilter === 'TODOS' ? 'Todos los estados' : reportStateFilter;
-    const priorityLabel = reportPriorityFilter === 'TODAS' ? 'Todas las prioridades' : reportPriorityFilter;
-    const attentionLabel = reportAttentionFilter === 'TODAS'
-      ? 'Todas las atenciones'
-      : formatTicketAttentionType(reportAttentionFilter);
-    const technicianLabel = reportTechnicianFilter === 'TODOS'
-      ? 'Todos los tecnicos'
-      : reportTechnicianFilter === 'SIN_ASIGNAR'
-        ? 'Sin asignar'
-        : reportTechnicianFilter;
-    const filterSummary = `Sucursal: ${branchLabel} | Área: ${areaLabel} | Estado: ${stateLabel} | Prioridad: ${priorityLabel} | Atención: ${attentionLabel} | Técnico: ${technicianLabel}`;
-    const generatedAt = new Date().toLocaleString();
-    const safePeriod = escapeHtml(periodLabel);
-    const safeFilterSummary = escapeHtml(filterSummary);
-    const safePreviousPeriod = escapeHtml(reportPreviousPeriodLabel);
-    const safeTrendMode = escapeHtml(reportTrendMode === 'SEMANAL' ? 'Semanal' : 'Diaria');
-    const safeGeneratedAt = escapeHtml(generatedAt);
-    const safeUser = escapeHtml(sessionUser?.nombre || 'Sistema');
-    const safeTicketsTrend = escapeHtml(reportTicketsTrend.label);
-    const safeOpenTrend = escapeHtml(reportOpenTrend.label);
-    const safeSlaTrend = escapeHtml(reportSlaComplianceTrend.label);
-    const previousPeriodMeta = reportComparisonWindow
-      ? `<p class="meta"><strong>Periodo anterior:</strong> ${safePreviousPeriod}</p>`
-      : '';
-    const ticketsTrendHtml = reportComparisonWindow ? `<div class="delta">${safeTicketsTrend}</div>` : '';
-    const openTrendHtml = reportComparisonWindow ? `<div class="delta">${safeOpenTrend}</div>` : '';
-    const slaTrendHtml = reportComparisonWindow ? `<div class="delta">${safeSlaTrend}</div>` : '';
-    const ticketRows = reportTickets.slice(0, 40).map((ticket) => {
-      const area = getTicketAreaLabel(ticket);
-      const branch = formatTicketBranchFromCatalog(ticket.sucursal);
-      const attention = formatTicketAttentionType(ticket.atencionTipo);
-      const sla = isTicketSlaExpired(ticket, liveNow) ? 'Vencido' : 'En tiempo';
-      return `
-        <tr>
-          <td>${ticket.id}</td>
-          <td>${escapeHtml(formatDateTime(ticket.fechaCreacion || ticket.fecha))}</td>
-          <td>${escapeHtml(branch)}</td>
-          <td>${escapeHtml(area)}</td>
-          <td>${escapeHtml(ticket.activoTag)}</td>
-          <td>${escapeHtml(ticket.prioridad)}</td>
-          <td>${escapeHtml(ticket.estado)}</td>
-          <td>${escapeHtml(attention)}</td>
-          <td>${escapeHtml(sla)}</td>
-          <td>${escapeHtml(ticket.asignadoA || 'Sin asignar')}</td>
-        </tr>
-      `;
-    }).join('');
-    const stateRows = reportStateBars.map((item) => `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${item.count}</td>
-      </tr>
-    `).join('');
-    const branchRows = reportBranchBars.slice(0, 10).map((item) => `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${item.count}</td>
-      </tr>
-    `).join('');
-    const areaRows = reportAreaBars.slice(0, 10).map((item) => `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${item.count}</td>
-      </tr>
-    `).join('');
-    const causeRows = reportIncidentCauseBars.map((item) => `
-      <tr>
-        <td>${escapeHtml(item.area)}</td>
-        <td>${escapeHtml(item.cause)}</td>
-        <td>${item.count}</td>
-      </tr>
-    `).join('');
-    const trendRows = reportLifecycleTrend.map((item) => `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${item.created}</td>
-        <td>${item.closed}</td>
-      </tr>
-    `).join('');
-    const auditRows = reportAuditModuleBars.map((item) => `
-      <tr>
-        <td>${escapeHtml(item.label)}</td>
-        <td>${item.count}</td>
-      </tr>
-    `).join('');
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Reporte Ejecutivo IT</title>
-  <style>
-    @page { size: A4 portrait; margin: 12mm; }
-    body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; }
-    .page { page-break-after: always; }
-    .page:last-child { page-break-after: auto; }
-    h1, h2 { margin: 0; }
-    .cover { padding: 12mm; border: 2px solid #e2e8f0; border-radius: 12px; }
-    .meta { margin-top: 10px; font-size: 12px; color: #475569; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-    .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
-    .kpi { font-size: 28px; font-weight: 800; margin-top: 4px; }
-    .label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: .05em; }
-    .delta { margin-top: 6px; font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: .04em; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
-    th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
-    th { background: #f8fafc; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; }
-    .section-title { margin-top: 14px; font-size: 14px; font-weight: 800; text-transform: uppercase; }
-  </style>
-</head>
-<body>
-  <section class="page cover">
-    <h1>Reporte Ejecutivo IT</h1>
-    <p class="meta"><strong>Periodo:</strong> ${safePeriod}</p>
-    <p class="meta"><strong>Filtros:</strong> ${safeFilterSummary}</p>
-    ${previousPeriodMeta}
-    <p class="meta"><strong>Tendencia:</strong> ${safeTrendMode}</p>
-    <p class="meta"><strong>Generado:</strong> ${safeGeneratedAt}</p>
-    <p class="meta"><strong>Usuario:</strong> ${safeUser}</p>
-    <div class="grid">
-      <div class="card"><div class="label">Tickets</div><div class="kpi">${reportTickets.length}</div>${ticketsTrendHtml}</div>
-      <div class="card"><div class="label">Abiertos</div><div class="kpi">${reportOpenCount}</div>${openTrendHtml}</div>
-      <div class="card"><div class="label">Cerrados</div><div class="kpi">${reportClosedCount}</div></div>
-      <div class="card"><div class="label">SLA cumplido</div><div class="kpi">${reportSlaCompliancePct}%</div><div class="delta">${reportSlaCompliantCount}/${reportSlaTotalCount} en tiempo</div>${slaTrendHtml}</div>
-      <div class="card"><div class="label">SLA vencido</div><div class="kpi">${reportSlaExpiredCount}</div></div>
-    </div>
-    <div class="grid">
-      <div class="card"><div class="label">Activos totales</div><div class="kpi">${reportInventorySnapshot.totalActivos}</div></div>
-      <div class="card"><div class="label">Activos en falla</div><div class="kpi">${reportInventorySnapshot.activosEnFalla}</div></div>
-      <div class="card"><div class="label">Insumos total</div><div class="kpi">${reportSupplySnapshot.total}</div></div>
-      <div class="card"><div class="label">Insumos críticos</div><div class="kpi">${reportSupplySnapshot.agotados + reportSupplySnapshot.bajoMinimo}</div></div>
-    </div>
-  </section>
-
-  <section class="page">
-    <h2>Distribucion Operativa</h2>
-    <p class="section-title">Tickets por estado</p>
-    <table>
-      <thead><tr><th>Estado</th><th>Cantidad</th></tr></thead>
-      <tbody>${stateRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
-    </table>
-    <p class="section-title">Tickets por sucursal</p>
-    <table>
-      <thead><tr><th>Sucursal</th><th>Cantidad</th></tr></thead>
-      <tbody>${branchRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
-    </table>
-    <p class="section-title">Tickets por área</p>
-    <table>
-      <thead><tr><th>Area</th><th>Cantidad</th></tr></thead>
-      <tbody>${areaRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
-    </table>
-    <p class="section-title">Top causas recurrentes</p>
-    <table>
-      <thead><tr><th>Area</th><th>Causa</th><th>Tickets</th></tr></thead>
-      <tbody>${causeRows || '<tr><td colspan="3">Sin datos</td></tr>'}</tbody>
-    </table>
-    <p class="section-title">Tendencia ${safeTrendMode} de tickets (creados vs cerrados)</p>
-    <table>
-      <thead><tr><th>Periodo</th><th>Creados</th><th>Cerrados</th></tr></thead>
-      <tbody>${trendRows || '<tr><td colspan="3">Sin datos</td></tr>'}</tbody>
-    </table>
-    <p class="section-title">Auditoría por módulo</p>
-    <table>
-      <thead><tr><th>Módulo</th><th>Movimientos</th></tr></thead>
-      <tbody>${auditRows || '<tr><td colspan="2">Sin datos</td></tr>'}</tbody>
-    </table>
-  </section>
-
-  <section class="page">
-    <h2>Detalle de Tickets (${reportTickets.length})</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Fecha</th>
-          <th>Sucursal</th>
-          <th>Area</th>
-          <th>Tag</th>
-          <th>Prioridad</th>
-          <th>Estado</th>
-          <th>Atención</th>
-          <th>SLA</th>
-          <th>Asignado</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${ticketRows || '<tr><td colspan="10">Sin tickets para los filtros seleccionados.</td></tr>'}
-      </tbody>
-    </table>
-  </section>
-</body>
-</html>`;
-  };
+  const buildReportPresentationHtml = (): string => buildExecutiveReportHtml({
+    reportDateFrom,
+    reportDateTo,
+    reportBranchFilter,
+    reportAreaFilter,
+    reportStateFilter,
+    reportPriorityFilter,
+    reportAttentionFilter,
+    reportTechnicianFilter,
+    reportPreviousPeriodLabel,
+    reportTrendMode,
+    hasComparisonWindow: Boolean(reportComparisonWindow),
+    reportTicketsTrend,
+    reportOpenTrend,
+    reportSlaComplianceTrend,
+    reportTickets,
+    reportStateBars,
+    reportBranchBars,
+    reportAreaBars,
+    reportIncidentCauseBars,
+    reportLifecycleTrend,
+    reportAuditModuleBars,
+    reportOpenCount,
+    reportClosedCount,
+    reportSlaCompliancePct,
+    reportSlaCompliantCount,
+    reportSlaTotalCount,
+    reportSlaExpiredCount,
+    reportInventorySnapshot,
+    reportSupplySnapshot,
+    sessionUserName: sessionUser?.nombre || 'Sistema',
+    nowMs: liveNow,
+    formatTicketBranchFromCatalog,
+  });
   const openReportPresentationWindow = (autoPrint = false) => {
-    const html = buildReportPresentationHtml();
-    const win = window.open('', '_blank', 'width=1200,height=900');
-    if (!win) {
-      try {
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const fallbackUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = fallbackUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(fallbackUrl), 2000);
-        showToast('Popup bloqueado. Se abrio un reporte alterno en otra pestana.', 'warning');
-      } catch {
-        showToast('No se pudo abrir ventana de presentacion/reportes', 'warning');
-      }
-      return;
-    }
-
-    try {
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-    } catch {
-      try {
-        win.close();
-      } catch {
-        // no-op
-      }
-      showToast('No se pudo renderizar la presentacion/reportes', 'error');
-      return;
-    }
-
-    if (autoPrint) {
-      let printed = false;
-      const trigger = () => {
-        if (printed || win.closed) return;
-        if (win.document.readyState !== 'complete') return;
-        printed = true;
-        win.focus();
-        win.print();
-      };
-      win.addEventListener('load', () => {
-        window.setTimeout(trigger, 250);
-      }, { once: true });
-      window.setTimeout(trigger, 1200);
-    }
+    openHtmlReportWindow(buildReportPresentationHtml(), {
+      autoPrint,
+      notify: showToast,
+      messages: {
+        popupFallback: 'Popup bloqueado. Se abrio un reporte alterno en otra pestana.',
+        openError: 'No se pudo abrir ventana de presentacion/reportes',
+        openErrorLevel: 'warning',
+        renderError: 'No se pudo renderizar la presentacion/reportes',
+      },
+    });
   };
   const exportReportExcel = async () => {
     if (reportTickets.length === 0 && reportClosedInPeriodCount === 0) {
@@ -3461,107 +2556,52 @@ export default function App() {
       return;
     }
     try {
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.utils.book_new();
-      const summaryRows = [
-        { Indicador: 'Periodo', Valor: `${reportDateFrom || 'N/D'} a ${reportDateTo || 'N/D'}` },
-        { Indicador: 'Filtro sucursal', Valor: reportBranchFilter === 'TODAS' ? 'Todas las sucursales' : formatTicketBranchFromCatalog(reportBranchFilter) },
-        { Indicador: 'Filtro área', Valor: reportAreaFilter === 'TODAS' ? 'Todas las áreas' : reportAreaFilter },
-        { Indicador: 'Filtro estado', Valor: reportStateFilter === 'TODOS' ? 'Todos los estados' : reportStateFilter },
-        { Indicador: 'Filtro prioridad', Valor: reportPriorityFilter === 'TODAS' ? 'Todas las prioridades' : reportPriorityFilter },
-        {
-          Indicador: 'Filtro atención',
-          Valor: reportAttentionFilter === 'TODAS'
-            ? 'Todas las atenciones'
-            : formatTicketAttentionType(reportAttentionFilter),
-        },
-        {
-          Indicador: 'Filtro técnico',
-          Valor: reportTechnicianFilter === 'TODOS'
-            ? 'Todos los tecnicos'
-            : reportTechnicianFilter === 'SIN_ASIGNAR'
-              ? 'Sin asignar'
-              : reportTechnicianFilter,
-        },
-        { Indicador: 'Periodo anterior', Valor: reportPreviousPeriodLabel },
-        { Indicador: 'Tendencia agrupada', Valor: reportTrendMode === 'SEMANAL' ? 'Semanal' : 'Diaria' },
-        { Indicador: 'Tickets', Valor: reportTickets.length },
-        { Indicador: 'Tickets periodo anterior', Valor: reportComparisonWindow ? reportPreviousTickets.length : 'N/D' },
-        { Indicador: 'Comparativo tickets', Valor: reportTicketsTrend.label },
-        { Indicador: 'Abiertos', Valor: reportOpenCount },
-        { Indicador: 'Abiertos periodo anterior', Valor: reportComparisonWindow ? reportPreviousOpenCount : 'N/D' },
-        { Indicador: 'Comparativo abiertos', Valor: reportOpenTrend.label },
-        { Indicador: 'Cerrados', Valor: reportClosedCount },
-        { Indicador: 'Tickets creados en periodo', Valor: reportCreatedInPeriodCount },
-        { Indicador: 'Tickets cerrados en periodo', Valor: reportClosedInPeriodCount },
-        { Indicador: 'Causas recurrentes detectadas', Valor: reportIncidentCauseBars.length },
-        { Indicador: 'Cumplimiento SLA (%)', Valor: reportSlaCompliancePct },
-        { Indicador: 'Cumplimiento SLA previo (%)', Valor: reportComparisonWindow ? reportPreviousSlaCompliancePct : 'N/D' },
-        { Indicador: 'Comparativo cumplimiento SLA', Valor: reportSlaComplianceTrend.label },
-        { Indicador: 'SLA vencido', Valor: reportSlaExpiredCount },
-        { Indicador: 'Críticos', Valor: reportCriticalCount },
-        { Indicador: 'MTTR promedio (horas)', Valor: reportAvgResolutionHours ?? 'N/D' },
-        { Indicador: 'MTTR promedio previo (horas)', Valor: reportComparisonWindow ? (reportPreviousAvgResolutionHours ?? 'N/D') : 'N/D' },
-        { Indicador: 'MTTR mediana (horas)', Valor: reportMedianResolutionHours ?? 'N/D' },
-        { Indicador: 'MTTR mediana previa (horas)', Valor: reportComparisonWindow ? (reportPreviousMedianResolutionHours ?? 'N/D') : 'N/D' },
-        { Indicador: 'Comparativo MTTR mediana', Valor: reportMttrMedianTrend.label },
-        { Indicador: 'P90 resolucion (horas)', Valor: reportP90ResolutionHours ?? 'N/D' },
-        { Indicador: 'P90 resolucion previo (horas)', Valor: reportComparisonWindow ? (reportPreviousP90ResolutionHours ?? 'N/D') : 'N/D' },
-        { Indicador: 'Comparativo P90 resolucion', Valor: reportP90ResolutionTrend.label },
-        { Indicador: 'Activos totales', Valor: reportInventorySnapshot.totalActivos },
-        { Indicador: 'Activos en falla', Valor: reportInventorySnapshot.activosEnFalla },
-        { Indicador: 'Insumos total', Valor: reportSupplySnapshot.total },
-        { Indicador: 'Insumos agotados', Valor: reportSupplySnapshot.agotados },
-        { Indicador: 'Insumos bajo mínimo', Valor: reportSupplySnapshot.bajoMinimo },
-      ];
-      const detailRows = reportTickets.map((ticket) => ({
-        ID: ticket.id,
-        Fecha: formatDateTime(ticket.fechaCreacion || ticket.fecha),
-        Sucursal: formatTicketBranchFromCatalog(ticket.sucursal),
-        Área: getTicketAreaLabel(ticket),
-        Tag: ticket.activoTag,
-        Prioridad: ticket.prioridad,
-        Estado: ticket.estado,
-        Atención: formatTicketAttentionType(ticket.atencionTipo),
-        SLA: isTicketSlaExpired(ticket, liveNow) ? 'VENCIDO' : 'EN TIEMPO',
-        Asignado: ticket.asignadoA || 'Sin asignar',
-        SolicitadoPor: ticket.solicitadoPor || '',
-        Departamento: ticket.departamento || '',
-        Descripción: ticket.descripcion,
-      }));
-      const stateRows = reportStateBars.map((row) => ({ Estado: row.label, Cantidad: row.count }));
-      const branchRows = reportBranchBars.map((row) => ({ Sucursal: row.label, Cantidad: row.count }));
-      const areaRows = reportAreaBars.map((row) => ({ Área: row.label, Cantidad: row.count }));
-      const techRows = reportTechBars.map((row) => ({ Técnico: row.label, Cantidad: row.count }));
-      const causeRows = reportIncidentCauseBars.map((row) => ({
-        Área: row.area,
-        Causa: row.cause,
-        Cantidad: row.count,
-      }));
-      const trendRows = reportLifecycleTrend.map((row) => ({
-        Periodo: row.label,
-        Creados: row.created,
-        Cerrados: row.closed,
-      }));
-      const auditRows = reportAuditRows.map((row) => ({
-        Fecha: row.fecha,
-        Usuario: row.usuario,
-        Módulo: auditModuleLabel(row.modulo || 'otros'),
-        Acción: row.accion,
-        Item: row.item,
-        Cantidad: row.cantidad,
-      }));
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Resumen');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detailRows), 'Tickets');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(stateRows), 'Estado');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(branchRows), 'Sucursal');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(areaRows), 'Área');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(techRows), 'Técnico');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(causeRows), 'Causas');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(trendRows), 'Tendencia');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(auditRows), 'Auditoría');
-      const suffix = `${reportDateFrom || 'inicio'}_${reportDateTo || 'fin'}`.replace(/[^0-9A-Za-z_-]/g, '-');
-      XLSX.writeFile(workbook, `reporteria_it_${suffix}.xlsx`);
+      await downloadReportExcelWorkbook({
+        reportDateFrom,
+        reportDateTo,
+        reportBranchFilter,
+        reportAreaFilter,
+        reportStateFilter,
+        reportPriorityFilter,
+        reportAttentionFilter,
+        reportTechnicianFilter,
+        reportPreviousPeriodLabel,
+        reportTrendMode,
+        hasComparisonWindow: Boolean(reportComparisonWindow),
+        reportTickets,
+        reportPreviousTicketsCount: reportPreviousTickets.length,
+        reportTicketsTrend,
+        reportOpenCount,
+        reportPreviousOpenCount,
+        reportOpenTrend,
+        reportClosedCount,
+        reportCreatedInPeriodCount,
+        reportClosedInPeriodCount,
+        reportSlaCompliancePct,
+        reportPreviousSlaCompliancePct,
+        reportSlaComplianceTrend,
+        reportSlaExpiredCount,
+        reportCriticalCount,
+        reportAvgResolutionHours,
+        reportPreviousAvgResolutionHours,
+        reportMedianResolutionHours,
+        reportPreviousMedianResolutionHours,
+        reportMttrMedianTrend,
+        reportP90ResolutionHours,
+        reportPreviousP90ResolutionHours,
+        reportP90ResolutionTrend,
+        reportInventorySnapshot,
+        reportSupplySnapshot,
+        reportStateBars,
+        reportBranchBars,
+        reportAreaBars,
+        reportTechBars,
+        reportIncidentCauseBars,
+        reportLifecycleTrend,
+        reportAuditRows,
+        nowMs: liveNow,
+        formatTicketBranchFromCatalog,
+      });
       showToast('Reporte Excel generado', 'success');
     } catch {
       showToast('No se pudo exportar el reporte en Excel', 'error');
@@ -3573,287 +2613,6 @@ export default function App() {
   const openReportExecutivePresentation = () => {
     openReportPresentationWindow(false);
   };
-  const buildTravelMovementSheetHtml = (): string => {
-    const safeDepartment = escapeHtml(String(travelReportDepartment || TRAVEL_DEFAULT_DEPARTMENT).trim().toUpperCase());
-    const safeMonth = escapeHtml(travelMonthLabel);
-    const safeReporter = escapeHtml(effectiveTravelReporterName.toUpperCase());
-    const safeAuthorizer = escapeHtml(String(travelReportAuthorizer || TRAVEL_DEFAULT_AUTHORIZER).trim().toUpperCase());
-    const safeFinance = escapeHtml(String(travelReportFinance || TRAVEL_DEFAULT_FINANCE).trim().toUpperCase());
-    const safeGeneratedAt = escapeHtml(new Date().toLocaleString('es-MX'));
-    const litersLabel = travelFuelEfficiencyValue > 0 ? travelFuelLiters.toFixed(1) : 'N/D';
-
-    const rowHtml = travelReportRows.map((row) => `
-      <tr>
-        <td>${escapeHtml(row.nombre.toUpperCase())}</td>
-        <td class="center">${row.routeIndex || ''}</td>
-        <td>${escapeHtml(row.destinationLabel)}</td>
-        <td class="center">${formatTravelNumber(row.kms)}</td>
-        <td class="center">${escapeHtml(row.fecha)}</td>
-        <td>${escapeHtml(row.motivo)}</td>
-      </tr>
-    `).join('');
-    const blankRowHtml = Array.from({ length: Math.max(0, TRAVEL_REPORT_MIN_ROWS - travelReportRows.length) })
-      .map(() => `
-        <tr class="blank">
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-        </tr>
-      `)
-      .join('');
-    const routeRowsHtml = travelDestinationRules.map((row) => `
-      <tr>
-        <td class="center">${row.index}</td>
-        <td>${escapeHtml(row.label)}</td>
-        <td class="center">${formatTravelNumber(row.kms)}</td>
-        <td class="center">${travelSuggestedTripsByCode.get(row.code) || 0}</td>
-      </tr>
-    `).join('');
-
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Formato Mensual Movilidad IT</title>
-  <style>
-    @page { size: A4 portrait; margin: 8mm; }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; background: #d8d8d8; color: #111827; }
-    .sheet {
-      width: 100%;
-      min-height: 100vh;
-      padding: 8px;
-      background: #d8d8d8;
-    }
-    .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 6px;
-    }
-    .logo-box {
-      width: 86px;
-      height: 86px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #f8fafc;
-      border: 2px solid #f59e0b;
-      font-weight: 900;
-      color: #f97316;
-      font-size: 30px;
-    }
-    .header-main h1 {
-      margin: 0;
-      font-size: 38px;
-      line-height: 1.05;
-      font-weight: 900;
-      letter-spacing: .02em;
-      text-transform: uppercase;
-    }
-    .meta {
-      margin-top: 8px;
-      display: grid;
-      grid-template-columns: auto auto;
-      gap: 4px 12px;
-      font-size: 13px;
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-    .meta .label { color: #374151; }
-    .meta .value { color: #111827; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 11px;
-      background: #f9fafb;
-    }
-    th, td {
-      border: 1px solid #111827;
-      padding: 3px 5px;
-      vertical-align: middle;
-      line-height: 1.15;
-    }
-    thead th {
-      background: #fbbf24;
-      color: #111827;
-      text-align: left;
-      font-size: 10px;
-      letter-spacing: .05em;
-      text-transform: uppercase;
-      padding-top: 4px;
-      padding-bottom: 4px;
-    }
-    .main-table tbody tr:nth-child(odd) td {
-      background: #f5f5dc;
-    }
-    .main-table tbody tr.blank td {
-      color: transparent;
-    }
-    .main-table .center,
-    .route-table .center {
-      text-align: center;
-    }
-    .main-table tfoot td {
-      background: #e5f000;
-      font-weight: 900;
-      text-transform: uppercase;
-      font-size: 13px;
-    }
-    .main-table tfoot td.label {
-      text-align: left;
-    }
-    .subgrid {
-      margin-top: 10px;
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 16px;
-      align-items: start;
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-    }
-    .route-table {
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-    }
-    .route-table th {
-      background: #fbbf24;
-      font-size: 10px;
-    }
-    .signatures {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 4px;
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-    }
-    .signature-row {
-      display: grid;
-      grid-template-columns: 140px minmax(0, 1fr);
-      align-items: end;
-      gap: 10px;
-      text-transform: uppercase;
-      font-size: 16px;
-      font-weight: 800;
-      line-height: 1;
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-    }
-    .signature-row .label {
-      white-space: nowrap;
-      letter-spacing: .04em;
-    }
-    .signature-row .line {
-      border-bottom: 1px solid #111827;
-      min-height: 24px;
-      padding: 0 6px 2px;
-      display: flex;
-      align-items: flex-end;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-weight: 500;
-      font-size: 14px;
-    }
-    .generated {
-      margin-top: 10px;
-      font-size: 11px;
-      text-transform: uppercase;
-      color: #4b5563;
-      letter-spacing: .04em;
-    }
-  </style>
-</head>
-<body>
-  <div class="sheet">
-    <div class="header">
-      <div class="logo-box">G</div>
-      <div class="header-main">
-        <h1>Supermercado Los Gigantes</h1>
-        <div class="meta">
-          <span class="label">Departamento:</span><span class="value">${safeDepartment}</span>
-          <span class="label">Reporte del mes:</span><span class="value">${safeMonth}</span>
-        </div>
-      </div>
-    </div>
-
-    <table class="main-table">
-      <colgroup>
-        <col style="width: 28%;" />
-        <col style="width: 4%;" />
-        <col style="width: 12%;" />
-        <col style="width: 8%;" />
-        <col style="width: 12%;" />
-        <col style="width: 36%;" />
-      </colgroup>
-      <thead>
-        <tr>
-          <th>NOMBRE</th>
-          <th>#</th>
-          <th>DESTINO</th>
-          <th>KMS</th>
-          <th>FECHA</th>
-          <th>MOTIVO</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rowHtml || ''}
-        ${blankRowHtml}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td class="label">TOTAL DE VIAJES</td>
-          <td class="center">${travelTotalTrips}</td>
-          <td class="label">KMS</td>
-          <td class="center">${formatTravelNumber(travelTotalKms)}</td>
-          <td class="label">LITROS</td>
-          <td class="center">${escapeHtml(litersLabel)}</td>
-        </tr>
-      </tfoot>
-    </table>
-
-    <div class="subgrid">
-      <table class="route-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>DESTINO</th>
-            <th>KMS</th>
-            <th>VIAJES</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${routeRowsHtml}
-        </tbody>
-      </table>
-      <div class="signatures">
-        <div class="signature-row">
-          <div class="label">PRESENTA</div>
-          <div class="line">${safeReporter}</div>
-        </div>
-        <div class="signature-row">
-          <div class="label">AUTORIZA</div>
-          <div class="line">${safeAuthorizer}</div>
-        </div>
-        <div class="signature-row">
-          <div class="label">FINANZAS</div>
-          <div class="line">${safeFinance}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="generated">Generado: ${safeGeneratedAt}</div>
-  </div>
-</body>
-</html>`;
-  };
   const openTravelMovementSheetWindow = (autoPrint = false) => {
     if (!travelMonthRange) {
       showToast('Selecciona un mes valido para generar el formato', 'warning');
@@ -3863,53 +2622,30 @@ export default function App() {
       showToast('No hay tickets para el mes/filtros seleccionados. Se abrira formato en blanco.', 'warning');
     }
 
-    const html = buildTravelMovementSheetHtml();
-    const win = window.open('', '_blank', 'width=1200,height=900');
-    if (!win) {
-      try {
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const fallbackUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = fallbackUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(fallbackUrl), 2000);
-        showToast('Popup bloqueado. Se abrio el formato en otra pestana.', 'warning');
-      } catch {
-        showToast('No se pudo abrir el formato mensual de movilidad', 'error');
-      }
-      return;
-    }
-
-    try {
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-    } catch {
-      try {
-        win.close();
-      } catch {
-        // no-op
-      }
-      showToast('No se pudo renderizar el formato mensual de movilidad', 'error');
-      return;
-    }
-
-    if (autoPrint) {
-      let printed = false;
-      const trigger = () => {
-        if (printed || win.closed) return;
-        if (win.document.readyState !== 'complete') return;
-        printed = true;
-        win.focus();
-        win.print();
-      };
-      win.addEventListener('load', () => {
-        window.setTimeout(trigger, 250);
-      }, { once: true });
-      window.setTimeout(trigger, 1200);
-    }
+    const html = buildTravelSheetHtml({
+      department: travelReportDepartment,
+      monthLabel: travelMonthLabel,
+      reporterName: effectiveTravelReporterName,
+      authorizer: travelReportAuthorizer,
+      finance: travelReportFinance,
+      fuelEfficiencyValue: travelFuelEfficiencyValue,
+      fuelLiters: travelFuelLiters,
+      rows: travelReportRows,
+      destinationRules: travelDestinationRules,
+      suggestedTripsByCode: travelSuggestedTripsByCode,
+      totalTrips: travelTotalTrips,
+      totalKms: travelTotalKms,
+    });
+    openHtmlReportWindow(html, {
+      autoPrint,
+      notify: showToast,
+      messages: {
+        popupFallback: 'Popup bloqueado. Se abrio el formato en otra pestana.',
+        openError: 'No se pudo abrir el formato mensual de movilidad',
+        openErrorLevel: 'error',
+        renderError: 'No se pudo renderizar el formato mensual de movilidad',
+      },
+    });
   };
   const openTravelMovementSheet = () => {
     openTravelMovementSheetWindow(false);
