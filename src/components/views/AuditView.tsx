@@ -1,6 +1,7 @@
 import React from 'react';
 import { Download } from 'lucide-react';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import type {
   AuditAlertsState,
   AuditFiltersState,
@@ -68,24 +69,15 @@ export const AuditView: React.FC<AuditViewProps> = ({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={resetAuditFilters}
-              className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-            >
+            <Button onClick={resetAuditFilters}>
               Limpiar Filtros
-            </button>
-            <button
-              onClick={() => void fetchAuditHistory()}
-              className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-            >
+            </Button>
+            <Button onClick={() => void fetchAuditHistory()}>
               Actualizar
-            </button>
-            <button
-              onClick={() => descargarAuditoria()}
-              className="px-6 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
-            >
+            </Button>
+            <Button size="lg" onClick={() => descargarAuditoria()}>
               <Download size={16} /> Exportar
-            </button>
+            </Button>
           </div>
         </div>
         <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

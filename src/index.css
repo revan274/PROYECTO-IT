@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@theme {
+  /* Tokens de marca Mesa IT — misma paleta que la UI actual */
+  --color-brand: #F58220;
+  --color-brand-strong: #E06C0C;
+  --color-brand-green: #8CC63F;
+}
+
 :root {
   color-scheme: light;
 }

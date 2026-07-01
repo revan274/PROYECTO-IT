@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 interface ImportPreviewSummary {
   totalRows: number;
@@ -123,19 +124,12 @@ export function ImportPreviewModal({
         </div>
 
         <div className="p-8 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-6 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-          >
+          <Button size="lg" onClick={onClose}>
             Cancelar
-          </button>
-          <button
-            disabled={isApplying || !canConfirm}
-            onClick={onConfirm}
-            className="px-6 py-3 rounded-2xl bg-[#F58220] text-white text-xs font-black uppercase disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="primary" size="lg" disabled={isApplying || !canConfirm} onClick={onConfirm}>
             {isApplying ? 'Aplicando...' : 'Confirmar Importación'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

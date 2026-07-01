@@ -1,5 +1,6 @@
 import { ScanLine, X } from 'lucide-react';
 import type { MutableRefObject } from 'react';
+import { Button } from '../ui/Button';
 
 interface QrScannerModalProps {
   open: boolean;
@@ -83,21 +84,17 @@ export function QrScannerModal({
               className="w-full h-56 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-mono text-slate-700 outline-none"
             />
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
                 disabled={isResolving || !manualInput.trim()}
                 onClick={() => void onResolve()}
-                className="px-5 py-3 rounded-2xl bg-[#F58220] text-white text-xs font-black uppercase disabled:opacity-50"
               >
                 {isResolving ? 'Resolviendo...' : 'Resolver QR'}
-              </button>
-              <button
-                type="button"
-                onClick={onClear}
-                className="px-5 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-              >
+              </Button>
+              <Button size="md" onClick={onClear}>
                 Limpiar
-              </button>
+              </Button>
             </div>
             <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
               Solo compatible con QR firmado (mtiqr1).
