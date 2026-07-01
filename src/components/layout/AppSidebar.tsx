@@ -37,12 +37,9 @@ export function AppSidebar<TView extends string>({
         }`}
       />
       <aside className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-72 bg-white flex flex-col border-r border-slate-100 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:w-72 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-6 py-6 sm:px-8 sm:py-8 flex items-center gap-3">
-          <LogoGigantes className="w-10 h-10 shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-black text-[#F58220] truncate">GIGANTES</h1>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Mesa IT</p>
-          </div>
+        <div className="px-6 py-6 sm:px-8 sm:py-8 flex flex-col items-start gap-2">
+          <LogoGigantes className="block w-44 sm:w-48 max-w-full h-auto" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Mesa IT</p>
         </div>
         <nav className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4 space-y-2">
           {navItems.map((item) => (

@@ -37,10 +37,9 @@ export function LoginView({
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
       <div className="bg-white w-full max-w-md rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 p-8 sm:p-12 text-center">
-        <div className="flex justify-center mb-6">
-          <LogoGigantes className="w-20 h-20 sm:w-24 sm:h-24 animate-bounce" />
+        <div className="flex items-center justify-center mb-4">
+          <LogoGigantes className="block w-56 sm:w-64 max-w-full h-auto mx-auto" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-[#F58220]">LOS GIGANTES</h1>
         <p className="text-[#8CC63F] font-bold text-sm tracking-[0.2em] uppercase mb-8">
           IT Management System
         </p>
