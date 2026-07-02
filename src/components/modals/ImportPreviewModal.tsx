@@ -52,9 +52,9 @@ export function ImportPreviewModal({
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vista Previa Dry-Run</p>
             <h3 className="text-lg font-black uppercase text-slate-800">{fileName}</h3>
           </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-red-500">
+          <Button variant="close" size="bare" onClick={onClose}>
             <X size={22} />
-          </button>
+          </Button>
         </div>
 
         <div className="p-8 space-y-6 max-h-[70vh] overflow-auto">

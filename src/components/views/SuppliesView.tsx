@@ -1,6 +1,8 @@
 import React from 'react';
 import { PlusCircle, Search, MinusCircle, History, Trash2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { FilterChip } from '../ui/FilterChip';
+import { Select } from '../ui/Select';
 import { InsumoFormModal } from '../modals/InsumoFormModal';
 import { SupplyHistoryModal } from '../modals/SupplyHistoryModal';
 import type { FormDataState, Insumo, InsumoErrors, InsumoField, InsumoTouchedState, SupplyAuditMovement } from '../../types/app';
@@ -155,27 +157,27 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
               className="w-full pl-11 pr-4 py-3 rounded-2xl glass-input  bg-white text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
             />
           </div>
-          <select
+          <Select
             value={supplyCategoryFilter}
             onChange={(e) => setSupplyCategoryFilter(e.target.value)}
-            className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODAS">Todas las categorías</option>
             {supplyCategoryOptions.map((categoria) => (
               <option key={categoria} value={categoria}>{categoria}</option>
             ))}
-          </select>
+          </Select>
           <div className="flex gap-2">
-            <select
+            <Select
               value={supplyStatusFilter}
               onChange={(e) => setSupplyStatusFilter(e.target.value as SupplyStatusFilter)}
-              className="flex-1 px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter" className="flex-1"
             >
               <option value="TODOS">Todos</option>
               <option value="AGOTADO">Agotado</option>
               <option value="BAJO">Bajo</option>
               <option value="OK">OK</option>
-            </select>
+            </Select>
             <button
               onClick={() => {
                 setSupplySearchTerm('');
@@ -199,36 +201,26 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <FilterChip
+            tone="critical"
+            active={supplyStatusFilter === 'AGOTADO'}
             onClick={() => setSupplyStatusFilter('AGOTADO')}
-            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-              supplyStatusFilter === 'AGOTADO'
-                ? 'bg-red-500 text-white border-red-500'
-                : 'bg-white text-red-500 border-red-200 hover:bg-red-50'
-            }`}
           >
             Ver agotados ({supplySummary.agotados})
-          </button>
-          <button
+          </FilterChip>
+          <FilterChip
+            tone="warning"
+            active={supplyStatusFilter === 'BAJO'}
             onClick={() => setSupplyStatusFilter('BAJO')}
-            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-              supplyStatusFilter === 'BAJO'
-                ? 'bg-amber-500 text-white border-amber-500'
-                : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'
-            }`}
           >
             Ver bajo mínimo ({supplySummary.bajoMinimo})
-          </button>
-          <button
+          </FilterChip>
+          <FilterChip
+            active={supplyStatusFilter === 'TODOS'}
             onClick={() => setSupplyStatusFilter('TODOS')}
-            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-              supplyStatusFilter === 'TODOS'
-                ? 'bg-slate-700 text-white border-slate-700'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
           >
             Ver todos
-          </button>
+          </FilterChip>
           <button
             disabled={!canEdit}
             onClick={() => void reponerCriticos(5)}

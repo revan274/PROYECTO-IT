@@ -1,4 +1,7 @@
 import React from 'react';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import type { UserItem, UserRole, UserSession } from '../../types/app';
 import { USER_ROLE_LABEL, USER_ROLE_PERMISSIONS } from '../../constants/app';
 
@@ -119,63 +122,65 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{editingUserId !== null ? 'Editar Usuario' : 'Nuevo Usuario'}</p>
                 <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{editingUserId !== null ? 'Actualización de Cuenta' : 'Registro de Cuenta'}</h4>
               </div>
-              <input
+              <Input
                 required
                 placeholder="NOMBRE COMPLETO"
                 value={newUserForm.nombre}
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="formMuted" className="w-full uppercase"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, nombre: e.target.value }))}
               />
-              <input
+              <Input
                 required
                 placeholder="USUARIO"
                 value={newUserForm.username}
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black lowercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="formMuted" className="w-full lowercase"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, username: e.target.value }))}
               />
-              <input
+              <Input
                 required={editingUserId === null}
                 type="password"
                 placeholder={editingUserId !== null ? 'PASSWORD (OPCIONAL)' : 'PASSWORD (MIN 6)'}
                 value={newUserForm.password}
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
+                variant="formMuted" className="w-full"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, password: e.target.value }))}
               />
-              <select
+              <Select
                 required
                 value={newUserForm.departamento}
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="formMuted" className="w-full uppercase"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, departamento: e.target.value }))}
               >
                 <option value="">Selecciona cargo...</option>
                 {userCargoOptions.map((cargo) => (
                   <option key={cargo.value} value={cargo.value}>{cargo.label}</option>
                 ))}
-              </select>
-              <select
+              </Select>
+              <Select
                 value={newUserForm.rol}
-                className="w-full p-4 bg-slate-50 glass-input  rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="formMuted" className="w-full uppercase"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, rol: e.target.value as UserRole }))}
               >
                 {roleCatalogOptions.map((role) => (
                   <option key={role.value} value={role.value}>{role.label}</option>
                 ))}
-              </select>
-              <button
+              </Select>
+              <Button
+                variant="primary"
+                size="bare"
+                className="w-full py-4 rounded-2xl shadow-xl"
                 type="submit"
                 disabled={isCreatingUser}
-                className="w-full py-4 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl disabled:opacity-50"
               >
                 {isCreatingUser ? (editingUserId !== null ? 'Guardando...' : 'Creando...') : (editingUserId !== null ? 'Guardar Cambios' : 'Crear Usuario')}
-              </button>
+              </Button>
               {editingUserId !== null && (
-                <button
-                  type="button"
+                <Button
+                  size="bare"
+                  className="w-full py-3 rounded-2xl text-xs"
                   onClick={resetNewUserForm}
-                  className="w-full py-3 border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-xs hover:bg-slate-50"
                 >
                   Cancelar Edición
-                </button>
+                </Button>
               )}
             </form>
 

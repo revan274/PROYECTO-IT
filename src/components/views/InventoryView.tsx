@@ -5,6 +5,9 @@ import { AssetDetailModal } from '../modals/AssetDetailModal';
 import { ImportPreviewModal } from '../modals/ImportPreviewModal';
 import { QrScannerModal } from '../modals/QrScannerModal';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { FilterChip } from '../ui/FilterChip';
+import { Select } from '../ui/Select';
 import type {
   Activo,
   DuplicateRiskItem,
@@ -215,19 +218,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               className="hidden"
               onChange={(event) => void handleImportInventory(event)}
             />
-            <button
+            <Button
+              variant="dark"
+              size="toolbar"
               disabled={!canEdit || isImportingInventory}
               onClick={() => inventoryImportInputRef.current?.click()}
-              className="w-full xl:w-auto min-w-0 bg-slate-800 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Upload size={16} /> {isImportingInventory ? 'Importando...' : 'Importar Excel'}
-            </button>
-            <button
-              onClick={exportarInventarioFiltrado}
-              className="w-full xl:w-auto min-w-0 bg-white border border-slate-200 text-slate-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-slate-50"
-            >
+            </Button>
+            <Button size="toolbar" onClick={exportarInventarioFiltrado}>
               <Download size={16} /> Exportar CSV
-            </button>
+            </Button>
             <button
               onClick={() => {
                 setQrManualInput('');
@@ -247,13 +248,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <Trash2 size={16} /> Vaciar Activos
               </button>
             )}
-            <button
+            <Button
+              variant="primary"
+              size="toolbar"
               disabled={!canEdit}
               onClick={() => openModal('activo')}
-              className="w-full xl:w-auto min-w-0 bg-[#F58220] text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Plus size={18} /> Nuevo Activo
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -278,39 +280,39 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
-            <select
+            <Select
               value={inventoryDepartmentFilter}
               onChange={(e) => setInventoryDepartmentFilter(e.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="TODOS">Todos los departamentos</option>
               {departamentoOptions.map((departamento) => (
                 <option key={departamento} value={departamento}>{departamento}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={inventoryEquipmentFilter}
               onChange={(e) => setInventoryEquipmentFilter(e.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="TODOS">Todos los equipos</option>
               {equipoOptions.map((equipo) => (
                 <option key={equipo} value={equipo}>{equipo}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={inventoryStatusFilter}
               onChange={(e) => setInventoryStatusFilter(e.target.value as 'TODOS' | EstadoActivo)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="TODOS">Todos los estados</option>
               <option value="Operativo">Operativo</option>
               <option value="Falla">Falla</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={inventoryRiskFilter}
               onChange={(e) => setInventoryRiskFilter(e.target.value as InventoryRiskFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="TODOS">Todos los riesgos</option>
               <option value="SIN_IP">Sin IP</option>
@@ -318,11 +320,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <option value="SIN_RESP">Sin responsable</option>
               <option value="DUP_RED">Duplicado de red</option>
               <option value="VIDA_ALTA">Vida útil &gt;= 4</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={inventorySortField}
               onChange={(e) => setInventorySortField(e.target.value as InventorySortField)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="tag">Orden: Tag</option>
               <option value="tipo">Orden: Equipo</option>
@@ -330,15 +332,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <option value="responsable">Orden: Responsable</option>
               <option value="ubicacion">Orden: Ubicación</option>
               <option value="aniosVida">Orden: Vida útil</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={inventorySortDirection}
               onChange={(e) => setInventorySortDirection(e.target.value as InventorySortDirection)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-500"
+              variant="filter"
             >
               <option value="asc">Ascendente</option>
               <option value="desc">Descendente</option>
-            </select>
+            </Select>
             <button
               onClick={() => {
                 setInventoryDepartmentFilter('TODOS');
@@ -356,46 +358,30 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <FilterChip
+              active={inventoryStatusFilter === 'Falla' && inventoryRiskFilter === 'TODOS'}
               onClick={() => applyInventoryFocus('FALLA')}
-              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                inventoryStatusFilter === 'Falla' && inventoryRiskFilter === 'TODOS'
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
             >
               Solo Fallas ({activosEnFalla})
-            </button>
-            <button
+            </FilterChip>
+            <FilterChip
+              active={inventoryRiskFilter === 'SIN_RESP'}
               onClick={() => applyInventoryFocus('SIN_RESP')}
-              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                inventoryRiskFilter === 'SIN_RESP'
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
             >
               Sin Responsable ({activosSinResponsable})
-            </button>
-            <button
+            </FilterChip>
+            <FilterChip
+              active={inventoryRiskFilter === 'DUP_RED'}
               onClick={() => applyInventoryFocus('DUP_RED')}
-              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                inventoryRiskFilter === 'DUP_RED'
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
             >
               Duplicados Red ({duplicateIpEntries.length + duplicateMacEntries.length})
-            </button>
-            <button
+            </FilterChip>
+            <FilterChip
+              active={inventoryRiskFilter === 'VIDA_ALTA'}
               onClick={() => applyInventoryFocus('VIDA_ALTA')}
-              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                inventoryRiskFilter === 'VIDA_ALTA'
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
             >
               Vida &gt;=4 ({activosVidaAlta})
-            </button>
+            </FilterChip>
           </div>
         </div>
 

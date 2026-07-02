@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 interface SupplyHistoryItem {
   nombre: string;
@@ -41,13 +42,9 @@ export function SupplyHistoryModal({
               Registros: {movements.length} | Unidad: {item.unidad || 'Piezas'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-300 hover:text-red-500"
-          >
+          <Button variant="close" size="bare" onClick={onClose}>
             <X size={22} />
-          </button>
+          </Button>
         </div>
 
         <div className="p-8 space-y-3 max-h-[68vh] overflow-y-auto">

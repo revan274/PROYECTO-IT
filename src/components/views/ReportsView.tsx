@@ -1,4 +1,6 @@
 import React from 'react';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import type {
   PrioridadTicket,
   ReportAttentionFilter,
@@ -291,22 +293,22 @@ export function ReportsView({
 
         <div className="p-8 border-b border-slate-50 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 gap-3">
-            <input
+            <Input
               type="date"
               value={reportDateFrom}
               onChange={(event) => setReportDateFrom(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <input
+            <Input
               type="date"
               value={reportDateTo}
               onChange={(event) => setReportDateTo(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <select
+            <Select
               value={reportBranchFilter}
               onChange={(event) => setReportBranchFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODAS">Sucursal: todas</option>
               {reportBranchOptions.map((code) => (
@@ -314,11 +316,11 @@ export function ReportsView({
                   {formatTicketBranchFromCatalog(code)}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={reportAreaFilter}
               onChange={(event) => setReportAreaFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODAS">Area: todas</option>
               {reportAreaOptions.map((area) => (
@@ -326,11 +328,11 @@ export function ReportsView({
                   {area}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={reportStateFilter}
               onChange={(event) => setReportStateFilter(event.target.value as ReportStateFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODOS">Estado: todos</option>
               {ticketStates.map((state) => (
@@ -338,21 +340,21 @@ export function ReportsView({
                   {state}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={reportPriorityFilter}
               onChange={(event) => setReportPriorityFilter(event.target.value as ReportPriorityFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODAS">Prioridad: todas</option>
               <option value="MEDIA">Media</option>
               <option value="ALTA">Alta</option>
               <option value="CRITICA">Critica</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={reportAttentionFilter}
               onChange={(event) => setReportAttentionFilter(event.target.value as ReportAttentionFilter)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODAS">Atención: todas</option>
               {ticketAttentionTypes.map((type) => (
@@ -360,11 +362,11 @@ export function ReportsView({
                   {formatTicketAttentionType(type)}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={reportTechnicianFilter}
               onChange={(event) => setReportTechnicianFilter(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODOS">Técnico: todos</option>
               <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
@@ -373,7 +375,7 @@ export function ReportsView({
                   {name}
                 </option>
               ))}
-            </select>
+            </Select>
             <button
               onClick={resetReportFilters}
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
@@ -384,12 +386,12 @@ export function ReportsView({
 
           <div className="flex flex-col lg:flex-row gap-3">
             <div className="flex-1 flex flex-col sm:flex-row gap-2">
-              <input
+              <Input
                 type="text"
                 value={reportPresetName}
                 onChange={(event) => setReportPresetName(event.target.value)}
                 placeholder="Nombre del preset"
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+                variant="filter" className="flex-1"
               />
               <button
                 onClick={saveCurrentReportFilterPreset}
@@ -452,16 +454,16 @@ export function ReportsView({
         </div>
         <div className="p-8 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
-            <input
+            <Input
               type="month"
               value={travelReportMonth}
               onChange={(event) => setTravelReportMonth(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <select
+            <Select
               value={travelReportTechnician}
               onChange={(event) => setTravelReportTechnician(event.target.value)}
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             >
               <option value="TODOS">Técnico: todos</option>
               <option value="SIN_ASIGNAR">Técnico: sin asignar</option>
@@ -470,41 +472,41 @@ export function ReportsView({
                   {name}
                 </option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
               type="text"
               value={travelReportName}
               onChange={(event) => setTravelReportName(event.target.value)}
               placeholder="Nombre en formato"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <input
+            <Input
               type="text"
               value={travelReportDepartment}
               onChange={(event) => setTravelReportDepartment(event.target.value.toUpperCase())}
               placeholder="Departamento"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <input
+            <Input
               type="text"
               value={travelReportFuelEfficiency}
               onChange={(event) => setTravelReportFuelEfficiency(event.target.value)}
               placeholder="Rendimiento km/l"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <input
+            <Input
               type="text"
               value={travelReportAuthorizer}
               onChange={(event) => setTravelReportAuthorizer(event.target.value.toUpperCase())}
               placeholder="Autoriza"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
-            <input
+            <Input
               type="text"
               value={travelReportFinance}
               onChange={(event) => setTravelReportFinance(event.target.value.toUpperCase())}
               placeholder="Finanzas"
-              className="px-4 py-3 rounded-2xl border border-slate-100 bg-white text-xs font-black uppercase text-slate-600"
+              variant="filter"
             />
           </div>
 

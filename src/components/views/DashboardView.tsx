@@ -2,6 +2,7 @@ import React from 'react';
 import type { Activo, DashboardRange, Insumo, TicketItem, ViewType } from '../../types/app';
 import { DASHBOARD_RANGES } from '../../constants/app';
 import { Badge } from '../ui/Badge';
+import { FilterChip } from '../ui/FilterChip';
 import { getSupplyHealthStatus } from '../../utils/appHelpers';
 import {
   normalizeTicketAttentionType,
@@ -103,17 +104,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {DASHBOARD_RANGES.map((range) => (
-              <button
+              <FilterChip
                 key={`dash-range-${range.value}`}
+                tone="brand"
+                active={dashboardRange === range.value}
                 onClick={() => setDashboardRange(range.value)}
-                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                  dashboardRange === range.value
-                    ? 'bg-[#F58220] text-white border-[#F58220]'
-                    : 'bg-white/5 text-slate-200 border-white/20 hover:bg-white/10'
-                }`}
               >
                 {range.label}
-              </button>
+              </FilterChip>
             ))}
           </div>
         </div>

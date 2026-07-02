@@ -2,6 +2,8 @@ import React from 'react';
 import { Ticket, Trash2 } from 'lucide-react';
 import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
 import { ticketRequiresTravel } from '../../utils/tickets';
 import type {
   CatalogBranch,
@@ -155,13 +157,15 @@ export function TicketsView({
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operación y seguimiento</p>
           <h3 className="text-xl font-black uppercase text-slate-800">Tickets IT</h3>
         </div>
-        <button
+        <Button
+          variant="dark"
+          size="bare"
           disabled={!canCreateTickets}
           onClick={onOpenTicketModal}
-          className="w-full rounded-3xl bg-slate-800 px-8 py-4 text-xs font-black uppercase text-white disabled:opacity-50 sm:w-auto"
+          className="w-full rounded-3xl px-8 py-4 text-xs sm:w-auto"
         >
           Nuevo ticket
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -197,64 +201,58 @@ export function TicketsView({
 
       <div className="rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-7">
-          <select
+          <Select
             value={ticketLifecycleFilter}
             onChange={(event) => onTicketLifecycleFilterChange(event.target.value as TicketLifecycleFilter)}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODOS">Ciclo: todos</option>
             <option value="ABIERTOS">Solo abiertos</option>
             <option value="CERRADOS">Solo cerrados</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={ticketStateFilter}
             onChange={(event) => onTicketStateFilterChange(event.target.value)}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODOS">Estado: todos</option>
             {ticketStates.map((state) => (
               <option key={state} value={state}>{state}</option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             value={ticketPriorityFilter}
             onChange={(event) => onTicketPriorityFilterChange(event.target.value)}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODAS">Prioridad: todas</option>
             <option value="MEDIA">Media</option>
             <option value="ALTA">Alta</option>
             <option value="CRITICA">Crítica</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={ticketAssignmentFilter}
             onChange={(event) => onTicketAssignmentFilterChange(event.target.value as TicketAssignmentFilter)}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODOS">Asignación: todos</option>
             <option value="ASIGNADOS">Solo asignados</option>
             <option value="SIN_ASIGNAR">Sin asignar</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={ticketSlaFilter}
             onChange={(event) => onTicketSlaFilterChange(event.target.value as TicketSlaFilter)}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500"
+            variant="filter"
           >
             <option value="TODOS">SLA: todos</option>
             <option value="VENCIDO">Solo vencido</option>
-          </select>
-          <button
-            onClick={() => onApplyTicketFocus('EN_PROCESO')}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-          >
+          </Select>
+          <Button onClick={() => onApplyTicketFocus('EN_PROCESO')}>
             Ver en proceso
-          </button>
-          <button
-            onClick={onResetFilters}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-          >
+          </Button>
+          <Button onClick={onResetFilters}>
             Limpiar filtros
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -310,17 +308,17 @@ export function TicketsView({
                 </div>
               </div>
               <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto">
-                <select
+                <Select
                   disabled={!canEdit}
                   value={ticket.estado}
                   onChange={(event) => onStatusChange(ticket.id, event.target.value as TicketEstado)}
-                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  variant="filter"
                 >
                   {ticketStates.map((state) => (
                     <option key={state} value={state}>{state}</option>
                   ))}
-                </select>
-                <select
+                </Select>
+                <Select
                   disabled={!canEdit}
                   value={normalizeTicketAttentionType(ticket.atencionTipo) || ''}
                   onChange={(event) => {
@@ -328,13 +326,13 @@ export function TicketsView({
                     if (!value) return;
                     onAttentionChange(ticket.id, value);
                   }}
-                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50 sm:min-w-[15rem]"
+                  variant="filter" className="sm:min-w-[15rem]"
                 >
                   <option value="">Sin definir</option>
                   {ticketAttentionTypes.map((type) => (
                     <option key={type} value={type}>{formatTicketAttentionType(type)}</option>
                   ))}
-                </select>
+                </Select>
                 <label className="flex min-w-[12rem] items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3">
                   <span className="text-[10px] font-black uppercase text-slate-500">
                     Se ocupo traslado
@@ -351,11 +349,11 @@ export function TicketsView({
                     <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white toggle-thumb shadow-sm transition-transform peer-checked:translate-x-5" />
                   </span>
                 </label>
-                <select
+                <Select
                   disabled={!canEdit}
                   value={ticket.asignadoA || ''}
                   onChange={(event) => onAssigneeChange(ticket.id, event.target.value)}
-                  className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-xs font-black uppercase text-slate-500 disabled:opacity-50"
+                  variant="filter"
                 >
                   <option value="">Sin asignar</option>
                   {technicians
@@ -363,7 +361,7 @@ export function TicketsView({
                     .map((user) => (
                       <option key={user.id} value={user.nombre}>{user.nombre}</option>
                     ))}
-                </select>
+                </Select>
                 <button
                   onClick={() => onViewAsset(ticket.activoTag)}
                   className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"

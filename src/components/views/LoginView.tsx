@@ -1,6 +1,9 @@
 import React from 'react';
 import { Sun, Moon, User } from 'lucide-react';
 import { LogoGigantes } from '../brand/LogoGigantes';
+import { Button } from '../ui/Button';
+import { Field } from '../ui/Field';
+import { Input } from '../ui/Input';
 import { Toast } from '../ui/Toast';
 
 interface LoginViewProps {
@@ -28,14 +31,14 @@ export function LoginView({
 }: LoginViewProps) {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-      <button
-        type="button"
+      <Button
+        size="icon"
+        className="fixed top-4 right-4 z-20 hover:text-slate-700 transition-colors"
         onClick={toggleTheme}
         title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 flex items-center justify-center transition-colors"
       >
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-      </button>
+      </Button>
       <div className="bg-white w-full max-w-md rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl border border-slate-100 p-8 sm:p-12 text-center">
         <div className="flex items-center justify-center mb-4">
           <LogoGigantes className="block w-56 sm:w-64 max-w-full h-auto mx-auto" />
@@ -45,38 +48,34 @@ export function LoginView({
         </p>
 
         <form onSubmit={handleLogin} className="space-y-4 text-left">
-          <div>
-            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">
-              Usuario
-            </label>
-            <input
-              className="w-full p-4 bg-slate-50 glass-input rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
+          <Field label="Usuario">
+            <Input
+              variant="formMuted" className="w-full"
               value={loginForm.username || ''}
               onChange={(e) => setLoginForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="admin"
               autoComplete="username"
             />
-          </div>
-          <div>
-            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">
-              Password
-            </label>
-            <input
+          </Field>
+          <Field label="Password">
+            <Input
               type="password"
-              className="w-full p-4 bg-slate-50 glass-input rounded-2xl text-sm font-black outline-none focus:ring-4 focus:ring-blue-100"
+              variant="formMuted" className="w-full"
               value={loginForm.password || ''}
               onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Ingresa tu password"
               autoComplete="current-password"
             />
-          </div>
-          <button
+          </Field>
+          <Button
+            variant="primary"
+            size="bare"
+            className="w-full py-4 rounded-3xl shadow-xl hover:scale-[1.02] transition-all tracking-widest gap-2"
             type="submit"
             disabled={loginLoading}
-            className="w-full bg-[#F58220] text-white font-black py-4 rounded-3xl shadow-xl hover:scale-[1.02] transition-all uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <User size={18} /> {loginLoading ? 'Entrando...' : 'Iniciar Sesión'}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-6 text-left text-[10px] text-slate-400 font-black uppercase tracking-wider">

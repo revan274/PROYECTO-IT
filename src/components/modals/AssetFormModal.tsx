@@ -1,6 +1,10 @@
 import React from 'react';
 import { Save } from 'lucide-react';
 import type { EstadoActivo, FormDataState } from '../../types/app';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
+import { TextArea } from '../ui/TextArea';
 import { ModalLayout } from './ModalLayout';
 
 interface AssetFormModalProps {
@@ -42,46 +46,46 @@ export function AssetFormModal({
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Requeridos: Tag, Tipo, Marca, Serial, Ubicación</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
+              <Input
                 required
                 placeholder="TAG *"
                 value={formData.tag || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ tag: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="ID INTERNO"
                 value={formData.idInterno || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ idInterno: e.target.value })}
               />
-              <input
+              <Input
                 required
                 placeholder="SERIAL *"
                 value={formData.serial || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ serial: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
+              <Input
                 required
                 placeholder="TIPO *"
                 value={formData.tipo || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ tipo: e.target.value })}
               />
-              <input
+              <Input
                 required
                 placeholder="MARCA *"
                 value={formData.marca || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ marca: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="MODELO"
                 value={formData.modelo || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ modelo: e.target.value })}
               />
             </div>
@@ -90,10 +94,10 @@ export function AssetFormModal({
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
             <div className="space-y-1">
-              <input
+              <Input
                 placeholder="NOMBRE VISIBLE PARA SOLICITANTES (EJ. CAJA 1, IMPRESORA MOSTRADOR)"
                 value={formData.nombreVisible || ''}
-                className="w-full p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form" className="w-full"
                 onChange={(e) => onChange({ nombreVisible: e.target.value })}
               />
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
@@ -101,63 +105,63 @@ export function AssetFormModal({
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
+              <Input
                 required
                 placeholder="UBICACION *"
                 value={formData.ubicacion || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ ubicacion: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="DEPARTAMENTO"
                 value={formData.departamento || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ departamento: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="RESPONSABLE"
                 value={formData.responsable || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ responsable: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
+              <Input
                 type="date"
                 value={formData.fechaCompra || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ fechaCompra: e.target.value })}
               />
-              <select
+              <Select
                 value={formData.estado || 'Operativo'}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ estado: e.target.value as EstadoActivo })}
               >
                 <option value="Operativo">Operativo</option>
                 <option value="Falla">Falla</option>
-              </select>
+              </Select>
             </div>
           </section>
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Red y Acceso</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
+              <Input
                 placeholder="IP ADDRESS"
                 value={formData.ipAddress || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ ipAddress: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="MAC ADDRESS"
                 value={formData.macAddress || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ macAddress: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="ANYDESK"
                 value={formData.anydesk || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ anydesk: e.target.value })}
               />
             </div>
@@ -166,42 +170,42 @@ export function AssetFormModal({
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hardware y Ciclo de Vida</p>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <input
+              <Input
                 placeholder="CPU"
                 value={formData.cpu || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ cpu: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="RAM"
                 value={formData.ram || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ ram: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="TIPO RAM"
                 value={formData.ramTipo || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ ramTipo: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="DISCO"
                 value={formData.disco || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ disco: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
+              <Input
                 placeholder="TIPO DISCO"
                 value={formData.tipoDisco || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ tipoDisco: e.target.value })}
               />
-              <input
+              <Input
                 placeholder="ANOS DE VIDA"
                 value={formData.aniosVida || ''}
-                className="p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
+                variant="form"
                 onChange={(e) => onChange({ aniosVida: e.target.value })}
               />
             </div>
@@ -209,22 +213,19 @@ export function AssetFormModal({
 
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
-            <textarea
+            <TextArea
+              variant="form"
+              className="w-full h-24"
               placeholder="COMENTARIOS"
               value={formData.comentarios || ''}
-              className="w-full p-4 bg-white glass-input rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
               onChange={(e) => onChange({ comentarios: e.target.value })}
             />
           </section>
         </div>
 
-        <button
-          disabled={!canSubmit}
-          type="submit"
-          className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 mt-4 flex justify-center gap-2 disabled:opacity-50"
-        >
+        <Button variant="primary" size="cta" className="mt-4" disabled={!canSubmit} type="submit">
           <Save size={18} /> {submitLabel}
-        </button>
+        </Button>
       </form>
     </ModalLayout>
   );

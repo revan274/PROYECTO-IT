@@ -1,4 +1,5 @@
 import { Menu, Moon, Search, Sun } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -53,14 +54,14 @@ export function AppHeader({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <button
-              type="button"
+            <Button
+              size="icon"
+              className="hover:text-slate-700 transition-colors"
               onClick={onToggleTheme}
               title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-              className="w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 flex items-center justify-center transition-colors"
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
+            </Button>
             <div className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider ${backendConnected ? 'text-[#8CC63F] bg-[#f4fce3] border-[#d8f5a2]' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
               <span>{backendConnected ? 'Backend Online' : 'Backend Offline'}</span>
               {isSyncing && <span className="text-slate-400">SYNC...</span>}

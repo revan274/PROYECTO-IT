@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Save } from 'lucide-react';
+import { Button } from '../ui/Button';
 import { SLA_POLICY, TICKET_AREA_OPTIONS, TICKET_ATTENTION_TYPES, TICKET_STATES } from '../../constants/app';
 import type {
   CatalogBranch,
@@ -381,13 +382,9 @@ export function TicketFormModal({
           </div>
         )}
 
-        <button
-          disabled={!canSubmit}
-          type="submit"
-          className="w-full py-5 bg-[#F58220] text-white rounded-2xl font-black uppercase shadow-xl hover:opacity-90 mt-4 flex justify-center gap-2 disabled:opacity-50"
-        >
+        <Button variant="primary" size="cta" className="mt-4" disabled={!canSubmit} type="submit">
           <Save size={18} /> {submitLabel}
-        </button>
+        </Button>
       </form>
     </ModalLayout>
   );

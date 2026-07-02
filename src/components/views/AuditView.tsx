@@ -2,6 +2,8 @@ import React from 'react';
 import { Download } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import type {
   AuditAlertsState,
   AuditFiltersState,
@@ -81,61 +83,61 @@ export const AuditView: React.FC<AuditViewProps> = ({
           </div>
         </div>
         <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <select
+          <Select
             value={auditFilters.module}
             onChange={(e) => updateAuditFilters({ module: (e.target.value || '') as '' | AuditModule })}
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
+            variant="filter"
           >
             <option value="">Módulo: Todos</option>
             <option value="tickets">Tickets</option>
             <option value="insumos">Insumos</option>
             <option value="activos">Activos</option>
             <option value="otros">Otros</option>
-          </select>
-          <select
+          </Select>
+          <Select
             value={auditFilters.result}
             onChange={(e) => updateAuditFilters({ result: (e.target.value || '') as '' | 'ok' | 'error' })}
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 bg-white"
+            variant="filter"
           >
             <option value="">Resultado: Todos</option>
             <option value="ok">OK</option>
             <option value="error">Error</option>
-          </select>
-          <input
+          </Select>
+          <Input
             value={auditFilters.user}
             onChange={(e) => updateAuditFilters({ user: e.target.value })}
             placeholder="Usuario / rol / depto"
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
-          <input
+          <Input
             value={auditFilters.action}
             onChange={(e) => updateAuditFilters({ action: e.target.value })}
             placeholder="Acción"
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
-          <input
+          <Input
             value={auditFilters.entity}
             onChange={(e) => updateAuditFilters({ entity: e.target.value })}
             placeholder="Entidad"
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
-          <input
+          <Input
             value={auditFilters.q}
             onChange={(e) => updateAuditFilters({ q: e.target.value })}
             placeholder="Búsqueda libre"
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
-          <input
+          <Input
             type="date"
             value={auditFilters.from}
             onChange={(e) => updateAuditFilters({ from: e.target.value })}
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
-          <input
+          <Input
             type="date"
             value={auditFilters.to}
             onChange={(e) => updateAuditFilters({ to: e.target.value })}
-            className="px-4 py-3 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600"
+            variant="filter"
           />
         </div>
       </div>

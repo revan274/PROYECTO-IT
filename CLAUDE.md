@@ -5,7 +5,9 @@
 **El Design System (`src/components/ui/`) es la única fuente de verdad para patrones visuales reutilizables.**
 
 - Ningún componente nuevo puede introducir clases Tailwind repetidas si ya existe un componente del DS que cubra ese caso.
-- Antes de escribir un `className` con más de ~4 utilidades, verificar si `Button`, `Badge`, `Toast` u otro componente de `src/components/ui/` ya lo cubre.
+- Catálogo estabilizado: `Button` (variant=piel, size=forma), `FilterChip` (active+tone), `Input`/`Select`/`TextArea` (variant de `controlSkin` + invalid), `Badge`, `Toast`. Pieles compartidas de controles en `controlSkin.ts`.
+- Clasificación obligatoria para toda piel nueva: (1) reutiliza `controlSkin`/variante existente, (2) solo difiere en layout → `className` del consumidor, (3) diferencia visual reutilizable con ≥2 consumidores → nueva variante. Sin categorías intermedias; sin variantes de un solo consumidor.
+- El layout (márgenes, grid, flex, anchos) es del consumidor vía `className`; los componentes solo encapsulan apariencia y comportamiento visual.
 - Los componentes del DS: aceptan `className` para extensión, reenvían props nativas del elemento HTML, no contienen lógica de negocio (solo presentación), y no añaden variantes usadas una sola vez.
 - Tokens de marca en `src/index.css` (`@theme`): `--color-brand` (#F58220), `--color-brand-strong` (#E06C0C), `--color-brand-green` (#8CC63F). Usar `bg-brand` / `text-brand` en lugar de `bg-[#F58220]`.
 
