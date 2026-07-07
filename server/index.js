@@ -126,6 +126,21 @@ if (IS_PRODUCTION && CORS_ORIGINS.length === 0) {
   console.warn('[SEGURIDAD] CORS_ORIGINS vacío en producción: se rechazarán orígenes cruzados. Define CORS_ORIGINS con tu dominio público.');
 }
 const TRUST_PROXY = process.env.TRUST_PROXY;
+const API_RATE_LIMIT_MAX = Math.max(300, Math.trunc(Number(process.env.RATE_LIMIT_MAX || 1200)));
+
+function buildRateLimitHandler(defaultMessage) {
+  return (req, res, _next, options) => {
+    const resetTime = req.rateLimit?.resetTime;
+    const retryAfterSec = resetTime instanceof Date
+      ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
+      : undefined;
+
+    res.status(options?.statusCode || 429).json({
+      error: defaultMessage,
+      ...(retryAfterSec ? { retryAfterSec } : {}),
+    });
+  };
+}
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -133,6 +148,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiados intentos de autenticación. Intenta más tarde.' },
+  handler: buildRateLimitHandler('Demasiados intentos de autenticación. Intenta más tarde.'),
 });
 
 const uploadLimiter = rateLimit({
@@ -141,6 +157,7 @@ const uploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas cargas de adjuntos. Intenta más tarde.' },
+  handler: buildRateLimitHandler('Demasiadas cargas de adjuntos. Intenta más tarde.'),
 });
 
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
@@ -202,10 +219,12 @@ function configureCommonMiddleware(app) {
   }));
   app.use('/api', rateLimit({
     windowMs: 60 * 1000,
-    max: Math.max(60, Math.trunc(Number(process.env.RATE_LIMIT_MAX || 240))),
+    max: API_RATE_LIMIT_MAX,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path === '/health',
     message: { error: 'Demasiadas solicitudes. Intenta más tarde.' },
+    handler: buildRateLimitHandler('Demasiadas solicitudes. Intenta más tarde.'),
   }));
   app.use(express.json({ limit: '8mb' }));
   app.use((req, res, next) => {
