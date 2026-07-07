@@ -2,6 +2,8 @@ import React from 'react';
 import type { Activo, DashboardRange, Insumo, TicketItem, ViewType } from '../../types/app';
 import { DASHBOARD_RANGES } from '../../constants/app';
 import { Badge } from '../ui/Badge';
+import { Card } from '../ui/Card';
+import { PageHeader } from '../ui/PageHeader';
 import { FilterChip } from '../ui/FilterChip';
 import { getSupplyHealthStatus } from '../../utils/appHelpers';
 import {
@@ -155,8 +157,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="xl:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad Reciente | {dashboardWindow.label}</p>
-              <h3 className="text-lg font-black uppercase text-slate-800">Últimos Tickets del Período</h3>
+              <PageHeader variant="section" eyebrow={<>Actividad Reciente | {dashboardWindow.label}</>} title={<>Últimos Tickets del Período</>} />
             </div>
             <button
               onClick={() => setView('tickets')}
@@ -205,9 +206,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Carga Operativa</p>
-            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Tickets por Técnico</h3>
+          <Card variant="hero">
+            <PageHeader variant="section" className="mb-5" eyebrow={<>Carga Operativa</>} title={<>Tickets por Técnico</>} />
             <div className="space-y-3">
               {dashboardTopOwners.map(([owner, count]) => (
                 <div key={`owner-${owner}`} className="space-y-2 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
@@ -241,11 +241,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 En proceso: {dashboardInProcessCount}
               </button>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Riesgos Inventario</p>
-            <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Atención Prioritaria</h3>
+          <Card variant="hero">
+            <PageHeader variant="section" className="mb-5" eyebrow={<>Riesgos Inventario</>} title={<>Atención Prioritaria</>} />
             <div className="space-y-3">
               <button
                 onClick={() => {
@@ -278,15 +277,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <p className="text-xl font-black text-slate-700">{effectiveRiskSummary.duplicateIpCount + effectiveRiskSummary.duplicateMacCount}</p>
               </button>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8 space-y-6">
+        <Card variant="hero" className="space-y-6">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distribucion de Tickets</p>
-            <h3 className="text-lg font-black uppercase text-slate-800">Estado y Sucursal ({dashboardWindow.label})</h3>
+            <PageHeader variant="section" eyebrow={<>Distribucion de Tickets</>} title={<>Estado y Sucursal ({dashboardWindow.label})</>} />
           </div>
 
           <div className="space-y-3">
@@ -329,12 +327,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8 space-y-6">
+        <Card variant="hero" className="space-y-6">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA y Aging</p>
-            <h3 className="text-lg font-black uppercase text-slate-800">Cumplimiento y Antiguedad ({dashboardWindow.label})</h3>
+            <PageHeader variant="section" eyebrow={<>SLA y Aging</>} title={<>Cumplimiento y Antiguedad ({dashboardWindow.label})</>} />
           </div>
 
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
@@ -369,7 +366,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

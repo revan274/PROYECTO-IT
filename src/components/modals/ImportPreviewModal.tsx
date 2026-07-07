@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { PageHeader } from '../ui/PageHeader';
 
 interface ImportPreviewSummary {
   totalRows: number;
@@ -49,8 +50,7 @@ export function ImportPreviewModal({
       <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vista Previa Dry-Run</p>
-            <h3 className="text-lg font-black uppercase text-slate-800">{fileName}</h3>
+            <PageHeader variant="section" eyebrow={<>Vista Previa Dry-Run</>} title={<>{fileName}</>} />
           </div>
           <Button variant="close" size="bare" onClick={onClose}>
             <X size={22} />

@@ -6,6 +6,8 @@ import { ImportPreviewModal } from '../modals/ImportPreviewModal';
 import { QrScannerModal } from '../modals/QrScannerModal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { PageHeader } from '../ui/PageHeader';
 import { FilterChip } from '../ui/FilterChip';
 import { Select } from '../ui/Select';
 import type {
@@ -207,9 +209,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 }) => {
   return (
     <>
-      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
+      <Card variant="glass">
         <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-          <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-xl">Activos IT</h3>
+          <PageHeader size="md" title={<>Activos IT</>} />
           <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
             <input
               ref={inventoryImportInputRef}
@@ -261,22 +263,22 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
         <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 bg-slate-50/40 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-100 rounded-2xl p-4">
+            <Card >
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con IP</p>
               <p className="text-2xl font-black text-slate-800">{activosConIp} <span className="text-sm text-slate-400">/ {activosEvaluablesIp}</span></p>
-            </div>
-            <div className="bg-white border border-slate-100 rounded-2xl p-4">
+            </Card>
+            <Card >
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Con MAC</p>
               <p className="text-2xl font-black text-slate-800">{activosConMac} <span className="text-sm text-slate-400">/ {activosEvaluablesMac}</span></p>
-            </div>
-            <div className="bg-white border border-slate-100 rounded-2xl p-4">
+            </Card>
+            <Card >
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sin Responsable</p>
               <p className="text-2xl font-black text-red-500">{activosSinResponsable} <span className="text-sm text-slate-400">/ {activosEvaluablesResponsable}</span></p>
-            </div>
-            <div className="bg-white border border-slate-100 rounded-2xl p-4">
+            </Card>
+            <Card >
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Vida Util Alta (&gt;=4)</p>
               <p className="text-2xl font-black text-amber-500">{activosVidaAlta}</p>
-            </div>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
@@ -498,7 +500,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       <AssetFormModal
         isOpen={assetFormModal.isOpen}
