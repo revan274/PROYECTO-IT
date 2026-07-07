@@ -2,7 +2,6 @@ import React from 'react';
 import { Save } from 'lucide-react';
 import type { EstadoActivo, FormDataState } from '../../types/app';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { TextArea } from '../ui/TextArea';
@@ -41,7 +40,7 @@ export function AssetFormModal({
     >
       <form onSubmit={onSubmit} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
         <div className="space-y-6">
-          <Card variant="muted" as="section" className="space-y-4">
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Datos Base</p>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Requeridos: Tag, Tipo, Marca, Serial, Ubicación</p>
@@ -90,9 +89,9 @@ export function AssetFormModal({
                 onChange={(e) => onChange({ modelo: e.target.value })}
               />
             </div>
-          </Card>
+          </section>
 
-          <Card variant="muted" as="section" className="space-y-4">
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
             <div className="space-y-1">
               <Input
@@ -142,9 +141,9 @@ export function AssetFormModal({
                 <option value="Falla">Falla</option>
               </Select>
             </div>
-          </Card>
+          </section>
 
-          <Card variant="muted" as="section" className="space-y-4">
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Red y Acceso</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
@@ -166,9 +165,9 @@ export function AssetFormModal({
                 onChange={(e) => onChange({ anydesk: e.target.value })}
               />
             </div>
-          </Card>
+          </section>
 
-          <Card variant="muted" as="section" className="space-y-4">
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hardware y Ciclo de Vida</p>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Input
@@ -210,9 +209,9 @@ export function AssetFormModal({
                 onChange={(e) => onChange({ aniosVida: e.target.value })}
               />
             </div>
-          </Card>
+          </section>
 
-          <Card variant="muted" as="section" className="space-y-4">
+          <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
             <TextArea
               variant="form"
@@ -221,7 +220,7 @@ export function AssetFormModal({
               value={formData.comentarios || ''}
               onChange={(e) => onChange({ comentarios: e.target.value })}
             />
-          </Card>
+          </section>
         </div>
 
         <Button variant="primary" size="cta" className="mt-4" disabled={!canSubmit} type="submit">

@@ -1,6 +1,5 @@
 import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 
 interface SupplyHistoryItem {
   nombre: string;
@@ -37,7 +36,8 @@ export function SupplyHistoryModal({
       <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
-            <PageHeader variant="section" eyebrow={<>Historial de movimientos</>} title={<>{item.nombre}</>} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Historial de movimientos</p>
+            <h3 className="text-lg font-black uppercase text-slate-800">{item.nombre}</h3>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
               Registros: {movements.length} | Unidad: {item.unidad || 'Piezas'}
             </p>

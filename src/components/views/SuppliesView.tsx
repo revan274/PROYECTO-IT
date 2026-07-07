@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card } from '../ui/Card';
-import { PageHeader } from '../ui/PageHeader';
 import { PlusCircle, Search, MinusCircle, History, Trash2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FilterChip } from '../ui/FilterChip';
@@ -112,7 +110,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
     <>
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-          <PageHeader size="md" title={<>Gestión de Stock</>} />
+          <h3 className="font-black text-slate-800 uppercase text-xl">Gestión de Stock</h3>
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportExcel}
@@ -131,22 +129,22 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card >
+          <div className="bg-white border border-slate-100 rounded-2xl p-4">
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total Insumos</p>
             <p className="text-2xl font-black text-slate-800">{supplySummary.totalInsumos}</p>
-          </Card>
-          <Card >
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-4">
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bajo Mínimo</p>
             <p className="text-2xl font-black text-amber-500">{supplySummary.bajoMinimo}</p>
-          </Card>
-          <Card >
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-4">
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Agotados</p>
             <p className="text-2xl font-black text-red-500">{supplySummary.agotados}</p>
-          </Card>
-          <Card >
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-4">
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Unidades Totales</p>
             <p className="text-2xl font-black text-slate-800">{supplySummary.totalUnidades}</p>
-          </Card>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

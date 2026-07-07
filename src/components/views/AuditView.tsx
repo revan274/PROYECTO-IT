@@ -2,8 +2,6 @@ import React from 'react';
 import { Download } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { PageHeader } from '../ui/PageHeader';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type {
@@ -63,10 +61,11 @@ export const AuditView: React.FC<AuditViewProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <Card variant="glass">
+      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
         <div className="p-8 md:p-10 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <PageHeader eyebrow={<>Trazabilidad</>} title={<>Auditoría Ejecutiva</>} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trazabilidad</p>
+            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Auditoría Ejecutiva</h3>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
               {isAuditLoading ? 'Consultando registros...' : `Registros mostrados: ${auditRowsForGrouping.length}`}
             </p>
@@ -141,21 +140,21 @@ export const AuditView: React.FC<AuditViewProps> = ({
             variant="filter"
           />
         </div>
-      </Card>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-        <Card variant="stat" tone="blue">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Tickets</p>
           <p className="text-3xl font-black text-blue-700">{auditModuleTotals.tickets}</p>
-        </Card>
-        <Card variant="stat" tone="green">
+        </div>
+        <div className="rounded-2xl border border-green-100 bg-green-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Insumos</p>
           <p className="text-3xl font-black text-green-700">{auditModuleTotals.insumos}</p>
-        </Card>
-        <Card variant="stat" tone="orange">
+        </div>
+        <div className="rounded-2xl border border-orange-100 bg-orange-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Activos IT</p>
           <p className="text-3xl font-black text-orange-700">{auditModuleTotals.activos}</p>
-        </Card>
+        </div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 hover-lift backdrop-blur-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Otros</p>
           <p className="text-3xl font-black text-slate-700">{auditModuleTotals.otros}</p>
@@ -183,7 +182,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
         { module: 'activos' as AuditModule, title: 'Auditoría Activos IT', rows: auditByModule.activos },
         { module: 'otros' as AuditModule, title: 'Auditoría Otros', rows: auditByModule.otros },
       ]).map((section) => (
-        <Card key={`audit-${section.module}`} variant="glass">
+        <div key={`audit-${section.module}`} className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{section.title}</h4>
@@ -245,7 +244,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       ))}
 
       {backendConnected && !isRequesterOnlyUser && (

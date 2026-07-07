@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card } from '../ui/Card';
-import { PageHeader } from '../ui/PageHeader';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type {
@@ -265,10 +263,11 @@ export function ReportsView({
 }: ReportsViewProps) {
   return (
     <div className="space-y-6">
-      <Card variant="glass">
+      <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <PageHeader eyebrow={<>Analitica Operativa</>} title={<>Reporteria Ejecutiva</>} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Analitica Operativa</p>
+            <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Reporteria Ejecutiva</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -430,7 +429,7 @@ export function ReportsView({
             )}
           </div>
         </div>
-      </Card>
+      </div>
 
       <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-amber-50/30 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -567,24 +566,24 @@ export function ReportsView({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Card >
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tickets</p>
           <p className="text-3xl font-black text-slate-800">{reportTicketsCount}</p>
           {hasReportComparison && (
             <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportTicketsTrend.toneClass}`}>{reportTicketsTrend.label}</p>
           )}
-        </Card>
-        <Card >
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
           <p className="text-3xl font-black text-blue-600">{reportOpenCount}</p>
           {hasReportComparison && (
             <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportOpenTrend.toneClass}`}>{reportOpenTrend.label}</p>
           )}
-        </Card>
-        <Card >
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cerrados</p>
           <p className="text-3xl font-black text-green-600">{reportClosedCount}</p>
-        </Card>
+        </div>
         <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Cumplimiento SLA</p>
           <p className="text-3xl font-black text-green-700">{reportSlaCompliancePct}%</p>
@@ -597,17 +596,17 @@ export function ReportsView({
             </p>
           )}
         </div>
-        <Card >
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Vencido</p>
           <p className="text-3xl font-black text-red-600">{reportSlaExpiredCount}</p>
-        </Card>
-        <Card >
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Traslados Req.</p>
           <p className="text-3xl font-black text-amber-600">{reportTravelCount}</p>
-        </Card>
+        </div>
       </div>
 
-      <Card variant="hero" className="space-y-5">
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div>
             <h4 className="text-base font-black uppercase text-slate-800">
@@ -662,10 +661,10 @@ export function ReportsView({
             </div>
           )}
         </div>
-      </Card>
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card variant="hero" className="space-y-5">
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
           <div className="flex items-center justify-between">
             <h4 className="text-base font-black uppercase text-slate-800">Tickets por Estado</h4>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
@@ -688,9 +687,9 @@ export function ReportsView({
               </div>
             </button>
           ))}
-        </Card>
+        </div>
 
-        <Card variant="hero" className="space-y-5">
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
           <div className="flex items-center justify-between">
             <h4 className="text-base font-black uppercase text-slate-800">Tickets por Sucursal</h4>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
@@ -718,11 +717,11 @@ export function ReportsView({
               Sin datos de sucursal para este periodo.
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <Card variant="hero" className="space-y-4">
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
           <h4 className="text-base font-black uppercase text-slate-800">Top Areas</h4>
           {reportAreaBars.slice(0, 8).map((item) => (
             <button
@@ -739,9 +738,9 @@ export function ReportsView({
               </div>
             </button>
           ))}
-        </Card>
+        </div>
 
-        <Card variant="hero" className="space-y-4">
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
           <h4 className="text-base font-black uppercase text-slate-800">Carga por Técnico</h4>
           {reportTechBars.slice(0, 8).map((item) => (
             <button
@@ -759,9 +758,9 @@ export function ReportsView({
               </div>
             </button>
           ))}
-        </Card>
+        </div>
 
-        <Card variant="hero" className="space-y-4">
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
           <h4 className="text-base font-black uppercase text-slate-800">Auditoría por Módulo</h4>
           {reportAuditModuleBars.map((item) => (
             <div key={`report-audit-${item.module}`} className="space-y-1">
@@ -777,11 +776,11 @@ export function ReportsView({
           <div className="pt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
             Logs filtrados: {reportAuditRowsCount} | Total auditoría: {reportAuditTotalCount}
           </div>
-        </Card>
+        </div>
       </div>
 
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      <Card variant="hero" className="space-y-4">
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <h4 className="text-base font-black uppercase text-slate-800">Top Causas Recurrentes</h4>
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Area + Falla</span>
@@ -810,9 +809,9 @@ export function ReportsView({
             Sin incidencias recurrentes para este periodo.
           </div>
         )}
-      </Card>
+      </div>
 
-      <Card variant="hero" className="space-y-4">
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
         <h4 className="text-base font-black uppercase text-slate-800">Tipos de Atención</h4>
         {reportAttentionBars.map((item) => (
           <div key={`report-attention-${item.label}`} className="w-full text-left space-y-1">
@@ -833,22 +832,22 @@ export function ReportsView({
             Sin datos de atención para este período.
           </div>
         )}
-      </Card>
+      </div>
     </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card >
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inventario</p>
           <p className="text-sm font-black text-slate-700">
             Activos: {reportInventorySnapshot.totalActivos} | En falla: {reportInventorySnapshot.activosEnFalla} | Sin responsable: {reportInventorySnapshot.sinResponsable}
           </p>
-        </Card>
-        <Card >
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Insumos</p>
           <p className="text-sm font-black text-slate-700">
             Total: {reportSupplySnapshot.total} | Agotados: {reportSupplySnapshot.agotados} | Bajo mínimo: {reportSupplySnapshot.bajoMinimo}
           </p>
-        </Card>
+        </div>
       </div>
     </div>
   );

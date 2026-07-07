@@ -3,7 +3,6 @@ import { Ticket, Trash2 } from 'lucide-react';
 import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/PageHeader';
 import { Select } from '../ui/Select';
 import { ticketRequiresTravel } from '../../utils/tickets';
 import type {
@@ -155,7 +154,8 @@ export function TicketsView({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <PageHeader size="md" eyebrow={<>Operación y seguimiento</>} title={<>Tickets IT</>} />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operación y seguimiento</p>
+          <h3 className="text-xl font-black uppercase text-slate-800">Tickets IT</h3>
         </div>
         <Button
           variant="dark"

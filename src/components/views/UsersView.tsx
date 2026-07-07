@@ -1,7 +1,5 @@
 import React from 'react';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { PageHeader } from '../ui/PageHeader';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type { UserItem, UserRole, UserSession } from '../../types/app';
@@ -92,30 +90,31 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       ) : (
         <>
-          <Card variant="glass">
+          <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <PageHeader eyebrow={<>Control de Accesos</>} title={<>Alta de Usuarios por Cargo</>} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Control de Accesos</p>
+                <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Alta de Usuarios por Cargo</h3>
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 Usuarios que pueden generar tickets
               </span>
             </div>
             <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card variant="stat" tone="blue">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Total Usuarios</p>
                 <p className="text-3xl font-black text-blue-700">{users.length}</p>
-              </Card>
-              <Card variant="stat" tone="green">
+              </div>
+              <div className="rounded-2xl border border-green-100 bg-green-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Activos</p>
                 <p className="text-3xl font-black text-green-700">{activeUsersCount}</p>
-              </Card>
-              <Card variant="stat" tone="orange">
+              </div>
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/80 p-4 hover-lift backdrop-blur-sm">
                 <p className="text-[10px] font-black uppercase tracking-widest text-orange-500">Generan Tickets</p>
                 <p className="text-3xl font-black text-orange-700">{ticketEligibleUsersCount}</p>
-              </Card>
+              </div>
             </div>
-          </Card>
+          </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
             <form onSubmit={handleCreateUser} className="xl:col-span-2 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 space-y-4">
