@@ -7,7 +7,7 @@ import type {
 } from '../types/app';
 import { normalizeForCompare, normalizeLooseDateString } from './format';
 
-export function normalizeAuditModule(value?: string): AuditModule | null {
+function normalizeAuditModule(value?: string): AuditModule | null {
   const raw = normalizeForCompare(value || '');
   if (raw === 'activos') return 'activos';
   if (raw === 'insumos') return 'insumos';
@@ -16,7 +16,7 @@ export function normalizeAuditModule(value?: string): AuditModule | null {
   return null;
 }
 
-export function inferAuditModule(accion: string, item = ''): AuditModule {
+function inferAuditModule(accion: string, item = ''): AuditModule {
   const action = normalizeForCompare(accion || '');
   const subject = normalizeForCompare(item || '');
   if (
@@ -59,7 +59,7 @@ export function auditModuleLabel(module: AuditModule): string {
   return 'Otros';
 }
 
-export function parseAuditBoundaryDate(value?: string, endOfDay = false): number | null {
+function parseAuditBoundaryDate(value?: string, endOfDay = false): number | null {
   const raw = String(value || '').trim();
   if (!raw) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {

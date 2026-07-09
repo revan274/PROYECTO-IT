@@ -8,7 +8,7 @@ import {
   normalizeKnownUserRole,
 } from '../domain/roles.js';
 
-export { DEFAULT_ROLE_CATALOG, USER_ROLES };
+
 
 // --- Domain constants ---
 
@@ -18,7 +18,7 @@ export const SLA_HOURS = {
   CRITICA: 2,
 };
 
-export const DEFAULT_CARGO_CATALOG = [
+const DEFAULT_CARGO_CATALOG = [
   'Coordinador de Sistemas',
   'Gerente',
   'Director',
@@ -27,7 +27,7 @@ export const DEFAULT_CARGO_CATALOG = [
   'CeDis',
 ];
 
-export const DEFAULT_BRANCH_CATALOG = [
+const DEFAULT_BRANCH_CATALOG = [
   { code: 'TJ01', name: 'Sucursal Estrella', activo: true },
   { code: 'TC01', name: 'Sucursal Camargo', activo: true },
   { code: 'TJ02', name: 'Sucursal CBtis', activo: true },
@@ -35,15 +35,15 @@ export const DEFAULT_BRANCH_CATALOG = [
   { code: 'CEDIS', name: 'CeDis', activo: true },
 ];
 
-export const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => branch.code));
+const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => branch.code));
 
 export const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
 export const CLOSED_STATES = new Set(['Resuelto', 'Cerrado']);
 
-export const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
-export const AUDIT_RESULTS = new Set(['ok', 'error']);
+const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
+const AUDIT_RESULTS = new Set(['ok', 'error']);
 
-export const DEMO_PASSWORD_HASHES = new Set([
+const DEMO_PASSWORD_HASHES = new Set([
   'scrypt-v1$4923721e0ded78534bbd638be30ae5f1$1993ab737237283782f648c1dfa3abc737309abc2bbe5a2e3600a4e1a2ed33660abb03efd5bfdd7a4b44d065e9fe400a6444df09f2661ecda0b2119ddc2d39f9',
   'scrypt-v1$32054ec3b72a1863e1839397517c410c$cd46075c7507e0a5b6e7d81239a433706acd86290609d17896a40d6addb6204688f8e9445b75664b23c1faca7e8be8a1385d49f121b3d415e3ee124fdf260456',
   'scrypt-v1$a992b6ad1d54ff5171d08b30f1eb3d1a$2e59f85b782d7dc3d2774617c2d37333c7cba81c83999f39db1a5a93a4a5b87498199d2143cbae6cd35cec8a35989d4b0c8d749f42ef566d3dae916c2b571967',
@@ -51,9 +51,9 @@ export const DEMO_PASSWORD_HASHES = new Set([
 
 // --- Runtime constants (env-derived) ---
 
-export const PAGINATION_DEFAULT_PAGE_SIZE = Math.max(10, Math.trunc(Number(process.env.PAGINATION_DEFAULT_SIZE || 25)));
-export const PAGINATION_MAX_PAGE_SIZE = Math.max(PAGINATION_DEFAULT_PAGE_SIZE, Math.trunc(Number(process.env.PAGINATION_MAX_SIZE || 100)));
-export const BOOTSTRAP_AUDIT_LIMIT = Math.max(0, Math.trunc(Number(process.env.BOOTSTRAP_AUDIT_LIMIT || 25)));
+const PAGINATION_DEFAULT_PAGE_SIZE = Math.max(10, Math.trunc(Number(process.env.PAGINATION_DEFAULT_SIZE || 25)));
+const PAGINATION_MAX_PAGE_SIZE = Math.max(PAGINATION_DEFAULT_PAGE_SIZE, Math.trunc(Number(process.env.PAGINATION_MAX_SIZE || 100)));
+const BOOTSTRAP_AUDIT_LIMIT = Math.max(0, Math.trunc(Number(process.env.BOOTSTRAP_AUDIT_LIMIT || 25)));
 export const AUTH_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 export const LOGIN_MAX_ATTEMPTS = Math.max(3, Math.trunc(Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS || 5)));
 export const LOGIN_LOCK_MS = Math.max(60_000, Math.trunc(Number(process.env.AUTH_LOGIN_LOCK_MS || 15 * 60 * 1000)));
@@ -65,7 +65,7 @@ export const DISALLOW_DEMO_PASSWORDS = String(
 
 // --- Error class ---
 
-export class HttpError extends Error {
+class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
@@ -522,7 +522,7 @@ export function summarizeAuditAlerts(rows) {
 
 // --- Catalog helpers ---
 
-export function normalizeCatalogBranchItem(value) {
+function normalizeCatalogBranchItem(value) {
   if (!value || typeof value !== 'object') return null;
   const code = asNonEmptyString(value.code || value.clave)
     .toUpperCase()
@@ -537,7 +537,7 @@ export function normalizeCatalogBranchItem(value) {
   };
 }
 
-export function normalizeCatalogRoleItem(value) {
+function normalizeCatalogRoleItem(value) {
   if (!value || typeof value !== 'object') return null;
   const roleValue = normalizeUserRole(value.value || value.rol);
   if (!roleValue) return null;
