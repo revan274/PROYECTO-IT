@@ -170,12 +170,12 @@ import {
   getSupplyCriticalityRank,
 } from './utils/appHelpers';
 
-const LazyUsersView = lazy(() => import('./components/views/UsersView'));
-const LazyDashboardView = lazy(() => import('./components/views/DashboardView'));
-const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
-const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
-const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
-const LazyAuditView = lazy(() => import('./components/views/AuditView'));
+const LazyUsersView = lazy(() => import('./components/views/UsersView').then(m => ({ default: m.UsersView })));
+const LazyDashboardView = lazy(() => import('./components/views/DashboardView').then(m => ({ default: m.DashboardView })));
+const LazyReportsView = lazy(() => import('./components/views/ReportsView').then(m => ({ default: m.ReportsView })));
+const LazyInventoryView = lazy(() => import('./components/views/InventoryView').then(m => ({ default: m.InventoryView })));
+const LazySuppliesView = lazy(() => import('./components/views/SuppliesView').then(m => ({ default: m.SuppliesView })));
+const LazyAuditView = lazy(() => import('./components/views/AuditView').then(m => ({ default: m.AuditView })));
 
 const VIEW_PATHS: Record<ViewType, string> = {
   dashboard: '/dashboard',
