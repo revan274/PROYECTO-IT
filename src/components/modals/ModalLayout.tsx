@@ -35,5 +35,3 @@ export function ModalLayout({
     </div>
   );
 }
-
-export default ModalLayout;

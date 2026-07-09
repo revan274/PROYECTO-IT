@@ -333,4 +333,3 @@ export const UsersView: React.FC<UsersViewProps> = ({
     </div>
   );
 };
-export default UsersView;

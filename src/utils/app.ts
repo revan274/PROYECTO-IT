@@ -1,8 +1,6 @@
 import type {
-  Activo,
   AuditFiltersState,
   AuditPaginationState,
-  Insumo,
   InsumoTouchedState,
   ReportAttentionFilter,
   ReportFilterPreset,
@@ -12,23 +10,16 @@ import type {
   StoredSession,
   ThemeMode,
   TicketEstado,
-  TicketItem,
   UserSession,
-  RegistroAuditoria,
 } from '../types/app';
 import {
   API_REQUEST_TIMEOUT_MS,
-  INSUMOS_INICIALES,
-  INVENTARIO_ACTIVOS_INICIAL,
   NORMALIZED_API_BASE_URL,
   REPORT_FILTER_PRESETS_STORAGE_PREFIX,
   SESSION_STORAGE_KEY,
-  TICKETS_INICIALES,
   THEME_STORAGE_KEY,
   TICKET_ATTENTION_TYPES,
   TICKET_STATES,
-  TRAVEL_DESTINATION_PRESETS,
-  AUDITORIA_INICIAL,
 } from '../constants/app';
 
 export function createEmptyInsumoTouched(): InsumoTouchedState {
@@ -51,26 +42,6 @@ export class ApiError extends Error {
     this.status = status;
     this.name = 'ApiError';
   }
-}
-
-export function cloneInitialActivos(): Activo[] {
-  return INVENTARIO_ACTIVOS_INICIAL.map((item) => ({ ...item }));
-}
-
-export function cloneInitialInsumos(): Insumo[] {
-  return INSUMOS_INICIALES.map((item) => ({ ...item }));
-}
-
-export function cloneInitialTickets(): TicketItem[] {
-  return TICKETS_INICIALES.map((item) => ({
-    ...item,
-    historial: item.historial ? item.historial.map((entry) => ({ ...entry })) : undefined,
-    attachments: item.attachments ? item.attachments.map((attachment) => ({ ...attachment })) : undefined,
-  }));
-}
-
-export function cloneInitialAuditoria(): RegistroAuditoria[] {
-  return AUDITORIA_INICIAL.map((item) => ({ ...item }));
 }
 
 export function readStoredSession(): StoredSession | null {
@@ -138,14 +109,6 @@ export function writeStoredTheme(theme: ThemeMode): void {
   } catch {
     // Ignore storage permission/quota issues to avoid breaking runtime.
   }
-}
-
-export function buildDefaultTravelKmsByBranch(): Record<string, string> {
-  const rows: Record<string, string> = {};
-  TRAVEL_DESTINATION_PRESETS.forEach((item) => {
-    rows[item.code] = String(item.defaultKms);
-  });
-  return rows;
 }
 
 export function buildCurrentMonthInputValue(date = new Date()): string {
