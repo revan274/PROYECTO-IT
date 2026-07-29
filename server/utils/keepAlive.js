@@ -8,7 +8,7 @@ export function startKeepAlive(url, interval = 14 * 60 * 1000) {
 
   console.log(`[Keep-Alive] Iniciando pings a ${url} cada ${interval / 1000 / 60} minutos.`);
 
-  setInterval(() => {
+  const timer = setInterval(() => {
     https.get(url, (res) => {
       console.log(`[Keep-Alive] Ping enviado a ${url} - Status: ${res.statusCode}`);
       // Consumir la respuesta para evitar fugas de memoria
@@ -18,4 +18,7 @@ export function startKeepAlive(url, interval = 14 * 60 * 1000) {
       console.error(`[Keep-Alive] Error al hacer ping a ${url}:`, err.message);
     });
   }, interval);
+
+  timer.unref();
+  return timer;
 }

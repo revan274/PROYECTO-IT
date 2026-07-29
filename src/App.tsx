@@ -32,7 +32,15 @@ import { useUserActions } from './hooks/actions/useUserActions';
 import { useDialogs } from './hooks/useDialogs';
 import { useAppCatalogs } from './hooks/useAppCatalogs';
 import { getViewPath, useAppNavigation, VIEW_PATHS } from './hooks/useAppNavigation';
+import { useAssetDirectoryData } from './hooks/useAssetDirectoryData';
 import { useDashboardMetrics } from './hooks/useDashboardMetrics';
+import { useReportKpiData } from './hooks/useReportKpiData';
+import { useReportLifecycleTrendData } from './hooks/useReportLifecycleTrendData';
+import { useReportTicketData } from './hooks/useReportTicketData';
+import { useSupplyDirectoryData } from './hooks/useSupplyDirectoryData';
+import { useTicketDirectoryData } from './hooks/useTicketDirectoryData';
+import { useTravelReportData } from './hooks/useTravelReportData';
+import { useUserDirectoryData } from './hooks/useUserDirectoryData';
 
 import { Toast } from './components/ui/Toast';
 import { ConfirmDialog } from './components/modals/ConfirmDialog';
@@ -42,20 +50,14 @@ import { TicketsView } from './components/views/TicketsView';
 import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
-  CATEGORIAS_INSUMO,
   TICKET_ATTENTION_TYPES,
   TICKET_STATES,
-  TRAVEL_DEFAULT_FUEL_EFFICIENCY,
-  TRAVEL_DESTINATION_PRESETS,
-  USER_ROLE_LABEL,
-  USER_ROLE_PERMISSIONS,
 } from './constants/app';
 import type {
   Activo,
   AssetQrTokenResponse,
   AuditFiltersState,
   AuditModule,
-  CatalogBranch,
   DashboardRange,
   InventoryRiskFilter,
   InventorySortField,
@@ -67,9 +69,6 @@ import type {
   SupplyAuditMovement,
   TicketAttachment,
   TicketEstado,
-  TicketItem,
-  TravelDestinationRule,
-  TravelReportRow,
 } from './types/app';
 import {
   apiRequest,
@@ -88,35 +87,23 @@ import {
   resolveAuditModule,
 } from './utils/audit';
 import {
-  assetRequiresNetworkIdentity,
-  assetRequiresResponsible,
-  calculateAssetRiskSummary,
-  parseAssetLifeYears,
-} from './utils/assets';
-import {
   canCreateTicketsByRole,
   canEditByRole,
   canManageUsersByRole,
   isRequesterOnlyRole,
   isUserRole,
-  roleCanGenerateTickets,
 } from './utils/roles';
 import {
   formatBytes,
   formatDateTime,
   getApiErrorMessage,
-  includesAllSearchTokens,
   normalizeForCompare,
-  parseDateToTimestamp,
   sanitizeFileToken,
   tokenizeSearchQuery,
 } from './utils/format';
 import {
   buildSuggestedTicketIssues,
   formatTicketAttentionType,
-  getSlaStatus,
-  isTicketSlaExpired,
-  isTicketClosed,
   normalizeTicketAttentionType,
 } from './utils/tickets';
 
@@ -126,40 +113,13 @@ import {
 } from './utils/qrTokens';
 
 import {
-  ticketTimestamp,
-  ticketCreatedTimestamp,
-  parseMonthInputRange,
-  formatMonthInputLabel,
-  formatTravelDate,
-  compactBranchLabel,
-  buildTravelReportRowsFromActualTrips,
-  parseNonNegativeNumber,
-  roundToTwoDecimals,
   formatTravelNumber,
-  parseTicketTravelCreatedAt,
-  resolveTravelTechnicianScope,
-  resolveTicketTravelDestinationCode,
   getTicketAreaLabel,
   extractTicketIssueDescription,
   normalizeIncidentCause,
-  matchesReportBranch,
-  matchesReportArea,
-  matchesReportState,
-  matchesReportPriority,
-  matchesReportAttention,
-  matchesReportTechnician,
-  collectResolutionHours,
-  startOfLocalDayTimestamp,
-  startOfLocalWeekTimestamp,
-  formatMetricTrend,
-  roundHours,
-  calculatePercentile,
-  calculateMedian,
-  ticketBelongsToSessionUser,
   getModalTitle,
   getModalSubmitLabel,
   getSupplyHealthStatus,
-  getSupplyCriticalityRank,
 } from './utils/appHelpers';
 
 const LazyUsersView = lazy(() => import('./components/views/UsersView'));
@@ -1074,106 +1034,39 @@ export default function App() {
     return inventorySortDirection === 'asc' ? '^' : 'v';
   }, [inventorySortField, inventorySortDirection]);
 
-  const networkIpCounts = useMemo(
-    () =>
-      activos.reduce<Record<string, number>>((acc, asset) => {
-        const ip = (asset.ipAddress || '').trim();
-        if (ip) acc[ip] = (acc[ip] || 0) + 1;
-        return acc;
-      }, {}),
-    [activos],
-  );
-  const networkMacCounts = useMemo(
-    () =>
-      activos.reduce<Record<string, number>>((acc, asset) => {
-        const mac = (asset.macAddress || '').trim().toLowerCase();
-        if (mac) acc[mac] = (acc[mac] || 0) + 1;
-        return acc;
-      }, {}),
-    [activos],
-  );
-  const hasNetworkDuplication = useCallback((asset: Activo): boolean => {
-    const ip = (asset.ipAddress || '').trim();
-    const mac = (asset.macAddress || '').trim().toLowerCase();
-    return (ip ? (networkIpCounts[ip] || 0) > 1 : false) || (mac ? (networkMacCounts[mac] || 0) > 1 : false);
-  }, [networkIpCounts, networkMacCounts]);
-  const localRiskSummary = useMemo(() => calculateAssetRiskSummary(activos), [activos]);
+  const {
+    localRiskSummary,
+    departamentoOptions,
+    equipoOptions,
+    filteredActivos,
+    sortedFilteredActivos,
+  } = useAssetDirectoryData({
+    activos,
+    searchTokens: headerSearchTokens,
+    departmentFilter: inventoryDepartmentFilter,
+    equipmentFilter: inventoryEquipmentFilter,
+    statusFilter: inventoryStatusFilter,
+    riskFilter: inventoryRiskFilter,
+    sortField: inventorySortField,
+    sortDirection: inventorySortDirection,
+  });
   const duplicateIpEntries = localRiskSummary.duplicateIpEntries;
   const duplicateMacEntries = localRiskSummary.duplicateMacEntries;
 
-  const departamentoOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(activos.map((asset) => (asset.departamento || '').trim()).filter(Boolean)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [activos],
-  );
-  const equipoOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(activos.map((asset) => (asset.tipo || asset.equipo || '').trim()).filter(Boolean)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [activos],
-  );
-  const filteredUsers = useMemo(
-    () =>
-      users.filter((user) => {
-        if (userRoleFilter !== 'TODOS' && user.rol !== userRoleFilter) {
-          return false;
-        }
-        if (userStatusFilter === 'ACTIVOS' && user.activo === false) {
-          return false;
-        }
-        if (userStatusFilter === 'INACTIVOS' && user.activo !== false) {
-          return false;
-        }
-        if (
-          userDepartmentFilter !== 'TODOS'
-          && normalizeForCompare(user.departamento || '') !== normalizeForCompare(userDepartmentFilter)
-        ) {
-          return false;
-        }
-
-        if (userSearchTokens.length === 0) return true;
-        const searchable = normalizeForCompare([
-          user.nombre,
-          user.username,
-          user.departamento,
-          userCargoLabelByValue[String(user.departamento || '').trim().toUpperCase()] || '',
-          roleLabelByValue[user.rol] || USER_ROLE_LABEL[user.rol],
-          rolePermissionsByValue[user.rol] || USER_ROLE_PERMISSIONS[user.rol],
-          user.activo !== false ? 'activo' : 'inactivo',
-        ].join(' '));
-        return includesAllSearchTokens(searchable, userSearchTokens);
-      }),
-    [
-      roleLabelByValue,
-      rolePermissionsByValue,
-      userCargoLabelByValue,
-      userDepartmentFilter,
-      userRoleFilter,
-      userSearchTokens,
-      userStatusFilter,
-      users,
-    ],
-  );
-  const sortedUsers = useMemo(
-    () =>
-      [...filteredUsers].sort((left, right) => {
-        const deptCompare = normalizeForCompare(left.departamento || '').localeCompare(normalizeForCompare(right.departamento || ''));
-        if (deptCompare !== 0) return deptCompare;
-        return normalizeForCompare(left.nombre).localeCompare(normalizeForCompare(right.nombre));
-      }),
-    [filteredUsers],
-  );
-  const activeUsersCount = useMemo(
-    () => users.filter((user) => user.activo !== false).length,
-    [users],
-  );
-  const ticketEligibleUsersCount = useMemo(
-    () => users.filter((user) => user.activo !== false && roleCanGenerateTickets(user.rol)).length,
-    [users],
-  );
+  const {
+    sortedUsers,
+    activeUsersCount,
+    ticketEligibleUsersCount,
+  } = useUserDirectoryData({
+    users,
+    searchTokens: userSearchTokens,
+    roleFilter: userRoleFilter,
+    statusFilter: userStatusFilter,
+    departmentFilter: userDepartmentFilter,
+    roleLabelByValue,
+    rolePermissionsByValue,
+    userCargoLabelByValue,
+  });
 
   const activosConIp = localRiskSummary.activosConIp;
   const activosEvaluablesIp = localRiskSummary.activosEvaluablesIp;
@@ -1184,65 +1077,6 @@ export default function App() {
   const activosVidaAlta = localRiskSummary.activosVidaAlta;
   const activosEnFalla = localRiskSummary.activosEnFalla;
 
-  const filteredActivos = useMemo(
-    () =>
-      activos.filter((asset) => {
-        if (inventoryDepartmentFilter !== 'TODOS' && normalizeForCompare(asset.departamento || '') !== normalizeForCompare(inventoryDepartmentFilter)) {
-          return false;
-        }
-        if (inventoryEquipmentFilter !== 'TODOS' && normalizeForCompare(asset.tipo || asset.equipo || '') !== normalizeForCompare(inventoryEquipmentFilter)) {
-          return false;
-        }
-        if (inventoryStatusFilter !== 'TODOS' && asset.estado !== inventoryStatusFilter) {
-          return false;
-        }
-        if (inventoryRiskFilter === 'SIN_IP' && (!assetRequiresNetworkIdentity(asset) || (asset.ipAddress || '').trim())) {
-          return false;
-        }
-        if (inventoryRiskFilter === 'SIN_MAC' && (!assetRequiresNetworkIdentity(asset) || (asset.macAddress || '').trim())) {
-          return false;
-        }
-        if (inventoryRiskFilter === 'SIN_RESP' && (!assetRequiresResponsible(asset) || (asset.responsable || '').trim())) {
-          return false;
-        }
-        if (inventoryRiskFilter === 'DUP_RED' && !hasNetworkDuplication(asset)) {
-          return false;
-        }
-        if (inventoryRiskFilter === 'VIDA_ALTA') {
-          const years = parseAssetLifeYears(asset.aniosVida);
-          if (years === null || years < 4) return false;
-        }
-
-        if (headerSearchTokens.length === 0) return true;
-        const searchable = normalizeForCompare([
-          asset.tag,
-          asset.tipo,
-          asset.marca,
-          asset.modelo,
-          asset.serial,
-          asset.idInterno,
-          asset.responsable,
-          asset.departamento,
-          asset.ubicacion,
-          asset.ipAddress,
-          asset.macAddress,
-          asset.cpu,
-          asset.ram,
-          asset.disco,
-        ].join(' '));
-        return includesAllSearchTokens(searchable, headerSearchTokens);
-      }),
-    [
-      activos,
-      hasNetworkDuplication,
-      headerSearchTokens,
-      inventoryDepartmentFilter,
-      inventoryEquipmentFilter,
-      inventoryRiskFilter,
-      inventoryStatusFilter,
-    ],
-  );
-
   const exportarInventarioFiltrado = useCallback(() => {
     if (filteredActivos.length === 0) {
       showToast('No hay activos para exportar', 'warning');
@@ -1252,100 +1086,16 @@ export default function App() {
     downloadInventoryCsv(filteredActivos);
   }, [filteredActivos, showToast]);
 
-  const sortedFilteredActivos = useMemo(() => {
-    const compareText = (left?: string, right?: string) => {
-      const a = normalizeForCompare(left || '');
-      const b = normalizeForCompare(right || '');
-      if (!a && !b) return 0;
-      if (!a) return 1;
-      if (!b) return -1;
-      return a.localeCompare(b);
-    };
-
-    const rows = [...filteredActivos];
-    rows.sort((left, right) => {
-      let base = 0;
-      if (inventorySortField === 'aniosVida') {
-        const leftYears = parseAssetLifeYears(left.aniosVida);
-        const rightYears = parseAssetLifeYears(right.aniosVida);
-        if (leftYears === null && rightYears === null) base = 0;
-        else if (leftYears === null) base = 1;
-        else if (rightYears === null) base = -1;
-        else base = leftYears - rightYears;
-      } else if (inventorySortField === 'tag') {
-        base = compareText(left.tag, right.tag);
-      } else if (inventorySortField === 'tipo') {
-        base = compareText(left.tipo || left.equipo || '', right.tipo || right.equipo || '');
-      } else if (inventorySortField === 'estado') {
-        base = compareText(left.estado, right.estado);
-      } else if (inventorySortField === 'responsable') {
-        base = compareText(left.responsable || '', right.responsable || '');
-      } else {
-        base = compareText(left.ubicacion || '', right.ubicacion || '');
-      }
-      return inventorySortDirection === 'asc' ? base : -base;
-    });
-
-    return rows;
-  }, [filteredActivos, inventorySortDirection, inventorySortField]);
-
-  const supplySummary = useMemo(() => {
-    let agotados = 0;
-    let bajoMinimo = 0;
-    let ok = 0;
-    let totalUnidades = 0;
-
-    insumos.forEach((item) => {
-      const status = getSupplyHealthStatus(item);
-      totalUnidades += item.stock;
-      if (status === 'AGOTADO') agotados += 1;
-      else if (status === 'BAJO') bajoMinimo += 1;
-      else ok += 1;
-    });
-
-    return {
-      totalInsumos: insumos.length,
-      agotados,
-      bajoMinimo,
-      ok,
-      totalUnidades,
-    };
-  }, [insumos]);
-
-  const supplyCategoryOptions = useMemo(
-    () =>
-      Array.from(new Set([...CATEGORIAS_INSUMO, ...insumos.map((item) => (item.categoria || '').trim()).filter(Boolean)]))
-        .sort((a, b) => a.localeCompare(b)),
-    [insumos],
-  );
-
-  const filteredSupplies = useMemo(() => {
-    const rows = insumos.filter((item) => {
-      if (supplyCategoryFilter !== 'TODAS' && item.categoria !== supplyCategoryFilter) return false;
-
-      const status = getSupplyHealthStatus(item);
-      if (supplyStatusFilter !== 'TODOS' && status !== supplyStatusFilter) return false;
-
-      if (supplySearchTokens.length === 0) return true;
-      const searchable = normalizeForCompare(`${item.nombre} ${item.categoria} ${item.unidad}`);
-      return includesAllSearchTokens(searchable, supplySearchTokens);
-    });
-
-    rows.sort((left, right) => {
-      const leftStatus = getSupplyHealthStatus(left);
-      const rightStatus = getSupplyHealthStatus(right);
-      const rankDiff = getSupplyCriticalityRank(leftStatus) - getSupplyCriticalityRank(rightStatus);
-      if (rankDiff !== 0) return rankDiff;
-
-      const leftCoverage = left.min > 0 ? left.stock / left.min : left.stock > 0 ? Number.MAX_SAFE_INTEGER : 0;
-      const rightCoverage = right.min > 0 ? right.stock / right.min : right.stock > 0 ? Number.MAX_SAFE_INTEGER : 0;
-      if (leftCoverage !== rightCoverage) return leftCoverage - rightCoverage;
-
-      return left.nombre.localeCompare(right.nombre);
-    });
-
-    return rows;
-  }, [insumos, supplyCategoryFilter, supplySearchTokens, supplyStatusFilter]);
+  const {
+    supplySummary,
+    supplyCategoryOptions,
+    filteredSupplies,
+  } = useSupplyDirectoryData({
+    insumos,
+    searchTokens: supplySearchTokens,
+    categoryFilter: supplyCategoryFilter,
+    statusFilter: supplyStatusFilter,
+  });
 
   const importIssueRows = useMemo(
     () =>
@@ -1439,46 +1189,29 @@ export default function App() {
     [auditRowsForGrouping, auditSummary],
   );
 
-  const canAccessTicketBySession = useCallback(
-    (ticket: TicketItem) => ticketBelongsToSessionUser(ticket, sessionUser),
-    [sessionUser],
-  );
-  const canDeleteTicket = useCallback(
-    (ticket: TicketItem): boolean => {
-      if (canEdit) return true;
-      if (!isRequesterOnlyRole(sessionUser?.rol)) return false;
-      if (!canAccessTicketBySession(ticket)) return false;
-      return ticket.estado === 'Abierto';
-    },
-    [canAccessTicketBySession, canEdit, sessionUser?.rol],
-  );
-  const getSlaStatusForCurrentTime = useCallback(
-    (ticket: TicketItem) => getSlaStatus(ticket, liveNow),
-    [liveNow],
-  );
-  const scopedTickets = useMemo(
-    () => (isRequesterOnlyUser ? tickets.filter(canAccessTicketBySession) : tickets),
-    [canAccessTicketBySession, isRequesterOnlyUser, tickets],
-  );
-
-  const isTicketOpen = useCallback((ticket: TicketItem): boolean => !isTicketClosed(ticket), []);
-  const openTickets = useMemo(
-    () => scopedTickets.filter(isTicketOpen),
-    [scopedTickets, isTicketOpen],
-  );
-  const openTicketsCount = openTickets.length;
-  const slaExpiredCount = useMemo(
-    () => openTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length,
-    [openTickets, liveNow],
-  );
-  const criticalTicketsCount = useMemo(
-    () => openTickets.filter((t) => t.prioridad === 'CRITICA').length,
-    [openTickets],
-  );
-  const unassignedTicketsCount = useMemo(
-    () => openTickets.filter((t) => !(t.asignadoA || '').trim()).length,
-    [openTickets],
-  );
+  const {
+    canDeleteTicket,
+    getSlaStatusForCurrentTime,
+    scopedTickets,
+    openTicketsCount,
+    slaExpiredCount,
+    criticalTicketsCount,
+    unassignedTicketsCount,
+    filteredTickets,
+  } = useTicketDirectoryData({
+    tickets,
+    sessionUser,
+    isRequesterOnlyUser,
+    canEdit,
+    liveNow,
+    searchTokens: headerSearchTokens,
+    lifecycleFilter: ticketLifecycleFilter,
+    stateFilter: ticketStateFilter,
+    priorityFilter: ticketPriorityFilter,
+    assignmentFilter: ticketAssignmentFilter,
+    slaFilter: ticketSlaFilter,
+    formatTicketBranch: formatTicketBranchFromCatalog,
+  });
 
   const {
     dashboardWindow,
@@ -1510,515 +1243,94 @@ export default function App() {
     formatTicketBranch: formatTicketBranchFromCatalog,
   });
 
-  const filteredTickets = useMemo(() => {
-    const rows = scopedTickets.filter((ticket) => {
-      if (ticketLifecycleFilter === 'ABIERTOS' && !isTicketOpen(ticket)) return false;
-      if (ticketLifecycleFilter === 'CERRADOS' && isTicketOpen(ticket)) return false;
-      if (ticketStateFilter !== 'TODOS' && ticket.estado !== ticketStateFilter) return false;
-      if (ticketPriorityFilter !== 'TODAS' && ticket.prioridad !== ticketPriorityFilter) return false;
-      if (ticketAssignmentFilter === 'ASIGNADOS' && !(ticket.asignadoA || '').trim()) return false;
-      if (ticketAssignmentFilter === 'SIN_ASIGNAR' && (ticket.asignadoA || '').trim()) return false;
-      if (ticketSlaFilter === 'VENCIDO' && !isTicketSlaExpired(ticket, liveNow)) return false;
-
-      if (headerSearchTokens.length === 0) return true;
-      const searchable = normalizeForCompare([
-        ticket.activoTag,
-        ticket.descripcion,
-        ticket.asignadoA || '',
-        formatTicketBranchFromCatalog(ticket.sucursal),
-        formatTicketAttentionType(ticket.atencionTipo),
-      ].join(' '));
-      return includesAllSearchTokens(searchable, headerSearchTokens);
-    });
-
-    rows.sort((a, b) => {
-      const leftExpired = isTicketSlaExpired(a, liveNow) ? 1 : 0;
-      const rightExpired = isTicketSlaExpired(b, liveNow) ? 1 : 0;
-      if (leftExpired !== rightExpired) return rightExpired - leftExpired;
-      return ticketTimestamp(b) - ticketTimestamp(a);
-    });
-    return rows;
-  }, [
-    formatTicketBranchFromCatalog,
-    headerSearchTokens,
-    liveNow,
-    scopedTickets,
-    isTicketOpen,
-    ticketAssignmentFilter,
-    ticketLifecycleFilter,
-    ticketPriorityFilter,
-    ticketSlaFilter,
-    ticketStateFilter,
-  ]);
-
-  const reportStartMs = useMemo(() => {
-    const parsed = parseDateToTimestamp(reportDateFrom);
-    if (parsed === null) return null;
-    return startOfLocalDayTimestamp(parsed);
-  }, [reportDateFrom]);
-  const reportEndMs = useMemo(() => {
-    const parsed = parseDateToTimestamp(reportDateTo);
-    if (parsed === null) return null;
-    return startOfLocalDayTimestamp(parsed) + (24 * 60 * 60 * 1000) - 1;
-  }, [reportDateTo]);
-  const reportComparisonWindow = useMemo(() => {
-    if (reportStartMs === null || reportEndMs === null || reportEndMs < reportStartMs) return null;
-    const spanMs = (reportEndMs - reportStartMs) + 1;
-    return {
-      previousStartMs: reportStartMs - spanMs,
-      previousEndMs: reportStartMs - 1,
-    };
-  }, [reportEndMs, reportStartMs]);
-  const reportPreviousPeriodLabel = useMemo(() => {
-    if (!reportComparisonWindow) return 'N/D';
-    const startLabel = new Date(reportComparisonWindow.previousStartMs).toLocaleDateString();
-    const endLabel = new Date(reportComparisonWindow.previousEndMs).toLocaleDateString();
-    return `${startLabel} a ${endLabel}`;
-  }, [reportComparisonWindow]);
-  const reportBaseTicketsByDate = useMemo(
-    () =>
-      !isReportsView
-        ? []
-        :
-        scopedTickets.filter((ticket) => {
-          const createdAt = ticketCreatedTimestamp(ticket);
-          if (reportStartMs !== null && createdAt < reportStartMs) return false;
-          if (reportEndMs !== null && createdAt > reportEndMs) return false;
-          return true;
-        }),
-    [isReportsView, reportEndMs, reportStartMs, scopedTickets],
-  );
-  const reportBranchOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          reportBaseTicketsByDate
-            .map((ticket) => String(ticket.sucursal || '').trim().toUpperCase())
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [reportBaseTicketsByDate],
-  );
-  const reportAreaOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          reportBaseTicketsByDate
-            .map((ticket) => getTicketAreaLabel(ticket))
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [reportBaseTicketsByDate],
-  );
-  const matchesReportCoreFilters = useCallback(
-    (ticket: TicketItem) =>
-      matchesReportBranch(ticket, reportBranchFilter)
-      && matchesReportArea(ticket, reportAreaFilter)
-      && matchesReportState(ticket, reportStateFilter)
-      && matchesReportPriority(ticket, reportPriorityFilter)
-      && matchesReportAttention(ticket, reportAttentionFilter),
-    [reportAreaFilter, reportAttentionFilter, reportBranchFilter, reportPriorityFilter, reportStateFilter],
-  );
-  const reportTechnicianOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          reportBaseTicketsByDate
-            .filter((ticket) => matchesReportCoreFilters(ticket))
-            .map((ticket) => String(ticket.asignadoA || '').trim())
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [matchesReportCoreFilters, reportBaseTicketsByDate],
-  );
-  const travelSourceTickets = useMemo(
-    () =>
-      !isReportsView
-        ? []
-        :
-        scopedTickets
-          .filter((ticket) => matchesReportCoreFilters(ticket)),
-    [isReportsView, matchesReportCoreFilters, scopedTickets],
-  );
-  const travelTechnicianOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          travelSourceTickets
-            .map((ticket) => String(ticket.asignadoA || '').trim())
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [travelSourceTickets],
-  );
-  const travelDestinationRules = useMemo(() => {
-    const rows: TravelDestinationRule[] = [];
-    const usedCodes = new Set<string>();
-    const branchByCode = new Map<string, CatalogBranch>();
-    activeTicketBranches.forEach((branch) => {
-      const code = String(branch.code || '').trim().toUpperCase();
-      if (!code) return;
-      branchByCode.set(code, branch);
-    });
-
-    TRAVEL_DESTINATION_PRESETS.forEach((preset) => {
-      const code = String(preset.code || '').trim().toUpperCase();
-      if (!code || usedCodes.has(code)) return;
-      const branch = branchByCode.get(code);
-      const label = preset.label || compactBranchLabel(branch?.name) || code;
-      rows.push({
-        code,
-        index: preset.index,
-        label,
-        kms: preset.defaultKms,
-      });
-      usedCodes.add(code);
-    });
-
-    let nextIndex = rows.length > 0 ? Math.max(...rows.map((row) => row.index)) + 1 : 1;
-    activeTicketBranches
-      .map((branch) => String(branch.code || '').trim().toUpperCase())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b))
-      .forEach((code) => {
-        if (usedCodes.has(code)) return;
-        const branch = branchByCode.get(code);
-        rows.push({
-          code,
-          index: nextIndex,
-          label: compactBranchLabel(branch?.name) || code,
-          kms: 0,
-        });
-        usedCodes.add(code);
-        nextIndex += 1;
-      });
-
-    return rows.sort((a, b) => a.index - b.index);
-  }, [activeTicketBranches]);
-  const travelDestinationRuleByCode = useMemo(
-    () => new Map(travelDestinationRules.map((row) => [row.code, row])),
-    [travelDestinationRules],
-  );
-  const travelMonthRange = useMemo(
-    () => parseMonthInputRange(travelReportMonth),
-    [travelReportMonth],
-  );
-  const currentTravelScope = useMemo(
-    () => resolveTravelTechnicianScope(travelReportTechnician, users),
-    [travelReportTechnician, users],
-  );
-  const effectiveTravelReporterName = useMemo(() => {
-    const manual = String(travelReportName || '').trim();
-    if (manual) return manual;
-    if (travelReportTechnician !== 'TODOS' && travelReportTechnician !== 'SIN_ASIGNAR') {
-      const selected = String(currentTravelScope.label || travelReportTechnician || '').trim();
-      if (selected) return selected;
-    }
-    const sessionName = String(sessionUser?.nombre || '').trim();
-    return sessionName || 'SIN NOMBRE';
-  }, [currentTravelScope.label, sessionUser?.nombre, travelReportName, travelReportTechnician]);
-  const travelTicketRows = useMemo(() => {
-    if (!isReportsView || !travelMonthRange) return [] as TravelReportRow[];
-    const rows: TravelReportRow[] = [];
-    const normalizedTechnician = normalizeForCompare(travelReportTechnician);
-    travelSourceTickets.forEach((ticket) => {
-      const createdAt = parseTicketTravelCreatedAt(ticket);
-      if (createdAt === null) return;
-      if (createdAt < travelMonthRange.startMs || createdAt > travelMonthRange.endMs) return;
-
-      const assigned = String(ticket.asignadoA || '').trim();
-      if (travelReportTechnician === 'SIN_ASIGNAR' && assigned) return;
-      if (travelReportTechnician !== 'TODOS' && travelReportTechnician !== 'SIN_ASIGNAR') {
-        if (normalizeForCompare(assigned) !== normalizedTechnician) return;
-      }
-
-      if (!ticket.trasladoRequerido) return;
-
-      const destinationCode = resolveTicketTravelDestinationCode(ticket, activeTicketBranchCodes);
-      if (!destinationCode) return;
-
-      const destinationRule = travelDestinationRuleByCode.get(destinationCode);
-      rows.push({
-        ticketId: ticket.id,
-        createdAt,
-        nombre: effectiveTravelReporterName,
-        destinationCode,
-        destinationLabel: destinationRule?.label || destinationCode,
-        routeIndex: destinationRule?.index || 0,
-        kms: destinationRule?.kms || 0,
-        fecha: formatTravelDate(ticket.fechaCreacion || ticket.fecha),
-        motivo: extractTicketIssueDescription(ticket),
-      });
-    });
-    rows.sort((a, b) => {
-      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
-      return a.ticketId - b.ticketId;
-    });
-    return rows;
-  }, [
-    activeTicketBranchCodes,
-    effectiveTravelReporterName,
+  const {
+    reportStartMs,
+    reportEndMs,
+    reportComparisonWindow,
+    reportPreviousPeriodLabel,
+    reportBranchOptions,
+    reportAreaOptions,
+    matchesReportCoreFilters,
+    reportTechnicianOptions,
+    reportScopedTicketsByFilters,
+    reportTickets,
+    reportPreviousTickets,
+  } = useReportTicketData({
     isReportsView,
-    travelDestinationRuleByCode,
+    scopedTickets,
+    reportDateFrom,
+    reportDateTo,
+    reportBranchFilter,
+    reportAreaFilter,
+    reportStateFilter,
+    reportPriorityFilter,
+    reportAttentionFilter,
+    reportTechnicianFilter,
+  });
+  const {
+    travelTechnicianOptions,
+    travelDestinationRules,
     travelMonthRange,
+    effectiveTravelReporterName,
+    travelSuggestedTripsByCode,
+    travelReportRows,
+    travelTotalTrips,
+    travelTotalKms,
+    travelFuelEfficiencyValue,
+    travelFuelLiters,
+    travelMonthLabel,
+  } = useTravelReportData({
+    isReportsView,
+    scopedTickets,
+    matchesReportCoreFilters,
+    activeTicketBranches,
+    activeTicketBranchCodes,
+    travelReportMonth,
     travelReportTechnician,
-    travelSourceTickets,
-  ]);
-  const travelSuggestedTripsByCode = useMemo(() => {
-    const counts = new Map<string, number>();
-    travelTicketRows.forEach((row) => {
-      counts.set(row.destinationCode, (counts.get(row.destinationCode) || 0) + 1);
-    });
-    return counts;
-  }, [travelTicketRows]);
-  const travelReportRows = useMemo(
-    () => buildTravelReportRowsFromActualTrips(
-      travelTicketRows,
-      travelSuggestedTripsByCode,
-      travelDestinationRuleByCode,
-      effectiveTravelReporterName,
-      travelMonthRange,
-    ),
-    [
-      effectiveTravelReporterName,
-      travelDestinationRuleByCode,
-      travelMonthRange,
-      travelTicketRows,
-      travelSuggestedTripsByCode,
-    ],
-  );
-  const travelTotalTrips = useMemo(
-    () => Array.from(travelSuggestedTripsByCode.values()).reduce((sum, trips) => sum + trips, 0),
-    [travelSuggestedTripsByCode],
-  );
-  const travelTotalKms = useMemo(
-    () => Array.from(travelSuggestedTripsByCode.entries()).reduce((sum, [destinationCode, trips]) => {
-      const destinationRule = travelDestinationRuleByCode.get(destinationCode);
-      return sum + ((destinationRule?.kms || 0) * trips);
-    }, 0),
-    [travelDestinationRuleByCode, travelSuggestedTripsByCode],
-  );
-  const travelFuelEfficiencyValue = useMemo(
-    () => parseNonNegativeNumber(travelReportFuelEfficiency, TRAVEL_DEFAULT_FUEL_EFFICIENCY),
-  [travelReportFuelEfficiency],
-  );
-  const travelFuelLiters = travelFuelEfficiencyValue > 0
-    ? roundToTwoDecimals(travelTotalKms / travelFuelEfficiencyValue)
-    : 0;
-  const travelMonthLabel = useMemo(
-    () => formatMonthInputLabel(travelReportMonth),
-    [travelReportMonth],
-  );
-  const reportScopedTicketsByFilters = useMemo(
-    () =>
-      !isReportsView
-        ? []
-        :
-        scopedTickets
-          .filter((ticket) => matchesReportCoreFilters(ticket))
-          .filter((ticket) => matchesReportTechnician(ticket, reportTechnicianFilter)),
-    [isReportsView, matchesReportCoreFilters, reportTechnicianFilter, scopedTickets],
-  );
-  const reportTickets = useMemo(
-    () =>
-      !isReportsView
-        ? []
-        :
-        reportScopedTicketsByFilters
-          .filter((ticket) => {
-            const createdAt = ticketCreatedTimestamp(ticket);
-            if (reportStartMs !== null && createdAt < reportStartMs) return false;
-            if (reportEndMs !== null && createdAt > reportEndMs) return false;
-            return true;
-          })
-          .sort((a, b) => ticketTimestamp(b) - ticketTimestamp(a)),
-    [isReportsView, reportEndMs, reportScopedTicketsByFilters, reportStartMs],
-  );
-  const reportPreviousTickets = useMemo(() => {
-    if (!isReportsView || !reportComparisonWindow) return [] as TicketItem[];
-    return reportScopedTicketsByFilters
-      .filter((ticket) => {
-        const createdAt = ticketCreatedTimestamp(ticket);
-        return createdAt >= reportComparisonWindow.previousStartMs && createdAt <= reportComparisonWindow.previousEndMs;
-      })
-      .sort((a, b) => ticketTimestamp(b) - ticketTimestamp(a));
-  }, [isReportsView, reportComparisonWindow, reportScopedTicketsByFilters]);
-  const reportTrendMode = useMemo<'DIARIA' | 'SEMANAL'>(() => {
-    if (reportStartMs === null || reportEndMs === null || reportEndMs < reportStartMs) return 'DIARIA';
-    const dayMs = 24 * 60 * 60 * 1000;
-    const spanDays = Math.ceil(((reportEndMs - reportStartMs) + 1) / dayMs);
-    return spanDays > 45 ? 'SEMANAL' : 'DIARIA';
-  }, [reportEndMs, reportStartMs]);
-  const reportLifecycleTrend = useMemo(() => {
-    if (!isReportsView) {
-      return [] as Array<{ key: number; label: string; created: number; closed: number }>;
-    }
-    if (reportStartMs === null || reportEndMs === null || reportEndMs < reportStartMs) {
-      return [] as Array<{ key: number; label: string; created: number; closed: number }>;
-    }
-
-    const locale = 'es-MX';
-    const dayMs = 24 * 60 * 60 * 1000;
-    const buckets = new Map<number, { key: number; label: string; created: number; closed: number }>();
-
-    if (reportTrendMode === 'SEMANAL') {
-      const firstBucket = startOfLocalWeekTimestamp(reportStartMs);
-      const lastBucket = startOfLocalWeekTimestamp(reportEndMs);
-      for (let cursor = firstBucket; cursor <= lastBucket; cursor += 7 * dayMs) {
-        const weekEnd = Math.min(cursor + (7 * dayMs) - 1, reportEndMs);
-        const labelStart = new Date(cursor).toLocaleDateString(locale, { day: '2-digit', month: 'short' });
-        const labelEnd = new Date(weekEnd).toLocaleDateString(locale, { day: '2-digit', month: 'short' });
-        buckets.set(cursor, {
-          key: cursor,
-          label: `${labelStart} - ${labelEnd}`,
-          created: 0,
-          closed: 0,
-        });
-      }
-
-      reportScopedTicketsByFilters.forEach((ticket) => {
-        const createdAt = ticketCreatedTimestamp(ticket);
-        if (createdAt >= reportStartMs && createdAt <= reportEndMs) {
-          const bucketKey = startOfLocalWeekTimestamp(createdAt);
-          const row = buckets.get(bucketKey);
-          if (row) row.created += 1;
-        }
-
-        const closedAt = parseDateToTimestamp(ticket.fechaCierre || '');
-        if (closedAt !== null && closedAt >= reportStartMs && closedAt <= reportEndMs) {
-          const bucketKey = startOfLocalWeekTimestamp(closedAt);
-          const row = buckets.get(bucketKey);
-          if (row) row.closed += 1;
-        }
-      });
-    } else {
-      const firstBucket = startOfLocalDayTimestamp(reportStartMs);
-      const lastBucket = startOfLocalDayTimestamp(reportEndMs);
-      for (let cursor = firstBucket; cursor <= lastBucket; cursor += dayMs) {
-        const label = new Date(cursor).toLocaleDateString(locale, { day: '2-digit', month: 'short' });
-        buckets.set(cursor, {
-          key: cursor,
-          label,
-          created: 0,
-          closed: 0,
-        });
-      }
-
-      reportScopedTicketsByFilters.forEach((ticket) => {
-        const createdAt = ticketCreatedTimestamp(ticket);
-        if (createdAt >= reportStartMs && createdAt <= reportEndMs) {
-          const bucketKey = startOfLocalDayTimestamp(createdAt);
-          const row = buckets.get(bucketKey);
-          if (row) row.created += 1;
-        }
-
-        const closedAt = parseDateToTimestamp(ticket.fechaCierre || '');
-        if (closedAt !== null && closedAt >= reportStartMs && closedAt <= reportEndMs) {
-          const bucketKey = startOfLocalDayTimestamp(closedAt);
-          const row = buckets.get(bucketKey);
-          if (row) row.closed += 1;
-        }
-      });
-    }
-
-    return Array.from(buckets.values()).sort((a, b) => a.key - b.key);
-  }, [isReportsView, reportEndMs, reportScopedTicketsByFilters, reportStartMs, reportTrendMode]);
-  const reportLifecycleTrendMax = useMemo(
-    () => (reportLifecycleTrend.length > 0 ? Math.max(1, ...reportLifecycleTrend.map((row) => Math.max(row.created, row.closed))) : 1),
-    [reportLifecycleTrend],
-  );
-  const reportCreatedInPeriodCount = useMemo(
-    () => reportLifecycleTrend.reduce((sum, row) => sum + row.created, 0),
-    [reportLifecycleTrend],
-  );
-  const reportClosedInPeriodCount = useMemo(
-    () => reportLifecycleTrend.reduce((sum, row) => sum + row.closed, 0),
-    [reportLifecycleTrend],
-  );
-  const reportOpenCount = reportTickets.filter(isTicketOpen).length;
-  const reportClosedCount = reportTickets.length - reportOpenCount;
-  const reportCriticalCount = reportTickets.filter((ticket) => ticket.prioridad === 'CRITICA').length;
-  const reportSlaExpiredCount = reportTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
-  const reportSlaTotalCount = reportTickets.length;
-  const reportSlaCompliantCount = Math.max(0, reportSlaTotalCount - reportSlaExpiredCount);
-  const reportSlaCompliancePct = reportSlaTotalCount > 0
-    ? Math.round((reportSlaCompliantCount / reportSlaTotalCount) * 100)
-    : 100;
-  const reportPreviousOpenCount = reportPreviousTickets.filter(isTicketOpen).length;
-  const reportPreviousSlaExpiredCount = reportPreviousTickets.filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
-  const reportPreviousSlaTotalCount = reportPreviousTickets.length;
-  const reportPreviousSlaCompliantCount = Math.max(0, reportPreviousSlaTotalCount - reportPreviousSlaExpiredCount);
-  const reportPreviousSlaCompliancePct = reportPreviousSlaTotalCount > 0
-    ? Math.round((reportPreviousSlaCompliantCount / reportPreviousSlaTotalCount) * 100)
-    : 100;
-  const reportResolutionHours = collectResolutionHours(reportTickets);
-  const reportPreviousResolutionHours = collectResolutionHours(reportPreviousTickets);
-  const reportAvgResolutionHours = reportResolutionHours.length > 0
-    ? roundHours(reportResolutionHours.reduce((sum, value) => sum + value, 0) / reportResolutionHours.length)
-    : null;
-  const reportMedianResolutionHours = calculateMedian(reportResolutionHours);
-  const reportP90ResolutionHours = calculatePercentile(reportResolutionHours, 90);
-  const reportPreviousAvgResolutionHours = reportPreviousResolutionHours.length > 0
-    ? roundHours(reportPreviousResolutionHours.reduce((sum, value) => sum + value, 0) / reportPreviousResolutionHours.length)
-    : null;
-  const reportPreviousMedianResolutionHours = calculateMedian(reportPreviousResolutionHours);
-  const reportPreviousP90ResolutionHours = calculatePercentile(reportPreviousResolutionHours, 90);
-  const reportDefaultTrend = useMemo(
-    () => ({ label: 'Comparativo no disponible', toneClass: 'text-slate-400' }),
-    [],
-  );
-  const reportTicketsTrend = useMemo(
-    () => (
-      reportComparisonWindow
-        ? formatMetricTrend(reportTickets.length, reportPreviousTickets.length, { positiveIsGood: false })
-        : reportDefaultTrend
-    ),
-    [reportComparisonWindow, reportDefaultTrend, reportPreviousTickets.length, reportTickets.length],
-  );
-  const reportOpenTrend = useMemo(
-    () => (
-      reportComparisonWindow
-        ? formatMetricTrend(reportOpenCount, reportPreviousOpenCount, { positiveIsGood: false })
-        : reportDefaultTrend
-    ),
-    [reportComparisonWindow, reportDefaultTrend, reportOpenCount, reportPreviousOpenCount],
-  );
-  const reportSlaComplianceTrend = useMemo(
-    () => (
-      reportComparisonWindow
-        ? formatMetricTrend(reportSlaCompliancePct, reportPreviousSlaCompliancePct, {
-          positiveIsGood: true,
-          unitSuffix: '%',
-          usePoints: true,
-        })
-        : reportDefaultTrend
-    ),
-    [reportComparisonWindow, reportDefaultTrend, reportPreviousSlaCompliancePct, reportSlaCompliancePct],
-  );
-  const reportMttrMedianTrend = useMemo(
-    () => (
-      reportComparisonWindow
-        ? formatMetricTrend(reportMedianResolutionHours, reportPreviousMedianResolutionHours, {
-          positiveIsGood: false,
-          decimals: 1,
-          unitSuffix: ' h',
-        })
-        : reportDefaultTrend
-    ),
-    [reportComparisonWindow, reportDefaultTrend, reportMedianResolutionHours, reportPreviousMedianResolutionHours],
-  );
-  const reportP90ResolutionTrend = useMemo(
-    () => (
-      reportComparisonWindow
-        ? formatMetricTrend(reportP90ResolutionHours, reportPreviousP90ResolutionHours, {
-          positiveIsGood: false,
-          decimals: 1,
-          unitSuffix: ' h',
-        })
-        : reportDefaultTrend
-    ),
-    [reportComparisonWindow, reportDefaultTrend, reportP90ResolutionHours, reportPreviousP90ResolutionHours],
-  );
+    travelReportName,
+    travelReportFuelEfficiency,
+    users,
+    sessionUser,
+  });
+  const {
+    reportTrendMode,
+    reportLifecycleTrend,
+    reportLifecycleTrendMax,
+    reportCreatedInPeriodCount,
+    reportClosedInPeriodCount,
+  } = useReportLifecycleTrendData({
+    isReportsView,
+    reportStartMs,
+    reportEndMs,
+    reportScopedTicketsByFilters,
+  });
+  const {
+    reportOpenCount,
+    reportClosedCount,
+    reportCriticalCount,
+    reportSlaExpiredCount,
+    reportSlaTotalCount,
+    reportSlaCompliantCount,
+    reportSlaCompliancePct,
+    reportPreviousOpenCount,
+    reportPreviousSlaCompliancePct,
+    reportAvgResolutionHours,
+    reportMedianResolutionHours,
+    reportP90ResolutionHours,
+    reportPreviousAvgResolutionHours,
+    reportPreviousMedianResolutionHours,
+    reportPreviousP90ResolutionHours,
+    reportTicketsTrend,
+    reportOpenTrend,
+    reportSlaComplianceTrend,
+    reportMttrMedianTrend,
+    reportP90ResolutionTrend,
+  } = useReportKpiData({
+    reportTickets,
+    reportPreviousTickets,
+    hasComparisonWindow: Boolean(reportComparisonWindow),
+    liveNow,
+  });
   const reportStateBars = TICKET_STATES.map((state) => ({
     label: state,
     count: reportTickets.filter((ticket) => ticket.estado === state).length,

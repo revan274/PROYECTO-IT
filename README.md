@@ -3,7 +3,7 @@
 Sistema de mesa de ayuda IT con frontend React y backend Node/Express.
 
 ## Requisitos
-- Node.js 20+
+- Node.js 20.19+
 
 ## Instalacion
 ```bash
@@ -33,7 +33,9 @@ npm run dev:server
 - `npm run lint`
 - `npm run test`
 - `npm run test:server`
+- `npm run test:server:coverage`
 - `npm run test:ui`
+- `npm run test:ui:coverage`
 
 ## Variables de entorno
 Revisa `.env.example`. Variables principales:
@@ -115,17 +117,45 @@ Revisa `.env.example`. Variables principales:
 - `solicitante`: solo flujo de tickets propios; puede crear tickets, comentar, adjuntar y eliminar tickets abiertos creados por sí mismo.
 - El rol `admin` debe permanecer activo en el catálogo para evitar bloquear la administración del sistema.
 
-## Despliegue en Render (1 servicio)
-Este repo incluye `render.yaml` para desplegar frontend + API en el mismo dominio.
+## Despliegue actual
 
-1. Sube el repo a GitHub.
-2. En Render: `New` -> `Blueprint` -> conecta el repo.
-3. Render detecta `render.yaml` y crea el servicio `mesa-it`.
-4. Configura variables sensibles en Render:
-   - `CORS_ORIGINS`: URL publica del servicio (ej: `https://mesa-it.onrender.com`)
-   - `QR_SIGNING_SECRET`: secreto largo y unico
-   - El blueprint monta un disco en `/var/data` y permite bootstrap inicial del DB con `ALLOW_PRODUCTION_SEED=true`.
-   - Después del primer arranque exitoso puedes cambiar `ALLOW_PRODUCTION_SEED=false` si quieres fail-closed estricto.
-5. Deploy.
+La topología versionada separa los dos servicios:
 
-El backend sirve automáticamente `dist/` cuando existe build, y la API queda en `/api`.
+- Frontend React: Cloudflare Workers/Assets, configurado en `wrangler.jsonc`.
+- API Node/Express: Railway, iniciada con `npm start`.
+- Persistencia principal: PostgreSQL mediante `DATABASE_URL`.
+
+No existe un `render.yaml` en este repositorio. El despliegue conjunto en Render no
+forma parte de la configuración actual.
+
+### API en Railway
+
+1. Conecta el repositorio a un servicio Railway con Node.js 20 o superior.
+2. Usa `npm start` como comando de inicio. Railway debe proporcionar `PORT`.
+3. Configura, como mínimo:
+   - `DATABASE_URL`: conexión PostgreSQL de producción.
+   - `CORS_ORIGINS`: origen exacto del frontend de Cloudflare, sin comodines.
+   - `QR_SIGNING_SECRET`: secreto largo, aleatorio y exclusivo del entorno.
+   - `TRUST_PROXY=1`: un salto de proxy delante de Express.
+   - `AUTH_DISALLOW_DEMO_PASSWORDS=true`.
+4. Verifica `https://<servicio-railway>/api/health` antes de publicar el frontend.
+
+Los adjuntos y respaldos son archivos locales y no se almacenan en PostgreSQL. Si
+se necesitan conservar entre despliegues, Railway debe tener un volumen persistente
+montado y `DB_FILE` debe apuntar a ese volumen, o los binarios deben migrarse a
+almacenamiento de objetos.
+
+### Frontend en Cloudflare
+
+1. Define en `.env.production` la URL absoluta de la API:
+   `VITE_API_URL=https://<servicio-railway>/api`.
+2. Autentica Wrangler en el entorno de despliegue.
+3. Ejecuta:
+
+```bash
+npm run deploy
+```
+
+El script compila el frontend y publica `dist/` usando `wrangler.jsonc`. Después del
+despliegue, confirma que el origen publicado coincide exactamente con
+`CORS_ORIGINS` en Railway.

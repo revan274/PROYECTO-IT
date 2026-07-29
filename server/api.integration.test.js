@@ -240,9 +240,10 @@ async function startTestServer(dbFile) {
       PORT: String(port),
       DB_FILE: dbFile,
       DB_BACKUP_ENABLE: 'false',
+      AUTH_RATE_LIMIT_MAX: '10000',
       AUTH_DISALLOW_DEMO_PASSWORDS: 'false',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
 
   const appendLogs = (chunk) => {
@@ -267,7 +268,8 @@ async function startTestServer(dbFile) {
 async function stopTestServer(child) {
   if (!child || child.exitCode !== null) return;
 
-  child.kill();
+  if (child.connected) child.send({ type: 'shutdown' });
+  else child.kill();
   const exitedCleanly = await Promise.race([
     once(child, 'exit').then(() => true),
     delay(3_000).then(() => false),
@@ -677,6 +679,51 @@ test('POST/PATCH stock/DELETE /api/insumos persiste cambios de inventario', { co
   assert.equal(storedSupply.stock, 9);
   assert.equal(storedSupply.activo, false);
   assert.equal(storedSupply.categoria, 'PERIFERICOS');
+});
+
+test('POST/PATCH /api/insumos permite un mínimo superior al stock', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const nombre = 'Papel Termico Bajo Minimo';
+
+  const created = await requestJson('/api/insumos', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre,
+      unidad: 'Rollos',
+      stock: 3,
+      min: 12,
+      categoria: 'CONSUMIBLES',
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.stock, 3);
+  assert.equal(created.data.min, 12);
+
+  const updated = await requestJson(`/api/insumos/${created.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      nombre,
+      unidad: 'Rollos',
+      stock: 2,
+      min: 15,
+      categoria: 'CONSUMIBLES',
+      ubicacion: 'Almacén IT',
+      proveedor: 'Proveedor Integración',
+    },
+  });
+
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.stock, 2);
+  assert.equal(updated.data.min, 15);
+
+  const persisted = await readPersistedDb();
+  const storedSupply = persisted.insumos.find((item) => Number(item.id) === Number(created.data.id));
+  assert.ok(storedSupply);
+  assert.equal(storedSupply.stock, 2);
+  assert.equal(storedSupply.min, 15);
 });
 
 test('resolver un ticket mantiene el activo en falla si existe otro ticket abierto relacionado', { concurrency: false }, async () => {

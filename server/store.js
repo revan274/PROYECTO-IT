@@ -1175,6 +1175,13 @@ export async function getSharedPostgresPool() {
   return getPgPool();
 }
 
+export async function closeStore() {
+  const pool = pgPool;
+  pgPool = null;
+  pgInitPromise = null;
+  if (pool) await pool.end();
+}
+
 export function nextId(db) {
   db.meta.nextId += 1;
   return db.meta.nextId;

@@ -1,0 +1,22 @@
+{
+  "all": true,
+  "include": [
+    "server/**/*.js"
+  ],
+  "exclude": [
+    "server/**/*.test.js",
+    "server/data/**"
+  ],
+  "reporter": [
+    "text",
+    "json-summary",
+    "html"
+  ],
+  "check-coverage": true,
+  "statements": 67,
+  "branches": 53,
+  "functions": 82,
+  "lines": 67,
+  "reports-dir": "coverage/server",
+  "temp-directory": "coverage/server/.tmp"
+}

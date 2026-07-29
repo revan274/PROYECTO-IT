@@ -31,10 +31,6 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (stock < 0 || min < 0) {
       return res.status(400).json({ error: 'Stock y mínimo deben ser mayores o iguales a 0.' });
     }
-    if (min > stock) {
-      return res.status(400).json({ error: 'El mínimo no puede ser mayor al stock inicial.' });
-    }
-
     const result = await updateDb((db) => {
       const exists = db.insumos.find(
         (item) =>
@@ -103,10 +99,6 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (stock < 0 || min < 0) {
       return res.status(400).json({ error: 'Stock y mínimo deben ser mayores o iguales a 0.' });
     }
-    if (min > stock) {
-      return res.status(400).json({ error: 'El mínimo no puede ser mayor al stock.' });
-    }
-
     const updated = await updateDb((db) => {
       const idx = db.insumos.findIndex((item) => Number(item.id) === Number(id));
       if (idx < 0) return { ok: false, code: 'NOT_FOUND' };

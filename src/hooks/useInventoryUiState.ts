@@ -107,10 +107,6 @@ export function useInventoryUiState({ insumos }: UseInventoryUiStateOptions) {
       else min = Math.trunc(value);
     }
 
-    if (stock !== null && min !== null && min > stock) {
-      errors.min = 'El mínimo no puede ser mayor al stock inicial.';
-    }
-
     if (!errors.nombre && nombre && categoria) {
       const duplicateLocal = insumos.some(
         (item) =>
