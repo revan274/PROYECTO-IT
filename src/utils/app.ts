@@ -53,6 +53,11 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiRequestBehavior {
+  acceptNotModified?: boolean;
+  onResponse?: (response: Response) => void;
+}
+
 export function cloneInitialActivos(): Activo[] {
   return INVENTARIO_ACTIVOS_INICIAL.map((item) => ({ ...item }));
 }
@@ -297,7 +302,11 @@ export function buildApiUrl(path: string): string {
   return `${NORMALIZED_API_BASE_URL}/${rawPath.replace(/^\/+/, '')}`;
 }
 
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiRequest<T>(
+  path: string,
+  init?: RequestInit,
+  behavior: ApiRequestBehavior = {},
+): Promise<T> {
   const storedToken = getStoredSessionToken();
   const shouldAttachAuth = !!storedToken && !path.startsWith('/auth/login');
   const headers = new Headers(init?.headers);
@@ -338,6 +347,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     }
   }
 
+  behavior.onResponse?.(response);
+  if (response.status === 304 && behavior.acceptNotModified) {
+    return undefined as T;
+  }
   if (!response.ok) {
     const body = await response.text();
     throw new ApiError(response.status, body || `HTTP ${response.status}`);

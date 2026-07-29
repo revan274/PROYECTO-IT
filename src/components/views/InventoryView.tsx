@@ -7,6 +7,7 @@ import { QrScannerModal } from '../modals/QrScannerModal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { FilterChip } from '../ui/FilterChip';
+import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type {
   Activo,
@@ -57,7 +58,7 @@ interface AssetFormModalConfig {
 }
 
 interface InventoryViewProps {
-  inventoryImportInputRef: React.RefObject<HTMLInputElement>;
+  inventoryImportInputRef: React.RefObject<HTMLInputElement | null>;
   handleImportInventory: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   canEdit: boolean;
   isImportingInventory: boolean;
@@ -90,7 +91,7 @@ interface InventoryViewProps {
   setInventorySortField: React.Dispatch<React.SetStateAction<InventorySortField>>;
   inventorySortDirection: InventorySortDirection;
   setInventorySortDirection: React.Dispatch<React.SetStateAction<InventorySortDirection>>;
-  setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
+  setSearchTerm: (term: string) => void;
   applyInventoryFocus: (focus: InventoryRiskFilter | 'FALLA') => void;
   activosEnFalla: number;
   duplicateIpEntries: DuplicateRiskItem[];
@@ -99,7 +100,7 @@ interface InventoryViewProps {
   getInventorySortIndicator: (field: InventorySortField) => React.ReactNode;
   sortedFilteredActivos: Activo[];
   selectedAsset: Activo | null;
-  setSelectedAsset: (asset: Activo) => void;
+  setSelectedAsset: (asset: Activo | null) => void;
   selectedAssetQrLoading: boolean;
   selectedAssetQrMode: 'signed' | 'unavailable';
   selectedAssetQrIssuedAt: string;
@@ -211,7 +212,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
           <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-xl">Activos IT</h3>
           <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
-            <input
+            <Input
+              variant="plain"
               ref={inventoryImportInputRef}
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -229,7 +231,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <Button size="toolbar" onClick={exportarInventarioFiltrado}>
               <Download size={16} /> Exportar CSV
             </Button>
-            <button
+            <Button variant="plain" size="bare"
               onClick={() => {
                 setQrManualInput('');
                 setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
@@ -238,15 +240,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               className="w-full xl:w-auto min-w-0 bg-white border border-blue-200 text-blue-700 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-blue-50"
             >
               <ScanLine size={16} /> Escanear QR
-            </button>
+            </Button>
             {canManageUsers && (
-              <button
+              <Button variant="plain" size="bare"
                 disabled={activos.length === 0}
                 onClick={() => void eliminarTodosActivos()}
                 className="w-full xl:w-auto min-w-0 bg-white border border-red-200 text-red-600 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-red-50 disabled:opacity-50"
               >
                 <Trash2 size={16} /> Vaciar Activos
-              </button>
+              </Button>
             )}
             <Button
               variant="primary"
@@ -341,7 +343,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <option value="asc">Ascendente</option>
               <option value="desc">Descendente</option>
             </Select>
-            <button
+            <Button variant="plain" size="bare"
               onClick={() => {
                 setInventoryDepartmentFilter('TODOS');
                 setInventoryEquipmentFilter('TODOS');
@@ -354,7 +356,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
             >
               Limpiar Filtros
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -390,45 +392,45 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               <tr>
                 <th className="px-6 py-6">
-                  <button
+                  <Button variant="plain" size="bare"
                     onClick={() => updateInventorySort('tag')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
                     TAG / Serial <span>{getInventorySortIndicator('tag')}</span>
-                  </button>
+                  </Button>
                 </th>
                 <th className="px-6 py-6">
-                  <button
+                  <Button variant="plain" size="bare"
                     onClick={() => updateInventorySort('tipo')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
                     Equipo <span>{getInventorySortIndicator('tipo')}</span>
-                  </button>
+                  </Button>
                 </th>
                 <th className="px-6 py-6">Hardware</th>
                 <th className="px-6 py-6">
-                  <button
+                  <Button variant="plain" size="bare"
                     onClick={() => updateInventorySort('responsable')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
                     Red / Responsable <span>{getInventorySortIndicator('responsable')}</span>
-                  </button>
+                  </Button>
                 </th>
                 <th className="px-6 py-6">
-                  <button
+                  <Button variant="plain" size="bare"
                     onClick={() => updateInventorySort('ubicacion')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
                     Ubicación <span>{getInventorySortIndicator('ubicacion')}</span>
-                  </button>
+                  </Button>
                 </th>
                 <th className="px-6 py-6">
-                  <button
+                  <Button variant="plain" size="bare"
                     onClick={() => updateInventorySort('estado')}
                     className="flex items-center gap-1 hover:text-slate-600 transition-colors"
                   >
                     Estado <span>{getInventorySortIndicator('estado')}</span>
-                  </button>
+                  </Button>
                 </th>
                 <th className="px-6 py-6 text-right">Acción</th>
               </tr>
@@ -470,13 +472,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </td>
                   <td className="px-6 py-6 text-right">
                     <div className="flex justify-end gap-3 items-center">
-                      <button
+                      <Button variant="plain" size="bare"
                         disabled={!canEdit}
                         onClick={(event) => eliminarActivo(asset.id, event)}
                         className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all z-30 disabled:opacity-40"
                       >
                         <Trash2 size={18} />
-                      </button>
+                      </Button>
                       <ChevronRight className="text-slate-300" />
                     </div>
                   </td>

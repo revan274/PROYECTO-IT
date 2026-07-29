@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { ModalDialog } from '../ui/ModalDialog';
 
 interface ModalLayoutProps {
   isOpen: boolean;
@@ -19,20 +20,30 @@ export function ModalLayout({
   widthClassName = 'max-w-lg',
   children,
 }: ModalLayoutProps) {
-  if (!isOpen) return null;
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-      <div className={`bg-white w-full ${widthClassName} rounded-[3rem] shadow-2xl overflow-hidden`}>
+    <ModalDialog
+      open={isOpen}
+      onClose={onClose}
+      isBusy={isBusy}
+      aria-labelledby={titleId}
+      className={`bg-white w-full ${widthClassName} rounded-[3rem] shadow-2xl overflow-hidden`}
+    >
         <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/30 font-black uppercase text-sm">
-          {title}
-          <Button variant="close" size="bare" onClick={onClose} disabled={isBusy}>
+          <span id={titleId}>{title}</span>
+          <Button
+            variant="close"
+            size="bare"
+            onClick={onClose}
+            disabled={isBusy}
+            aria-label={`Cerrar ${title}`}
+          >
             <X size={24} />
           </Button>
         </div>
         {children}
-      </div>
-    </div>
+    </ModalDialog>
   );
 }
 

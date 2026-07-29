@@ -1,4 +1,5 @@
 import { COMMON_TICKET_ISSUES, SLA_POLICY } from '../constants/app';
+import { isClosedTicketState } from '../../shared/ticket-rules.js';
 import type {
   Activo,
   PrioridadTicket,
@@ -260,7 +261,7 @@ export function calculateSlaDeadline(prioridad: PrioridadTicket): string {
 }
 
 export function isTicketClosed(ticket: Pick<TicketItem, 'estado'>): boolean {
-  return ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado';
+  return isClosedTicketState(ticket.estado);
 }
 
 export function ticketAuditActionLabel(estado: TicketEstado): string {

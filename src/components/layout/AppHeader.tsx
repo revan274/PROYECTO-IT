@@ -1,5 +1,6 @@
 import { Menu, Moon, Search, Sun } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -38,12 +39,13 @@ export function AppHeader({
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button type="button" className="lg:hidden text-slate-400 shrink-0" onClick={onOpenSidebar}>
+            <Button variant="plain" size="bare" className="lg:hidden text-slate-400 shrink-0" onClick={onOpenSidebar} aria-label="Abrir menú">
               <Menu />
-            </button>
+            </Button>
             <div className="relative max-w-md w-full hidden md:block">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-              <input
+              <Input
+                variant="plain"
                 type="text"
                 placeholder="Buscar..."
                 className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none"
@@ -62,7 +64,7 @@ export function AppHeader({
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </Button>
-            <div className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider ${backendConnected ? 'text-[#8CC63F] bg-[#f4fce3] border-[#d8f5a2]' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
+            <div className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider ${backendConnected ? 'text-lime-700 bg-lime-50 border-lime-200' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
               <span>{backendConnected ? 'Backend Online' : 'Backend Offline'}</span>
               {isSyncing && <span className="text-slate-400">SYNC...</span>}
               {!isSyncing && lastSync && backendConnected && <span className="text-slate-400">({lastSync})</span>}
@@ -72,7 +74,7 @@ export function AppHeader({
               <p className="text-xs font-black text-slate-700">{sessionUser?.nombre || 'Invitado'}</p>
               <p className="text-[8px] font-semibold text-slate-300 tracking-[0.05em] normal-case">{authorBrand}</p>
             </div>
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#f4fce3] flex items-center justify-center text-[#8CC63F] font-black border-2 border-white shadow-sm ring-2 ring-slate-50">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-lime-50 flex items-center justify-center text-brand-green font-black border-2 border-white shadow-sm ring-2 ring-slate-50">
               {sessionUser?.nombre?.slice(0, 2).toUpperCase() || 'IT'}
             </div>
           </div>
@@ -80,7 +82,8 @@ export function AppHeader({
 
         <div className="relative w-full md:hidden">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-          <input
+          <Input
+            variant="plain"
             type="text"
             placeholder="Buscar..."
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none"
@@ -90,7 +93,7 @@ export function AppHeader({
         </div>
 
         <div className="flex sm:hidden items-center justify-between gap-3 text-[10px] font-black uppercase tracking-wider">
-          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border ${backendConnected ? 'text-[#8CC63F] bg-[#f4fce3] border-[#d8f5a2]' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
+          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border ${backendConnected ? 'text-lime-700 bg-lime-50 border-lime-200' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
             <span>{backendConnected ? 'Online' : 'Offline'}</span>
             {isSyncing && <span className="text-slate-400">Sync</span>}
           </div>

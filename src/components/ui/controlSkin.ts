@@ -4,7 +4,7 @@
  * El layout (w-full, flex-1, márgenes) es responsabilidad del consumidor.
  */
 
-export type ControlVariant = 'form' | 'formMuted' | 'filter' | 'soft';
+export type ControlVariant = 'form' | 'formMuted' | 'filter' | 'soft' | 'plain';
 
 export const controlSkin: Record<ControlVariant, string> = {
   // Formulario glass sobre superficie blanca (AssetForm y afines)
@@ -15,6 +15,8 @@ export const controlSkin: Record<ControlVariant, string> = {
   filter: 'px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 disabled:opacity-50',
   // Formulario suave con estados de validación (InsumoForm); sin glass a propósito
   soft: 'p-5 rounded-2xl text-sm font-black uppercase outline-none',
+  // Adaptador semántico para controles con una piel heredada aún no compartida.
+  plain: '',
 };
 
 /** Estados de superficie para la variante `soft` (y futuras validaciones). */

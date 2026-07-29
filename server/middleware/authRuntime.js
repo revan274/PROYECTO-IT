@@ -1,12 +1,16 @@
-import { readDb, updateDb, sanitizeUser } from '../store.js';
+import {
+  readDbSnapshot,
+  readDbVersion,
+  updateDb,
+  sanitizeUser,
+} from '../store.js';
+import { createAuthPersistence } from '../modules/auth-persistence.js';
 import {
   parseBearerToken,
   createAuthToken,
   getLoginAttemptKey,
-  isDemoPasswordUser,
   pushAuditWithContext,
   roleIsEnabledByCatalog,
-  asNonEmptyString,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_LOCK_MS,
   LOGIN_TRACK_WINDOW_MS,
@@ -15,40 +19,22 @@ import {
 } from '../utils/helpers.js';
 
 export function createAuthRuntime() {
-  const authSessions = new Map();
-  const loginAttempts = new Map();
-  let lastLoginAttemptGcAt = 0;
+  const authPersistence = createAuthPersistence({
+    tokenTtlMs: AUTH_TOKEN_TTL_MS,
+    loginMaxAttempts: LOGIN_MAX_ATTEMPTS,
+    loginLockMs: LOGIN_LOCK_MS,
+    loginTrackWindowMs: LOGIN_TRACK_WINDOW_MS,
+    gcIntervalMs: LOGIN_ATTEMPT_GC_MS,
+  });
 
-  function gcLoginAttempts() {
-    const nowTs = Date.now();
-    if (nowTs - lastLoginAttemptGcAt < LOGIN_ATTEMPT_GC_MS) return;
-    for (const [key, item] of loginAttempts.entries()) {
-      const expired = !item
-        || (item.lockedUntil && item.lockedUntil <= nowTs && nowTs - item.lastFailedAt > LOGIN_TRACK_WINDOW_MS)
-        || (!item.lockedUntil && nowTs - item.windowStartedAt > LOGIN_TRACK_WINDOW_MS);
-      if (expired) loginAttempts.delete(key);
-    }
-    lastLoginAttemptGcAt = nowTs;
-  }
-
-  function registerSession(user) {
+  async function registerSession(user) {
     const token = createAuthToken();
-    authSessions.set(token, {
-      userId: Number(user.id),
-      username: String(user.username).toLowerCase(),
-      issuedAt: Date.now(),
-    });
+    await authPersistence.createSession(token, user);
     return token;
   }
 
-  function getValidSession(token) {
-    const session = authSessions.get(token);
-    if (!session) return null;
-    if (Date.now() - Number(session.issuedAt || 0) > AUTH_TOKEN_TTL_MS) {
-      authSessions.delete(token);
-      return null;
-    }
-    return session;
+  async function getValidSession(token) {
+    return authPersistence.getSession(token);
   }
 
   // Clave por-usuario independiente de la IP: evita el bypass del lockout
@@ -57,64 +43,19 @@ export function createAuthRuntime() {
     return `user::${String(username || '').trim().toLowerCase() || '*'}`;
   }
 
-  function getLoginThrottle(req, username) {
-    gcLoginAttempts();
+  async function getLoginThrottle(req, username) {
     const keys = [getLoginAttemptKey(req, username), getUsernameAttemptKey(username)];
-    const nowTs = Date.now();
-    let throttle = null;
-    for (const key of keys) {
-      const item = loginAttempts.get(key);
-      if (item?.lockedUntil && item.lockedUntil > nowTs) {
-        if (!throttle || item.lockedUntil > throttle.lockedUntil) {
-          throttle = {
-            key,
-            lockedUntil: item.lockedUntil,
-            retryAfterSec: Math.max(1, Math.ceil((item.lockedUntil - nowTs) / 1000)),
-          };
-        }
-      }
-    }
-    return throttle;
+    return authPersistence.getLoginThrottle(keys);
   }
 
-  function bumpLoginFailure(key, nowTs) {
-    const current = loginAttempts.get(key);
-    const windowExpired = !current || nowTs - Number(current.windowStartedAt || 0) > LOGIN_TRACK_WINDOW_MS;
-
-    const next = windowExpired
-      ? { count: 1, windowStartedAt: nowTs, lastFailedAt: nowTs, lockedUntil: 0 }
-      : {
-          ...current,
-          count: Number(current.count || 0) + 1,
-          lastFailedAt: nowTs,
-        };
-
-    if (next.count >= LOGIN_MAX_ATTEMPTS) {
-      next.lockedUntil = nowTs + LOGIN_LOCK_MS;
-      next.count = 0;
-      next.windowStartedAt = nowTs;
-    }
-
-    loginAttempts.set(key, next);
-    return next;
+  async function registerLoginFailure(req, username) {
+    const keys = [getLoginAttemptKey(req, username), getUsernameAttemptKey(username)];
+    return authPersistence.registerLoginFailure(keys);
   }
 
-  function registerLoginFailure(req, username) {
-    gcLoginAttempts();
-    const nowTs = Date.now();
-    const ipResult = bumpLoginFailure(getLoginAttemptKey(req, username), nowTs);
-    const userResult = bumpLoginFailure(getUsernameAttemptKey(username), nowTs);
-    const lockedUntil = Math.max(Number(ipResult.lockedUntil || 0), Number(userResult.lockedUntil || 0));
-
-    return {
-      locked: lockedUntil > nowTs,
-      retryAfterSec: lockedUntil > nowTs ? Math.max(1, Math.ceil((lockedUntil - nowTs) / 1000)) : 0,
-    };
-  }
-
-  function clearLoginFailures(req, username) {
-    loginAttempts.delete(getLoginAttemptKey(req, username));
-    loginAttempts.delete(getUsernameAttemptKey(username));
+  async function clearLoginFailures(req, username) {
+    const keys = [getLoginAttemptKey(req, username), getUsernameAttemptKey(username)];
+    await authPersistence.clearLoginFailures(keys);
   }
 
   async function writeSecurityAudit(req, payload) {
@@ -137,25 +78,43 @@ export function createAuthRuntime() {
         return res.status(401).json({ error: 'Sesión requerida.' });
       }
 
-      const session = getValidSession(token);
+      const session = await getValidSession(token);
       if (!session) {
         return res.status(401).json({ error: 'Sesión inválida o expirada.' });
       }
 
-      const db = await readDb();
+      const isConditionalBootstrap = req.method === 'GET'
+        && String(req.originalUrl || '').split('?')[0] === '/api/bootstrap'
+        && Boolean(req.headers['if-none-match']);
+      if (isConditionalBootstrap) {
+        const currentVersion = await readDbVersion();
+        if (
+          currentVersion !== null
+          && Number(session.validatedStateVersion) === currentVersion
+          && session.user
+        ) {
+          req.authToken = token;
+          req.authUser = sanitizeUser(session.user);
+          req.appDbVersion = currentVersion;
+          return next();
+        }
+      }
+
+      const { db, version } = await readDbSnapshot();
       const user = db.users.find(
         (u) =>
           Number(u.id) === Number(session.userId) &&
           String(u.username).toLowerCase() === String(session.username).toLowerCase() &&
+          Number(u.authVersion || 0) === Number(session.authVersion || 0) &&
           u.activo !== false,
       );
 
       if (!user) {
-        authSessions.delete(token);
+        await authPersistence.destroySession(token);
         return res.status(401).json({ error: 'Usuario no autorizado.' });
       }
       if (!roleIsEnabledByCatalog(db, user.rol)) {
-        authSessions.delete(token);
+        await authPersistence.destroySession(token);
         await writeSecurityAudit(req, {
           accion: 'Sesión Rechazada',
           item: session.username || user.username || 'N/A',
@@ -172,23 +131,24 @@ export function createAuthRuntime() {
 
       req.authToken = token;
       req.authUser = sanitizeUser(user);
+      req.appDb = db;
+      req.appDbVersion = version;
+      if (Number(session.validatedStateVersion) !== Number(version)) {
+        await authPersistence.updateSessionValidation(token, user, version);
+      }
       next();
     } catch (error) {
       next(error);
     }
   }
 
-  function revokeSessionsByUserId(userId) {
-    for (const [token, session] of authSessions.entries()) {
-      if (Number(session?.userId) === Number(userId)) {
-        authSessions.delete(token);
-      }
-    }
+  async function revokeSessionsByUserId(userId) {
+    await authPersistence.revokeSessionsByUserId(userId);
   }
 
-  function destroySession(token) {
+  async function destroySession(token) {
     if (!token) return;
-    authSessions.delete(token);
+    await authPersistence.destroySession(token);
   }
 
   return {

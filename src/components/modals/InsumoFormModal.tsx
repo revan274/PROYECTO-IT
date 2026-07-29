@@ -6,6 +6,7 @@ import { digitsOnly, preventInvalidIntegerInputKeys } from '../../utils/format';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import { ModalLayout } from './ModalLayout';
 
 interface InsumoFormModalProps {
@@ -48,7 +49,7 @@ export function InsumoFormModal({
             className="w-full"
             invalid={Boolean(insumoTouched.nombre && validationErrors.nombre)}
             required
-            autoFocus
+            data-autofocus
             placeholder="NOMBRE"
             value={formData.nombre || ''}
             onBlur={() => onTouchField('nombre')}
@@ -112,47 +113,41 @@ export function InsumoFormModal({
           </Field>
         </div>
         <Field error={insumoTouched.categoria ? validationErrors.categoria : null}>
-          <select
+          <Select
+            variant="soft"
+            className="w-full"
+            invalid={Boolean(insumoTouched.categoria && validationErrors.categoria)}
             required
             value={formData.categoria || ''}
             onBlur={() => onTouchField('categoria')}
             onChange={(e) => onChange({ categoria: e.target.value.toUpperCase() })}
-            className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none ${
-              insumoTouched.categoria && validationErrors.categoria
-                ? 'bg-red-50/40 border border-red-200 text-red-700'
-                : 'bg-slate-50 border border-slate-100 text-slate-700'
-            }`}
           >
             <option value="" disabled>Selecciona categoría...</option>
             {supplyCategoryOptions.map((categoria) => (
               <option key={categoria} value={categoria}>{categoria}</option>
             ))}
-          </select>
+          </Select>
         </Field>
         <div className="space-y-1">
-          <input
+          <Input
+            variant="soft"
+            className="w-full"
+            invalid={Boolean(insumoTouched.ubicacion && validationErrors.ubicacion)}
             placeholder="UBICACION (Opcional)"
             value={formData.ubicacionInsumo || ''}
             onBlur={() => onTouchField('ubicacion')}
             onChange={(e) => onChange({ ubicacionInsumo: e.target.value })}
-            className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none bg-slate-50 border border-slate-100 ${
-              insumoTouched.ubicacion && validationErrors.ubicacion
-                ? 'border-red-200 text-red-700 placeholder:text-red-300'
-                : ''
-            }`}
           />
         </div>
         <div className="space-y-1">
-          <input
+          <Input
+            variant="soft"
+            className="w-full"
+            invalid={Boolean(insumoTouched.proveedor && validationErrors.proveedor)}
             placeholder="PROVEEDOR / MARCA (Opcional)"
             value={formData.proveedor || ''}
             onBlur={() => onTouchField('proveedor')}
             onChange={(e) => onChange({ proveedor: e.target.value })}
-            className={`w-full p-5 rounded-2xl text-sm font-black uppercase outline-none bg-slate-50 border border-slate-100 ${
-              insumoTouched.proveedor && validationErrors.proveedor
-                ? 'border-red-200 text-red-700 placeholder:text-red-300'
-                : ''
-            }`}
           />
         </div>
 

@@ -58,7 +58,7 @@ export interface ReportExcelData {
   reportLifecycleTrend: Array<{ label: string; created: number; closed: number }>;
   reportAuditRows: RegistroAuditoria[];
   nowMs: number;
-  formatTicketBranchFromCatalog: (value: string) => string;
+  formatTicketBranchFromCatalog: (value?: string) => string;
 }
 
 /**

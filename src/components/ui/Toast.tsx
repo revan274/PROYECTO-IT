@@ -15,11 +15,18 @@ export function Toast({ message, type, onClose }: ToastProps) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bg = type === 'success' ? 'bg-[#8CC63F]' : type === 'error' ? 'bg-red-500' : 'bg-[#F58220]';
+  const bg = type === 'success' ? 'bg-brand-green' : type === 'error' ? 'bg-red-500' : 'bg-brand';
 
   return (
-    <div className={`fixed bottom-6 right-6 ${bg} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 z-50`}>
-      {type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
+    <div
+      role={type === 'success' ? 'status' : 'alert'}
+      aria-live={type === 'success' ? 'polite' : 'assertive'}
+      aria-atomic="true"
+      className={`fixed bottom-6 right-6 ${bg} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 z-50`}
+    >
+      {type === 'success'
+        ? <CheckCircle size={20} aria-hidden="true" />
+        : <AlertTriangle size={20} aria-hidden="true" />}
       <span className="font-black text-xs uppercase tracking-wide">{message}</span>
     </div>
   );

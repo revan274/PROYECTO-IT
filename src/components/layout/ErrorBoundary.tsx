@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 interface Props {
   children?: ReactNode;
@@ -51,13 +52,15 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-slate-500 dark:text-slate-400 text-center max-w-md mb-8">
             {this.state.error?.message || 'La aplicación encontró un problema de renderizado. Por favor recarga la página.'}
           </p>
-          <button
+          <Button
+            variant="danger"
+            size="bare"
             onClick={this.handleReset}
             className="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors"
           >
             <RefreshCcw size={18} />
             Recargar Vista
-          </button>
+          </Button>
         </div>
       );
     }

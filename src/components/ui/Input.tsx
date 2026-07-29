@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import type { InputHTMLAttributes } from 'react';
 import { controlSkin, controlStateSkin, type ControlVariant } from './controlSkin';
 
@@ -7,15 +8,15 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }
 
-export function Input({
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   variant = 'form',
   invalid = false,
   className,
   ...rest
-}: InputProps) {
+}, ref) {
   const stateClasses = variant === 'soft'
     ? (invalid ? controlStateSkin.invalid : controlStateSkin.normal)
     : (invalid ? controlStateSkin.invalid : '');
   const classes = [controlSkin[variant], stateClasses, className].filter(Boolean).join(' ');
-  return <input className={classes} {...rest} />;
-}
+  return <input ref={ref} className={classes} {...rest} />;
+});

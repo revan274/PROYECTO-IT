@@ -7,8 +7,14 @@ import type {
   TicketAttentionType,
   TicketEstado,
   TicketItem,
+  UserSession,
 } from '../../types/app';
-import { useAppStore } from '../../store/useAppStore';
+import type {
+  RefreshAppData,
+  SetTickets,
+  ShowConfirm,
+  ShowToast,
+} from '../../types/actionDependencies';
 import { ApiError, apiRequest, getApiErrorMessage } from '../../utils/api';
 import { buildApiUrl, getStoredSessionToken } from '../../utils/app';
 import { ticketBelongsToSessionUser } from '../../utils/appHelpers';
@@ -21,6 +27,13 @@ import {
 } from '../../utils/tickets';
 
 interface UseTicketActionsProps {
+  sessionUser: UserSession | null;
+  backendConnected: boolean;
+  refreshAppData: RefreshAppData | null;
+  showToast: ShowToast;
+  showConfirm: ShowConfirm | null;
+  tickets: TicketItem[];
+  setTickets: SetTickets;
   canEdit: boolean;
   canCreateTickets: boolean;
   canCreateComments: boolean;
@@ -50,6 +63,13 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function useTicketActions({
+  sessionUser,
+  backendConnected,
+  refreshAppData,
+  showToast,
+  showConfirm,
+  tickets,
+  setTickets,
   canEdit,
   canCreateTickets,
   canCreateComments,
@@ -60,14 +80,6 @@ export function useTicketActions({
   ticketCommentDrafts,
   setTicketAttachmentLoadingId,
 }: UseTicketActionsProps) {
-  const sessionUser = useAppStore((state) => state.sessionUser);
-  const backendConnected = useAppStore((state) => state.backendConnected);
-  const refreshAppData = useAppStore((state) => state.refreshAppData);
-  const showToast = useAppStore((state) => state.showToast);
-  const showConfirm = useAppStore((state) => state.showConfirm);
-  const tickets = useAppStore((state) => state.tickets);
-  const setTickets = useAppStore((state) => state.setTickets);
-
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;

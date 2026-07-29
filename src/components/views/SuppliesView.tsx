@@ -1,7 +1,9 @@
 import React from 'react';
 import { PlusCircle, Search, MinusCircle, History, Trash2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { Button } from '../ui/Button';
 import { FilterChip } from '../ui/FilterChip';
+import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { InsumoFormModal } from '../modals/InsumoFormModal';
 import { SupplyHistoryModal } from '../modals/SupplyHistoryModal';
@@ -37,7 +39,7 @@ interface SuppliesViewProps {
   openModal: (type: ModalType | string) => void;
   supplySummary: SupplySummary;
   supplySearchTerm: string;
-  setSupplySearchTerm: React.Dispatch<React.SetStateAction<string>>;
+  setSupplySearchTerm: (term: string) => void;
   supplyCategoryFilter: string;
   setSupplyCategoryFilter: React.Dispatch<React.SetStateAction<string>>;
   supplyCategoryOptions: string[];
@@ -50,7 +52,7 @@ interface SuppliesViewProps {
   supplyAuditMovementsByInsumoId: Record<number, SupplyAuditMovement[]>;
   openInsumoEditModal: (insumo: Insumo) => void;
   eliminarInsumo: (id: number, e: React.MouseEvent) => void;
-  formatDateTime: (dateString: string) => string;
+  formatDateTime: (dateString?: string) => string;
   selectedSupplyHistoryItem: Insumo | null;
   setSelectedSupplyHistoryItem: React.Dispatch<React.SetStateAction<Insumo | null>>;
   selectedSupplyMovements: SupplyAuditMovement[];
@@ -112,19 +114,19 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
           <h3 className="font-black text-slate-800 uppercase text-xl">Gestión de Stock</h3>
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="plain" size="bare"
               onClick={handleExportExcel}
               className="px-4 py-4 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
             >
               <Download size={18} /> Exportar
-            </button>
-            <button
+            </Button>
+            <Button variant="plain" size="bare"
               disabled={!canEdit}
               onClick={() => openModal('insumo')}
-              className="bg-[#8CC63F] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
+              className="bg-brand-green text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
             >
               <PlusCircle size={18} /> Registrar Insumo
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -150,7 +152,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative md:col-span-2">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-            <input
+            <Input variant="plain"
               value={supplySearchTerm}
               onChange={(e) => setSupplySearchTerm(e.target.value)}
               placeholder="Buscar insumo..."
@@ -178,7 +180,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
               <option value="BAJO">Bajo</option>
               <option value="OK">OK</option>
             </Select>
-            <button
+            <Button variant="plain" size="bare"
               onClick={() => {
                 setSupplySearchTerm('');
                 setSupplyCategoryFilter('TODAS');
@@ -187,7 +189,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
             >
               Limpiar
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -221,13 +223,13 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
           >
             Ver todos
           </FilterChip>
-          <button
+          <Button variant="plain" size="bare"
             disabled={!canEdit}
             onClick={() => void reponerCriticos(5)}
-            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border bg-[#f4fce3] text-[#5e8f1d] border-[#d8f5a2] hover:bg-[#e8f9c8] disabled:opacity-50"
+            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border bg-lime-50 text-lime-700 border-lime-200 hover:bg-lime-100 disabled:opacity-50"
           >
             Reponer críticos +5
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -259,22 +261,22 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                     {item.categoria}
                   </span>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button variant="plain" size="bare"
                       disabled={!canEdit}
                       onClick={() => openInsumoEditModal(item)}
                       className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                       title="Editar insumo"
                     >
                       Editar
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="plain" size="bare"
                       disabled={!canEdit}
                       onClick={(e) => eliminarInsumo(item.id, e)}
                       className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all disabled:opacity-40"
                       title="Eliminar insumo"
                     >
                       <Trash2 size={20} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -310,13 +312,13 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                       Sin movimientos registrados
                     </p>
                   )}
-                  <button
+                  <Button variant="plain" size="bare"
                     type="button"
                     onClick={() => setSelectedSupplyHistoryItem(item)}
-                    className="mt-2 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#F58220] hover:text-orange-600"
+                    className="mt-2 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand hover:text-orange-600"
                   >
                     <History size={12} /> Historial ({supplyMovements.length})
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="mb-3">
@@ -336,7 +338,7 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                 <div className="mb-6">
                   <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className={`h-full ${supplyStatus === 'AGOTADO' ? 'bg-red-500' : supplyStatus === 'BAJO' ? 'bg-amber-500' : 'bg-[#8CC63F]'}`}
+                      className={`h-full ${supplyStatus === 'AGOTADO' ? 'bg-red-500' : supplyStatus === 'BAJO' ? 'bg-amber-500' : 'bg-brand-green'}`}
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -346,17 +348,17 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-center gap-3 mb-2 h-16">
-                  <button
+                  <Button variant="plain" size="bare"
                     disabled={!canEdit}
                     onClick={() => ajustarStock(item.id, -1)}
                     title="Reducir stock (-1)"
                     className="w-12 h-12 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all border border-red-100 shadow-sm disabled:opacity-40"
                   >
                     <MinusCircle size={24} />
-                  </button>
+                  </Button>
 
                   <div className="flex flex-col items-center">
-                    <input
+                    <Input variant="plain"
                       type="number"
                       disabled={!canEdit}
                       className={`w-24 text-center text-4xl font-black bg-transparent outline-none ${statusTone}`}
@@ -389,33 +391,33 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
                     </span>
                   </div>
 
-                  <button
+                  <Button variant="plain" size="bare"
                     disabled={!canEdit}
                     onClick={() => ajustarStock(item.id, 1)}
                     title="Incrementar stock (+1)"
-                    className="w-12 h-12 flex items-center justify-center bg-[#f4fce3] hover:bg-[#e8f9c8] text-[#5e8f1d] rounded-xl transition-all border border-[#d8f5a2] shadow-sm disabled:opacity-40"
+                    className="w-12 h-12 flex items-center justify-center bg-lime-50 hover:bg-lime-100 text-lime-700 rounded-xl transition-all border border-lime-200 shadow-sm disabled:opacity-40"
                   >
                     <PlusCircle size={24} />
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="flex justify-center gap-2">
-                  <button
+                  <Button variant="plain" size="bare"
                     disabled={!canEdit}
                     onClick={() => ajustarStock(item.id, -5)}
                     className="px-3 py-1 rounded-lg border border-red-100 bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
                     title="Reducir stock (-5)"
                   >
                     -5
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain" size="bare"
                     disabled={!canEdit}
                     onClick={() => ajustarStock(item.id, 5)}
-                    className="px-3 py-1 rounded-lg border border-lime-100 bg-[#f4fce3] text-[#5e8f1d] text-[10px] font-black uppercase disabled:opacity-40"
+                    className="px-3 py-1 rounded-lg border border-lime-200 bg-lime-50 text-lime-700 text-[10px] font-black uppercase disabled:opacity-40"
                     title="Incrementar stock (+5)"
                   >
                     +5
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

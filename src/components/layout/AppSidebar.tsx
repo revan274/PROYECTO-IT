@@ -2,6 +2,7 @@ import { LogOut } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LogoGigantes } from '../brand/LogoGigantes';
+import { Button } from '../ui/Button';
 
 interface NavItem<TView extends string> {
   id: TView;
@@ -28,7 +29,9 @@ export function AppSidebar<TView extends string>({
 }: AppSidebarProps<TView>) {
   return (
     <>
-      <button
+      <Button
+        variant="plain"
+        size="bare"
         type="button"
         aria-label="Cerrar menu"
         onClick={onCloseSidebar}
@@ -49,7 +52,7 @@ export function AppSidebar<TView extends string>({
               onClick={onCloseSidebar}
               className={({ isActive }) =>
                 `w-full flex items-center gap-4 px-4 py-3 sm:px-5 sm:py-4 rounded-[1.5rem] text-xs font-black transition-all uppercase tracking-wider ${
-                  isActive ? 'bg-[#F58220] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
+                  isActive ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'
                 }`
               }
             >
@@ -62,9 +65,9 @@ export function AppSidebar<TView extends string>({
           <p className="mb-4 text-[9px] font-semibold tracking-[0.08em] text-slate-300 break-words">
             {authorBrand}
           </p>
-          <button onClick={onLogout} className="flex items-center gap-2 text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600">
+          <Button variant="plain" size="bare" onClick={onLogout} className="flex items-center gap-2 text-[10px] text-red-400 tracking-widest hover:text-red-600">
             <LogOut size={14} /> Cerrar Sistema
-          </button>
+          </Button>
         </div>
       </aside>
     </>

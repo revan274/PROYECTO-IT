@@ -1,6 +1,9 @@
 import { ScanLine, X } from 'lucide-react';
+import { useId } from 'react';
 import type { MutableRefObject } from 'react';
 import { Button } from '../ui/Button';
+import { ModalDialog } from '../ui/ModalDialog';
+import { TextArea } from '../ui/TextArea';
 
 interface QrScannerModalProps {
   open: boolean;
@@ -29,19 +32,31 @@ export function QrScannerModal({
   onResolve,
   onClear,
 }: QrScannerModalProps) {
+  const titleId = useId();
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden">
+    <ModalDialog
+      open={open}
+      onClose={onClose}
+      isBusy={isResolving}
+      aria-labelledby={titleId}
+      className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden"
+    >
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Segura QR</p>
-            <h3 className="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
+            <h3 id={titleId} className="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
               <ScanLine size={18} /> Escanear Activo
             </h3>
           </div>
-          <Button variant="close" size="bare" onClick={onClose}>
+          <Button
+            variant="close"
+            size="bare"
+            onClick={onClose}
+            disabled={isResolving}
+            aria-label="Cerrar escáner QR"
+          >
             <X size={22} />
           </Button>
         </div>
@@ -77,7 +92,8 @@ export function QrScannerModal({
 
           <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Manual</p>
-            <textarea
+            <TextArea
+              variant="soft"
               value={manualInput}
               onChange={(e) => onManualInputChange(e.target.value)}
               placeholder="Pega aquí el token mtiqr1 del QR firmado"
@@ -101,7 +117,6 @@ export function QrScannerModal({
             </p>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalDialog>
   );
 }

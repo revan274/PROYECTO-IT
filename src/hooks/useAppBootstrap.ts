@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { BootstrapResponse } from '../types/app';
 import { useAppStore } from '../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../utils/api';
@@ -14,7 +14,7 @@ interface UseAppBootstrapOptions {
 }
 
 export function useAppBootstrap({
-  pollingMs = 60000,
+  pollingMs = 60_000,
   onBootstrapData,
   onRefreshSuccess,
   onRefreshFailure,
@@ -30,41 +30,85 @@ export function useAppBootstrap({
   const lastSync = useAppStore((state) => state.lastSync);
   const setRefreshAppData = useAppStore((state) => state.setRefreshAppData);
   const showToast = useAppStore((state) => state.showToast);
+  const bootstrapEtagRef = useRef('');
+  const inFlightRefreshRef = useRef<Promise<void> | null>(null);
+  const inFlightIsForceRef = useRef(false);
+  const initializedSessionKeyRef = useRef('');
 
   const refreshData = useCallback(
     async (options?: boolean | { silent?: boolean; force?: boolean }) => {
       const silent = typeof options === 'boolean' ? options : (options?.silent ?? false);
+      const force = typeof options === 'boolean' ? options : (options?.force ?? false);
       if (!sessionUser) return;
-      if (!silent) setIsSyncing(true);
 
-      try {
-        const data = await apiRequest<BootstrapResponse>('/bootstrap');
-        setCoreData({
-          activos: data.activos || [],
-          insumos: data.insumos || [],
-          tickets: data.tickets || [],
-          users: data.users || [],
-          catalogos: normalizeCatalogState(data.catalogos),
-          auditoria: Array.isArray(data.auditoria) ? data.auditoria : [],
-        });
-        onBootstrapData?.(data);
-        setBackendConnected(true);
-        setLastSync(new Date().toLocaleTimeString());
-        onRefreshSuccess?.();
-      } catch (error) {
-        if (isSessionRejectedApiError(error)) {
-          onSessionRejected();
-          if (!silent) {
-            showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+      if (inFlightRefreshRef.current) {
+        if (!force || inFlightIsForceRef.current) return inFlightRefreshRef.current;
+        await inFlightRefreshRef.current;
+      }
+
+      const request = (async () => {
+        if (!silent) setIsSyncing(true);
+
+        try {
+          const headers = new Headers();
+          if (!force && bootstrapEtagRef.current) {
+            headers.set('If-None-Match', bootstrapEtagRef.current);
           }
-          return;
-        }
 
-        setBackendConnected(false);
-        onRefreshFailure?.();
-        showToast(getApiErrorMessage(error) || 'No se pudo sincronizar con el backend', 'warning');
+          let responseEtag = '';
+          const data = await apiRequest<BootstrapResponse | undefined>(
+            '/bootstrap',
+            { headers },
+            {
+              acceptNotModified: true,
+              onResponse(response) {
+                responseEtag = response.headers.get('etag') || '';
+              },
+            },
+          );
+          if (responseEtag) bootstrapEtagRef.current = responseEtag;
+
+          if (data) {
+            setCoreData({
+              activos: data.activos || [],
+              insumos: data.insumos || [],
+              tickets: data.tickets || [],
+              users: data.users || [],
+              catalogos: normalizeCatalogState(data.catalogos),
+              auditoria: Array.isArray(data.auditoria) ? data.auditoria : [],
+            });
+            onBootstrapData?.(data);
+          }
+          setBackendConnected(true);
+          setLastSync(new Date().toLocaleTimeString());
+          onRefreshSuccess?.();
+        } catch (error) {
+          if (isSessionRejectedApiError(error)) {
+            bootstrapEtagRef.current = '';
+            onSessionRejected();
+            if (!silent) {
+              showToast('La sesión ya no es válida. Inicia sesión nuevamente.', 'warning');
+            }
+            return;
+          }
+
+          setBackendConnected(false);
+          onRefreshFailure?.();
+          showToast(getApiErrorMessage(error) || 'No se pudo sincronizar con el backend', 'warning');
+        } finally {
+          if (!silent) setIsSyncing(false);
+        }
+      })();
+
+      inFlightRefreshRef.current = request;
+      inFlightIsForceRef.current = force;
+      try {
+        await request;
       } finally {
-        if (!silent) setIsSyncing(false);
+        if (inFlightRefreshRef.current === request) {
+          inFlightRefreshRef.current = null;
+          inFlightIsForceRef.current = false;
+        }
       }
     },
     [
@@ -87,15 +131,37 @@ export function useAppBootstrap({
   }, [refreshData, setRefreshAppData]);
 
   useEffect(() => {
-    if (!sessionUser) return;
+    bootstrapEtagRef.current = '';
+  }, [sessionUser?.id, sessionUser?.username]);
 
-    void refreshData({ silent: true, force: true });
+  useEffect(() => {
+    if (!sessionUser) {
+      initializedSessionKeyRef.current = '';
+      return;
+    }
 
-    const intervalId = window.setInterval(() => {
+    const sessionKey = `${sessionUser.id}:${sessionUser.username}`;
+    if (initializedSessionKeyRef.current !== sessionKey) {
+      initializedSessionKeyRef.current = sessionKey;
+      void refreshData({ silent: true, force: true });
+    }
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'hidden') return;
       void refreshData({ silent: true });
-    }, pollingMs);
+    };
+    const intervalId = window.setInterval(refreshIfVisible, pollingMs);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshIfVisible();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', refreshIfVisible);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', refreshIfVisible);
+    };
   }, [pollingMs, refreshData, sessionUser]);
 
   const ensureBackendConnected = useCallback(

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type {
@@ -270,24 +271,24 @@ export function ReportsView({
             <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Reporteria Ejecutiva</h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button variant="plain" size="bare"
               onClick={openReportExecutivePresentation}
               className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
             >
               Abrir Presentacion
-            </button>
-            <button
+            </Button>
+            <Button variant="plain" size="bare"
               onClick={exportReportExcel}
               className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase text-emerald-700 hover:bg-emerald-100"
             >
               Exportar Excel
-            </button>
-            <button
+            </Button>
+            <Button variant="plain" size="bare"
               onClick={exportReportPdf}
               className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-xs font-black uppercase text-blue-700 hover:bg-blue-100"
             >
               Exportar PDF
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -376,12 +377,12 @@ export function ReportsView({
                 </option>
               ))}
             </Select>
-            <button
+            <Button variant="plain" size="bare"
               onClick={resetReportFilters}
               className="px-4 py-3 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
             >
               Limpiar
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-col lg:flex-row gap-3">
@@ -393,12 +394,12 @@ export function ReportsView({
                 placeholder="Nombre del preset"
                 variant="filter" className="flex-1"
               />
-              <button
+              <Button variant="plain" size="bare"
                 onClick={saveCurrentReportFilterPreset}
                 className="px-4 py-3 rounded-2xl border border-indigo-200 bg-indigo-50 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-100"
               >
                 Guardar Preset
-              </button>
+              </Button>
             </div>
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 self-center">
               Presets guardados: {reportFilterPresets.length}
@@ -408,18 +409,18 @@ export function ReportsView({
           <div className="flex flex-wrap gap-2">
             {reportFilterPresets.map((preset) => (
               <div key={preset.id} className="flex items-center rounded-2xl border border-slate-200 overflow-hidden bg-white">
-                <button
+                <Button variant="plain" size="bare"
                   onClick={() => applyReportFilterPreset(preset)}
                   className="px-3 py-2 text-[10px] font-black uppercase text-slate-700 hover:bg-slate-50"
                 >
                   {preset.name}
-                </button>
-                <button
+                </Button>
+                <Button variant="plain" size="bare"
                   onClick={() => deleteReportFilterPreset(preset)}
                   className="px-3 py-2 text-[10px] font-black uppercase text-red-500 border-l border-slate-200 hover:bg-red-50"
                 >
                   Eliminar
-                </button>
+                </Button>
               </div>
             ))}
             {reportFilterPresets.length === 0 && (
@@ -438,18 +439,18 @@ export function ReportsView({
             <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-2xl">Formato Mensual de Viajes IT</h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button variant="plain" size="bare"
               onClick={openTravelMovementSheet}
               className="px-4 py-3 rounded-2xl border border-amber-300 bg-amber-100 text-xs font-black uppercase text-amber-800 hover:bg-amber-200"
             >
               Abrir Formato
-            </button>
-            <button
+            </Button>
+            <Button variant="plain" size="bare"
               onClick={printTravelMovementSheet}
               className="px-4 py-3 rounded-2xl border border-orange-300 bg-orange-100 text-xs font-black uppercase text-orange-800 hover:bg-orange-200"
             >
               Imprimir Formato
-            </button>
+            </Button>
           </div>
         </div>
         <div className="p-8 space-y-6">
@@ -670,10 +671,10 @@ export function ReportsView({
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
           </div>
           {reportStateBars.map((item) => (
-            <button
+            <Button variant="plain" size="bare"
               key={`report-state-${item.label}`}
               onClick={() => applyReportDrillDown({ estado: item.label as TicketEstado })}
-              className="w-full text-left space-y-1"
+              className="w-full flex-col items-stretch text-left space-y-1"
             >
               <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
                 <span>{item.label}</span>
@@ -681,11 +682,11 @@ export function ReportsView({
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className="h-full bg-[#F58220]"
+                  className="h-full bg-brand"
                   style={{ width: `${Math.round((item.count / reportStateMax) * 100)}%` }}
                 />
               </div>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -695,10 +696,10 @@ export function ReportsView({
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drill-down</span>
           </div>
           {reportBranchBars.map((item) => (
-            <button
+            <Button variant="plain" size="bare"
               key={`report-branch-${item.code}`}
               onClick={() => applyReportDrillDown({ sucursalCode: item.code })}
-              className="w-full text-left space-y-1"
+              className="w-full flex-col items-stretch text-left space-y-1"
             >
               <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
                 <span>{item.label}</span>
@@ -710,7 +711,7 @@ export function ReportsView({
                   style={{ width: `${Math.round((item.count / reportBranchMax) * 100)}%` }}
                 />
               </div>
-            </button>
+            </Button>
           ))}
           {reportBranchBars.length === 0 && (
             <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">
@@ -724,10 +725,10 @@ export function ReportsView({
         <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
           <h4 className="text-base font-black uppercase text-slate-800">Top Areas</h4>
           {reportAreaBars.slice(0, 8).map((item) => (
-            <button
+            <Button variant="plain" size="bare"
               key={`report-area-${item.label}`}
               onClick={() => applyReportDrillDown({ area: item.label })}
-              className="w-full text-left space-y-1"
+              className="w-full flex-col items-stretch text-left space-y-1"
             >
               <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
                 <span>{item.label}</span>
@@ -736,17 +737,17 @@ export function ReportsView({
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full bg-emerald-500" style={{ width: `${Math.round((item.count / reportAreaMax) * 100)}%` }} />
               </div>
-            </button>
+            </Button>
           ))}
         </div>
 
         <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
           <h4 className="text-base font-black uppercase text-slate-800">Carga por Técnico</h4>
           {reportTechBars.slice(0, 8).map((item) => (
-            <button
+            <Button variant="plain" size="bare"
               key={`report-tech-${item.label}`}
               onClick={() => item.label !== 'SIN ASIGNAR' && applyReportDrillDown({ asignadoA: item.label })}
-              className="w-full text-left space-y-1 disabled:cursor-not-allowed"
+              className="w-full flex-col items-stretch text-left space-y-1 disabled:cursor-not-allowed"
               disabled={item.label === 'SIN ASIGNAR'}
             >
               <div className="flex items-center justify-between text-xs font-black uppercase text-slate-600">
@@ -756,7 +757,7 @@ export function ReportsView({
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full bg-amber-500" style={{ width: `${Math.round((item.count / reportTechMax) * 100)}%` }} />
               </div>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -786,10 +787,10 @@ export function ReportsView({
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Area + Falla</span>
         </div>
         {reportIncidentCauseBars.map((item) => (
-          <button
+          <Button variant="plain" size="bare"
             key={`report-cause-${item.key}`}
             onClick={() => applyReportIncidentCauseDrillDown(item.area, item.cause)}
-            className="w-full text-left space-y-1"
+            className="w-full flex-col items-stretch text-left space-y-1"
           >
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.area}</p>
             <div className="flex items-center justify-between gap-3 text-xs font-black text-slate-700">
@@ -802,7 +803,7 @@ export function ReportsView({
                 style={{ width: `${Math.round((item.count / reportIncidentCauseMax) * 100)}%` }}
               />
             </div>
-          </button>
+          </Button>
         ))}
         {reportIncidentCauseBars.length === 0 && (
           <div className="border border-dashed border-slate-200 rounded-2xl p-4 text-center text-[10px] font-black uppercase tracking-wider text-slate-400">

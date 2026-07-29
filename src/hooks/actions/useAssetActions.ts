@@ -1,21 +1,28 @@
 import { useCallback } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
-import type { FormDataState } from '../../types/app';
+import type { Activo, FormDataState, UserSession } from '../../types/app';
+import type { RefreshAppData, ShowConfirm, ShowToast } from '../../types/actionDependencies';
 import { canEditByRole, canManageUsersByRole } from '../../utils/roles';
 
 interface UseAssetActionsProps {
+  sessionUser: UserSession | null;
+  activos: Activo[];
+  backendConnected: boolean;
+  refreshAppData: RefreshAppData | null;
+  showToast: ShowToast;
+  showConfirm: ShowConfirm | null;
   onAfterBulkDelete?: () => void;
 }
 
-export function useAssetActions({ onAfterBulkDelete }: UseAssetActionsProps = {}) {
-  const sessionUser = useAppStore((state) => state.sessionUser);
-  const activos = useAppStore((state) => state.activos);
-  const backendConnected = useAppStore((state) => state.backendConnected);
-  const refreshAppData = useAppStore((state) => state.refreshAppData);
-  const showToast = useAppStore((state) => state.showToast);
-  const showConfirm = useAppStore((state) => state.showConfirm);
-
+export function useAssetActions({
+  sessionUser,
+  activos,
+  backendConnected,
+  refreshAppData,
+  showToast,
+  showConfirm,
+  onAfterBulkDelete,
+}: UseAssetActionsProps) {
   const canManageUsers = canManageUsersByRole(sessionUser?.rol);
   const isReadOnly = !canEditByRole(sessionUser?.rol);
 

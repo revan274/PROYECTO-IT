@@ -7,6 +7,7 @@ import {
   DEFAULT_ROLE_CATALOG,
   normalizeStoredUserRole,
 } from './domain/roles.js';
+import { mutatePostgresStateWithLock } from './modules/postgres-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -849,6 +850,7 @@ function normalizeDbShape(db) {
       copy.departamento = String(copy.departamento || '').trim().toUpperCase();
       copy.rol = normalizeUserRole(copy.rol);
       copy.activo = copy.activo !== false;
+      copy.authVersion = Math.max(0, Math.trunc(Number(copy.authVersion) || 0));
       return copy;
     })
     : DEFAULT_USERS;
@@ -869,6 +871,7 @@ function normalizeDbShape(db) {
     normalized.meta.nextId = maxExistingId(normalized) + 1;
   }
   normalized.meta.nextId = Math.max(Math.trunc(Number(normalized.meta.nextId)), maxExistingId(normalized) + 1);
+  normalized.meta.revision = Math.max(0, Math.trunc(Number(normalized.meta.revision) || 0));
 
   return normalized;
 }
@@ -904,25 +907,59 @@ async function ensurePgState() {
         CREATE TABLE IF NOT EXISTS ${PG_STATE_TABLE} (
           id INTEGER PRIMARY KEY CHECK (id = 1),
           data JSONB NOT NULL,
+          version BIGINT NOT NULL DEFAULT 1,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`
+        ALTER TABLE ${PG_STATE_TABLE}
+        ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 1
+      `);
 
       const existing = await pool.query(`SELECT id FROM ${PG_STATE_TABLE} WHERE id = 1`);
-      if (existing.rowCount && existing.rowCount > 0) return;
+      if (!existing.rowCount) {
+        if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
+          throw new Error(
+            'DATABASE_URL está configurado pero la base de datos no tiene estado inicial. Habilita ALLOW_PRODUCTION_SEED=true temporalmente para sembrarla.',
+          );
+        }
 
-      if (IS_PRODUCTION && !ALLOW_PRODUCTION_SEED) {
-        throw new Error(
-          'DATABASE_URL está configurado pero la base de datos no tiene estado inicial. Habilita ALLOW_PRODUCTION_SEED=true temporalmente para sembrarla.',
+        const seedDb = await loadBootstrapDb();
+        await pool.query(
+          `INSERT INTO ${PG_STATE_TABLE} (id, data, version, updated_at) VALUES (1, $1::jsonb, 1, NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [JSON.stringify(seedDb)],
         );
       }
 
-      const seedDb = await loadBootstrapDb();
-      await pool.query(
-        `INSERT INTO ${PG_STATE_TABLE} (id, data, updated_at) VALUES (1, $1::jsonb, NOW())
-         ON CONFLICT (id) DO NOTHING`,
-        [JSON.stringify(seedDb)],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `SELECT data, version FROM ${PG_STATE_TABLE} WHERE id = 1 FOR UPDATE`,
+        );
+        const rawDb = result.rows[0]?.data || {};
+        const currentVersion = Math.max(1, Math.trunc(Number(result.rows[0]?.version) || 1));
+        const normalized = normalizeDbShape(rawDb);
+        normalized.meta.revision = currentVersion;
+
+        if (JSON.stringify(normalized) !== JSON.stringify(rawDb)) {
+          const nextVersion = currentVersion + 1;
+          normalized.meta.revision = nextVersion;
+          await client.query(
+            `UPDATE ${PG_STATE_TABLE}
+             SET data = $1::jsonb, version = $2, updated_at = NOW()
+             WHERE id = 1`,
+            [JSON.stringify(normalized), nextVersion],
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
     })().catch((error) => {
       pgInitPromise = null;
       throw error;
@@ -992,19 +1029,7 @@ async function backupCurrentDbSnapshot() {
   }
 }
 
-export async function readDb() {
-  let parsed;
-  if (USE_POSTGRES) {
-    await ensurePgState();
-    const pool = getPgPool();
-    const result = await pool.query(`SELECT data FROM ${PG_STATE_TABLE} WHERE id = 1`);
-    parsed = result.rows[0]?.data || {};
-  } else {
-    await ensureDbFile();
-    const raw = await fs.readFile(DB_FILE, 'utf8');
-    parsed = JSON.parse(raw);
-  }
-  const normalized = normalizeDbShape(parsed);
+function getDbMigrationFlags(parsed) {
   const assetsRequireSecretMigration = Array.isArray(parsed?.activos)
     && parsed.activos.some((asset) => (
       asset
@@ -1015,51 +1040,139 @@ export async function readDb() {
       )
     ));
   const usersRequireMigration = Array.isArray(parsed?.users)
-    && parsed.users.some((user) => typeof user?.password === 'string' || !String(user?.passwordHash || '').trim());
+    && parsed.users.some((user) => (
+      typeof user?.password === 'string'
+      || !String(user?.passwordHash || '').trim()
+      || !Number.isFinite(Number(user?.authVersion))
+    ));
   const auditRequiresMigration = Array.isArray(parsed?.auditoria)
     && parsed.auditoria.some((entry) => entryNeedsAuditMigration(entry));
   const catalogsRequireMigration = !parsed?.catalogos
     || !Array.isArray(parsed.catalogos?.sucursales)
     || !Array.isArray(parsed.catalogos?.cargos)
     || !Array.isArray(parsed.catalogos?.roles);
-  if (assetsRequireSecretMigration || usersRequireMigration || auditRequiresMigration || catalogsRequireMigration) {
-    await writeDb(normalized, { backup: !assetsRequireSecretMigration });
-  }
-  return normalized;
+  const revisionRequiresMigration = !Number.isFinite(Number(parsed?.meta?.revision));
+
+  return {
+    assetsRequireSecretMigration,
+    usersRequireMigration,
+    auditRequiresMigration,
+    catalogsRequireMigration,
+    revisionRequiresMigration,
+    required: assetsRequireSecretMigration
+      || usersRequireMigration
+      || auditRequiresMigration
+      || catalogsRequireMigration
+      || revisionRequiresMigration,
+  };
 }
 
-async function writeDb(db, options = {}) {
-  if (USE_POSTGRES) {
-    await ensurePgState();
-    const pool = getPgPool();
-    await pool.query(
-      `INSERT INTO ${PG_STATE_TABLE} (id, data, updated_at) VALUES (1, $1::jsonb, NOW())
-       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
-      [JSON.stringify(db)],
-    );
-    return;
-  }
+async function readFileDbRaw() {
+  await ensureDbFile();
+  const raw = await fs.readFile(DB_FILE, 'utf8');
+  return JSON.parse(raw);
+}
+
+async function writeFileDb(db, options = {}) {
   await ensureDbFile();
   if (options.backup !== false) {
     await backupCurrentDbSnapshot();
   }
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
+  const temporaryFile = `${DB_FILE}.${process.pid}.tmp`;
+  await fs.writeFile(temporaryFile, JSON.stringify(db, null, 2), 'utf8');
+  await fs.rename(temporaryFile, DB_FILE);
+}
+
+export async function readDbSnapshot() {
+  if (USE_POSTGRES) {
+    await ensurePgState();
+    const pool = getPgPool();
+    const result = await pool.query(
+      `SELECT data, version FROM ${PG_STATE_TABLE} WHERE id = 1`,
+    );
+    const version = Math.max(1, Math.trunc(Number(result.rows[0]?.version) || 1));
+    const db = normalizeDbShape(result.rows[0]?.data || {});
+    db.meta.revision = version;
+    return { db, version };
+  }
+
+  const job = queue.then(async () => {
+    const parsed = await readFileDbRaw();
+    const db = normalizeDbShape(parsed);
+    const migrations = getDbMigrationFlags(parsed);
+
+    if (migrations.required) {
+      const currentVersion = Math.max(0, Math.trunc(Number(parsed?.meta?.revision) || 0));
+      db.meta.revision = currentVersion + 1;
+      await writeFileDb(db, { backup: !migrations.assetsRequireSecretMigration });
+    }
+
+    return {
+      db,
+      version: Math.max(0, Math.trunc(Number(db.meta.revision) || 0)),
+    };
+  });
+
+  queue = job.catch(() => undefined);
+  return job;
+}
+
+export async function readDb() {
+  const snapshot = await readDbSnapshot();
+  return snapshot.db;
+}
+
+export async function readDbVersion() {
+  if (!USE_POSTGRES) return null;
+  await ensurePgState();
+  const pool = getPgPool();
+  const result = await pool.query(
+    `SELECT version FROM ${PG_STATE_TABLE} WHERE id = 1`,
+  );
+  return Math.max(1, Math.trunc(Number(result.rows[0]?.version) || 1));
+}
+
+async function updatePostgresDb(mutator) {
+  await ensurePgState();
+  const pool = getPgPool();
+  const client = await pool.connect();
+
+  try {
+    return await mutatePostgresStateWithLock(client, normalizeDbShape, mutator);
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateDb(mutator) {
+  if (USE_POSTGRES) {
+    return updatePostgresDb(mutator);
+  }
+
   const job = queue.then(async () => {
-    const db = await readDb();
-    const snapshotBefore = JSON.stringify(db);
+    const parsed = await readFileDbRaw();
+    const db = normalizeDbShape(parsed);
+    const snapshotBefore = JSON.stringify(parsed);
     const result = await mutator(db);
     const snapshotAfter = JSON.stringify(db);
+
     if (snapshotAfter !== snapshotBefore) {
-      await writeDb(db);
+      const currentVersion = Math.max(0, Math.trunc(Number(parsed?.meta?.revision) || 0));
+      db.meta.revision = currentVersion + 1;
+      const migrations = getDbMigrationFlags(parsed);
+      await writeFileDb(db, { backup: !migrations.assetsRequireSecretMigration });
     }
     return result;
   });
 
   queue = job.catch(() => undefined);
   return job;
+}
+
+export async function getSharedPostgresPool() {
+  if (!USE_POSTGRES) return null;
+  await ensurePgState();
+  return getPgPool();
 }
 
 export function nextId(db) {

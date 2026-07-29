@@ -188,12 +188,12 @@ export const AuditView: React.FC<AuditViewProps> = ({
               <h4 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight">{section.title}</h4>
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{section.rows.length} registros</span>
             </div>
-            <button
+            <Button variant="plain" size="bare"
               onClick={() => descargarAuditoria(section.module)}
               className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 flex items-center gap-2"
             >
               <Download size={14} /> CSV
-            </button>
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[820px]">
@@ -211,7 +211,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
                 {section.rows.map((log) => (
                   <tr key={`${section.module}-${log.id}`}>
                     <td className="px-8 py-4 text-xs font-bold text-slate-500 tracking-tighter">{log.fecha}</td>
-                    <td className="px-8 py-4 text-[10px] font-black text-[#8CC63F] uppercase tracking-widest">{log.usuario}</td>
+                    <td className="px-8 py-4 text-[10px] font-black text-brand-green uppercase tracking-widest">{log.usuario}</td>
                     <td className="px-8 py-4"><Badge variant={log.accion}>{log.accion}</Badge></td>
                     <td className="px-8 py-4 font-black text-slate-800 uppercase text-xs">{log.item}</td>
                     <td className="px-8 py-4">
@@ -250,27 +250,27 @@ export const AuditView: React.FC<AuditViewProps> = ({
       {backendConnected && !isRequesterOnlyUser && (
         <div className="glass-panel bg-white/90 rounded-[2rem] shadow-2xl border border-slate-100 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="plain" size="bare"
               onClick={() => setAuditPage((prev: number) => Math.max(1, prev - 1))}
               disabled={isAuditLoading || auditPagination.page <= 1}
               className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 disabled:opacity-40"
             >
               Anterior
-            </button>
-            <button
+            </Button>
+            <Button variant="plain" size="bare"
               onClick={() => setAuditPage((prev: number) => Math.min(auditPagination.totalPages || 1, prev + 1))}
               disabled={isAuditLoading || auditPagination.page >= (auditPagination.totalPages || 1)}
               className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-600 disabled:opacity-40"
             >
               Siguiente
-            </button>
+            </Button>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               Página {auditPagination.page} de {auditPagination.totalPages} | Total {auditPagination.total}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tamaño</span>
-            <select
+            <Select variant="plain"
               value={String(auditPageSize)}
               onChange={(e) => {
                 const size = Number(e.target.value) || 25;
@@ -282,7 +282,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
               <option value="25">25</option>
               <option value="50">50</option>
               <option value="100">100</option>
-            </select>
+            </Select>
           </div>
         </div>
       )}

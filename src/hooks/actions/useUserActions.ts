@@ -1,20 +1,26 @@
 import type React from 'react';
 import { useCallback } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
-import type { UserItem, UserRole } from '../../types/app';
+import type { UserItem, UserRole, UserSession } from '../../types/app';
+import type { RefreshAppData, ShowConfirm, ShowToast } from '../../types/actionDependencies';
 import { isUserRole } from '../../utils/assets';
 import { normalizeForCompare } from '../../utils/format';
 
 interface UserFormState {
   username: string;
   nombre: string;
-  rol: string;
+  rol: UserRole;
   departamento: string;
-  password?: string;
+  password: string;
 }
 
 interface UseUserActionsProps {
+  sessionUser: UserSession | null;
+  users: UserItem[];
+  backendConnected: boolean;
+  refreshAppData: RefreshAppData | null;
+  showToast: ShowToast;
+  showConfirm: ShowConfirm | null;
   canManageUsers: boolean;
   editingUserId: number | null;
   newUserForm: UserFormState;
@@ -26,6 +32,12 @@ interface UseUserActionsProps {
 }
 
 export function useUserActions({
+  sessionUser,
+  users,
+  backendConnected,
+  refreshAppData,
+  showToast,
+  showConfirm,
   canManageUsers,
   editingUserId,
   newUserForm,
@@ -35,13 +47,6 @@ export function useUserActions({
   setUserActionLoadingId,
   resetNewUserForm,
 }: UseUserActionsProps) {
-  const sessionUser = useAppStore((state) => state.sessionUser);
-  const users = useAppStore((state) => state.users);
-  const backendConnected = useAppStore((state) => state.backendConnected);
-  const refreshAppData = useAppStore((state) => state.refreshAppData);
-  const showToast = useAppStore((state) => state.showToast);
-  const showConfirm = useAppStore((state) => state.showConfirm);
-
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;

@@ -1,16 +1,19 @@
 import { useState, useCallback } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
 import type { LoginResponse } from '../../types/app';
+import type { SetStoredSession, ShowToast } from '../../types/actionDependencies';
 
 interface UseAuthActionsProps {
   clearSession: () => void;
+  setStoredSession: SetStoredSession;
+  showToast: ShowToast;
 }
 
-export function useAuthActions({ clearSession }: UseAuthActionsProps) {
-  const setStoredSession = useAppStore((state) => state.setStoredSession);
-  const showToast = useAppStore((state) => state.showToast);
-  
+export function useAuthActions({
+  clearSession,
+  setStoredSession,
+  showToast,
+}: UseAuthActionsProps) {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
 

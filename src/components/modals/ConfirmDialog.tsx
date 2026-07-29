@@ -1,4 +1,6 @@
-import { useEffect } from 'react';
+import { useId } from 'react';
+import { Button } from '../ui/Button';
+import { ModalDialog } from '../ui/ModalDialog';
 
 interface ConfirmDialogProps {
   message: string;
@@ -15,47 +17,32 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onCancel]);
+  const titleId = useId();
+  const messageId = useId();
 
   return (
-    <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6"
-      onClick={onCancel}
+    <ModalDialog
+      open
+      onClose={onCancel}
+      overlayClassName="z-[100]"
+      className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden"
+      aria-labelledby={titleId}
+      aria-describedby={messageId}
     >
-      <div
-        className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-8 border-b border-slate-100 font-black uppercase text-sm text-slate-700">
-          {title}
-        </div>
-        <div className="p-8 text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
-          {message}
-        </div>
-        <div className="px-8 pb-8 flex gap-3 justify-end">
-          <button
-            autoFocus
-            type="button"
-            onClick={onCancel}
-            className="px-5 py-2 rounded-xl text-sm font-semibold text-slate-500 hover:bg-slate-100 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      <div id={titleId} className="p-8 border-b border-slate-100 font-black uppercase text-sm text-slate-700">
+        {title}
       </div>
-    </div>
+      <div id={messageId} className="p-8 text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
+        {message}
+      </div>
+      <div className="px-8 pb-8 flex gap-3 justify-end">
+        <Button data-autofocus size="bare" className="px-5 py-2 rounded-xl text-sm normal-case" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button variant="danger" size="bare" className="px-5 py-2 rounded-xl text-sm normal-case" onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </ModalDialog>
   );
 }

@@ -1,14 +1,15 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import type {
   Activo,
+  AssetRiskSummary,
   AuditAlertsState,
   AuditFiltersState,
   AuditIntegrityState,
   AuditPaginationState,
   AuditSummaryState,
   FormDataState,
+  ImportDraftState,
   Insumo,
   InsumoTouchedState,
   ModalType,
@@ -33,6 +34,11 @@ import {
 } from '../../constants/app';
 
 interface UseSessionActionsOptions {
+  logout: () => void;
+  resetCoreData: () => void;
+  resetSyncStatus: () => void;
+  clearToast: () => void;
+  clearGlobalSearchTerm: () => void;
   setView: (view: ViewType) => void;
   applyReportFilterSnapshot: (snapshot: ReportFilterSnapshot) => void;
   setAuditRemoteRows: Dispatch<SetStateAction<RegistroAuditoria[] | null>>;
@@ -45,8 +51,8 @@ interface UseSessionActionsOptions {
   setAuditIntegrity: Dispatch<SetStateAction<AuditIntegrityState | null>>;
   setAuditAlerts: Dispatch<SetStateAction<AuditAlertsState | null>>;
   setIsAuditLoading: Dispatch<SetStateAction<boolean>>;
-  setAssetRiskSummary: Dispatch<SetStateAction<null>>;
-  setImportDraft: Dispatch<SetStateAction<null>>;
+  setAssetRiskSummary: Dispatch<SetStateAction<AssetRiskSummary | null>>;
+  setImportDraft: Dispatch<SetStateAction<ImportDraftState | null>>;
   setIsApplyingImport: Dispatch<SetStateAction<boolean>>;
   setSupplyStockDrafts: Dispatch<SetStateAction<Record<number, string>>>;
   setSelectedAsset: Dispatch<SetStateAction<Activo | null>>;
@@ -76,6 +82,11 @@ interface UseSessionActionsOptions {
 }
 
 export function useSessionActions({
+  logout,
+  resetCoreData,
+  resetSyncStatus,
+  clearToast,
+  clearGlobalSearchTerm,
   setView,
   applyReportFilterSnapshot,
   setAuditRemoteRows,
@@ -117,12 +128,6 @@ export function useSessionActions({
   setTravelReportAuthorizer,
   setTravelReportFinance,
 }: UseSessionActionsOptions) {
-  const logout = useAppStore((state) => state.logout);
-  const resetCoreData = useAppStore((state) => state.resetCoreData);
-  const resetSyncStatus = useAppStore((state) => state.resetSyncStatus);
-  const clearToast = useAppStore((state) => state.clearToast);
-  const clearGlobalSearchTerm = useAppStore((state) => state.clearGlobalSearchTerm);
-
   const clearSession = useCallback(() => {
     logout();
     setView('dashboard');

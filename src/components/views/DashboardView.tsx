@@ -1,7 +1,15 @@
 import React from 'react';
-import type { Activo, DashboardRange, Insumo, TicketItem, ViewType } from '../../types/app';
+import type {
+  Activo,
+  DashboardRange,
+  Insumo,
+  InventoryRiskFilter,
+  TicketItem,
+  ViewType,
+} from '../../types/app';
 import { DASHBOARD_RANGES } from '../../constants/app';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { FilterChip } from '../ui/FilterChip';
 import { getSupplyHealthStatus } from '../../utils/appHelpers';
 import {
@@ -22,6 +30,9 @@ interface BarChartItem {
   count: number;
 }
 
+type TicketFocusAction = 'ABIERTOS' | 'CRITICA' | 'SIN_ASIGNAR' | 'SLA' | 'EN_PROCESO';
+type InventoryFocusAction = InventoryRiskFilter | 'FALLA';
+
 interface DashboardViewProps {
   dashboardWindow: { label: string };
   dashboardOpenTicketsCurrent: TicketItem[];
@@ -37,13 +48,13 @@ interface DashboardViewProps {
   dashboardSlaExpiredCount: number;
   dashboardSlaTrend: Trend;
   setView: (view: ViewType) => void;
-  applyTicketFocus: (focus: string) => void;
+  applyTicketFocus: (focus: TicketFocusAction) => void;
   dashboardRecentTickets: TicketItem[];
   setSearchTerm: (term: string) => void;
   dashboardTopOwners: Array<[string, number]>;
   dashboardOwnerMax: number;
   dashboardInProcessCount: number;
-  applyInventoryFocus: (focus: string) => void;
+  applyInventoryFocus: (focus: InventoryFocusAction) => void;
   activosSinResponsable: number;
   activosVidaAlta: number;
   effectiveRiskSummary: { duplicateIpCount: number; duplicateMacCount: number };
@@ -118,37 +129,62 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="z-10 self-start md:self-auto">
           <div className="text-left md:text-right">
             <p className="text-4xl sm:text-5xl font-black">{systemHealth}%</p>
-            <p className="text-[10px] font-black text-[#8CC63F] uppercase tracking-widest">Salud IT</p>
+            <p className="text-[10px] font-black text-brand-green uppercase tracking-widest">Salud IT</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
-        <div onClick={() => setView('supplies')} className="bg-[#F58220] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
+        <Button
+          variant="plain"
+          size="bare"
+          onClick={() => setView('supplies')}
+          className="w-full flex-col items-stretch justify-start text-left bg-brand p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
+        >
           <p className="text-xs font-black uppercase opacity-60 mb-2">Stock Bajo</p>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length}</h2>
           <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-        </div>
-        <div onClick={() => applyTicketFocus('ABIERTOS')} className="bg-white p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl cursor-pointer">
+        </Button>
+        <Button
+          variant="plain"
+          size="bare"
+          onClick={() => applyTicketFocus('ABIERTOS')}
+          className="w-full flex-col items-stretch justify-start text-left bg-white p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
+        >
           <p className="text-xs font-black uppercase text-slate-400 mb-2">Tickets Abiertos</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#F58220]">{dashboardOpenTicketsCurrent.length}</h2>
+          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-brand">{dashboardOpenTicketsCurrent.length}</h2>
           <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardOpenTrend.toneClass}`}>{dashboardOpenTrend.label}</p>
-        </div>
-        <div onClick={() => setView('inventory')} className="bg-[#8CC63F] p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl cursor-pointer">
+        </Button>
+        <Button
+          variant="plain"
+          size="bare"
+          onClick={() => setView('inventory')}
+          className="w-full flex-col items-stretch justify-start text-left bg-brand-green p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-lime-200"
+        >
           <p className="text-xs font-black uppercase opacity-60 mb-2">Activos</p>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{activos.length}</h2>
           <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-        </div>
-        <div onClick={() => applyTicketFocus('CRITICA')} className="bg-amber-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl cursor-pointer">
+        </Button>
+        <Button
+          variant="plain"
+          size="bare"
+          onClick={() => applyTicketFocus('CRITICA')}
+          className="w-full flex-col items-stretch justify-start text-left bg-amber-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-200"
+        >
           <p className="text-xs font-black uppercase opacity-60 mb-2">Críticos</p>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardCriticalTicketsCurrent.length}</h2>
           <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardCriticalTrend.toneClass}`}>{dashboardCriticalTrend.label}</p>
-        </div>
-        <div onClick={() => applyTicketFocus('SLA')} className="bg-red-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl cursor-pointer">
+        </Button>
+        <Button
+          variant="plain"
+          size="bare"
+          onClick={() => applyTicketFocus('SLA')}
+          className="w-full flex-col items-stretch justify-start text-left bg-red-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200"
+        >
           <p className="text-xs font-black uppercase opacity-60 mb-2">SLA Vencido</p>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardSlaExpiredCount}</h2>
           <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardSlaTrend.toneClass}`}>{dashboardSlaTrend.label}</p>
-        </div>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -158,23 +194,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Actividad Reciente | {dashboardWindow.label}</p>
               <h3 className="text-lg font-black uppercase text-slate-800">Últimos Tickets del Período</h3>
             </div>
-            <button
+            <Button
+              size="bare"
               onClick={() => setView('tickets')}
               className="px-5 py-2 rounded-2xl border border-slate-200 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
             >
               Ver Todo
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-3">
             {dashboardRecentTickets.map((ticket) => (
-              <button
+              <Button
+                variant="plain"
+                size="bare"
                 key={`recent-${ticket.id}`}
                 onClick={() => {
                   setView('tickets');
                   setSearchTerm(ticket.activoTag);
                 }}
-                className="w-full text-left border border-slate-100 rounded-2xl p-4 hover:border-slate-200 hover:bg-slate-50/70 transition-colors"
+                className="w-full flex-col items-stretch justify-start text-left border border-slate-100 rounded-2xl p-4 hover:border-slate-200 hover:bg-slate-50/70 transition-colors"
               >
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Badge variant={ticket.prioridad}>{ticket.prioridad}</Badge>
@@ -194,7 +233,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
                   Asignado: {ticket.asignadoA || 'Sin asignar'} | Creado: {formatDateTime(ticket.fechaCreacion || ticket.fecha)}
                 </p>
-              </button>
+              </Button>
             ))}
             {dashboardRecentTickets.length === 0 && (
               <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center text-xs font-black uppercase tracking-wider text-slate-400">
@@ -213,11 +252,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div key={`owner-${owner}`} className="space-y-2 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase text-slate-700">{owner}</span>
-                    <span className="text-xs font-black text-[#F58220]">{count}</span>
+                    <span className="text-xs font-black text-brand">{count}</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full bg-[#F58220]"
+                      className="h-full bg-brand"
                       style={{ width: `${Math.round((count / dashboardOwnerMax) * 100)}%` }}
                     />
                   </div>
@@ -228,18 +267,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Sin tickets asignados.
                 </div>
               )}
-              <button
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={() => applyTicketFocus('SIN_ASIGNAR')}
                 className="w-full bg-amber-50 border border-amber-100 text-amber-700 rounded-2xl px-4 py-3 text-xs font-black uppercase text-left"
               >
                 Sin asignar: {dashboardUnassignedCount}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={() => applyTicketFocus('EN_PROCESO')}
                 className="w-full bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl px-4 py-3 text-xs font-black uppercase text-left"
               >
                 En proceso: {dashboardInProcessCount}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -247,7 +290,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Riesgos Inventario</p>
             <h3 className="text-lg font-black uppercase text-slate-800 mb-5">Atención Prioritaria</h3>
             <div className="space-y-3">
-              <button
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={() => {
                   setView('inventory');
                   applyInventoryFocus('SIN_RESP');
@@ -256,8 +301,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sin Responsable</p>
                 <p className="text-xl font-black text-red-500">{activosSinResponsable}</p>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={() => {
                   setView('inventory');
                   applyInventoryFocus('VIDA_ALTA');
@@ -266,8 +313,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vida Util Alta</p>
                 <p className="text-xl font-black text-amber-500">{activosVidaAlta}</p>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={() => {
                   setView('inventory');
                   applyInventoryFocus('DUP_RED');
@@ -276,7 +325,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Duplicados de Red</p>
                 <p className="text-xl font-black text-slate-700">{effectiveRiskSummary.duplicateIpCount + effectiveRiskSummary.duplicateMacCount}</p>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -299,7 +348,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                   <div
-                    className="h-full bg-[#8CC63F]"
+                    className="h-full bg-brand-green"
                     style={{ width: `${Math.round((item.count / dashboardStateMax) * 100)}%` }}
                   />
                 </div>

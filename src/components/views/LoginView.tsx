@@ -11,8 +11,8 @@ interface LoginViewProps {
   toggleTheme: () => void;
   handleLogin: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   loginLoading: boolean;
-  loginForm: { username: string; password?: string };
-  setLoginForm: React.Dispatch<React.SetStateAction<{ username: string; password?: string }>>;
+  loginForm: { username: string; password: string };
+  setLoginForm: React.Dispatch<React.SetStateAction<{ username: string; password: string }>>;
   AUTHOR_SIGNATURE: string;
   toast: { message: string; type: 'success' | 'warning' | 'error' } | null;
   setToast: (toast: { message: string; type: 'success' | 'warning' | 'error' } | null) => void;
@@ -43,7 +43,7 @@ export function LoginView({
         <div className="flex items-center justify-center mb-4">
           <LogoGigantes className="block w-56 sm:w-64 max-w-full h-auto mx-auto" />
         </div>
-        <p className="text-[#8CC63F] font-bold text-sm tracking-[0.2em] uppercase mb-8">
+        <p className="text-brand-green font-bold text-sm tracking-[0.2em] uppercase mb-8">
           IT Management System
         </p>
 

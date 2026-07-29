@@ -1,8 +1,13 @@
 import { useCallback } from 'react';
 import type React from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
-import type { Insumo } from '../../types/app';
+import type { Insumo, InsumoTouchedState, UserSession } from '../../types/app';
+import type {
+  RefreshAppData,
+  ShowConfirm,
+  ShowPrompt,
+  ShowToast,
+} from '../../types/actionDependencies';
 import { canEditByRole } from '../../utils/roles';
 
 interface InsumoValidationResult {
@@ -16,26 +21,32 @@ interface InsumoValidationResult {
 }
 
 interface UseSupplyActionsProps {
-  setInsumoTouched: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  sessionUser: UserSession | null;
+  insumos: Insumo[];
+  backendConnected: boolean;
+  refreshAppData: RefreshAppData | null;
+  showToast: ShowToast;
+  showConfirm: ShowConfirm | null;
+  showPrompt: ShowPrompt | null;
+  setInsumoTouched: React.Dispatch<React.SetStateAction<InsumoTouchedState>>;
   getSupplyHealthStatus: (item: Insumo) => 'AGOTADO' | 'BAJO' | 'OK';
   setSupplyStockDrafts: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   supplyStockDrafts: Record<number, string>;
 }
 
 export function useSupplyActions({
+  sessionUser,
+  insumos,
+  backendConnected,
+  refreshAppData,
+  showToast,
+  showConfirm,
+  showPrompt,
   setInsumoTouched,
   getSupplyHealthStatus,
   setSupplyStockDrafts,
   supplyStockDrafts,
 }: UseSupplyActionsProps) {
-  const sessionUser = useAppStore((state) => state.sessionUser);
-  const insumos = useAppStore((state) => state.insumos);
-  const backendConnected = useAppStore((state) => state.backendConnected);
-  const refreshAppData = useAppStore((state) => state.refreshAppData);
-  const showToast = useAppStore((state) => state.showToast);
-  const showConfirm = useAppStore((state) => state.showConfirm);
-  const showPrompt = useAppStore((state) => state.showPrompt);
-
   const isReadOnly = !canEditByRole(sessionUser?.rol);
 
   const ensureBackendConnected = useCallback(
@@ -62,6 +73,8 @@ export function useSupplyActions({
       stock: true,
       min: true,
       categoria: true,
+      ubicacion: true,
+      proveedor: true,
     });
 
     if (isReadOnly) {

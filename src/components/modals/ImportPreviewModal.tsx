@@ -1,5 +1,7 @@
 import { X } from 'lucide-react';
+import { useId } from 'react';
 import { Button } from '../ui/Button';
+import { ModalDialog } from '../ui/ModalDialog';
 
 interface ImportPreviewSummary {
   totalRows: number;
@@ -39,20 +41,32 @@ export function ImportPreviewModal({
   onExportIssues,
   onConfirm,
 }: ImportPreviewModalProps) {
+  const titleId = useId();
   if (!open) return null;
 
   const invalidTotal = Number(preview.invalid || 0) + Number(localInvalidCount || 0);
   const canConfirm = Number(preview.created || 0) + Number(preview.updated || 0) > 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden">
+    <ModalDialog
+      open={open}
+      onClose={onClose}
+      isBusy={isApplying}
+      aria-labelledby={titleId}
+      className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden"
+    >
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vista Previa Dry-Run</p>
-            <h3 className="text-lg font-black uppercase text-slate-800">{fileName}</h3>
+            <h3 id={titleId} className="text-lg font-black uppercase text-slate-800">{fileName}</h3>
           </div>
-          <Button variant="close" size="bare" onClick={onClose}>
+          <Button
+            variant="close"
+            size="bare"
+            onClick={onClose}
+            disabled={isApplying}
+            aria-label="Cerrar vista previa de importación"
+          >
             <X size={22} />
           </Button>
         </div>
@@ -84,12 +98,14 @@ export function ImportPreviewModal({
           <div className="border border-slate-100 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 bg-slate-50 flex justify-between items-center">
               <p className="text-xs font-black uppercase text-slate-500">Incidencias ({issues.length})</p>
-              <button
+              <Button
+                variant="plain"
+                size="bare"
                 onClick={onExportIssues}
-                className="text-xs font-black uppercase text-[#F58220] hover:text-orange-600"
+                className="text-xs text-brand hover:text-orange-600"
               >
                 Exportar Errores CSV
-              </button>
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[600px]">
@@ -131,7 +147,6 @@ export function ImportPreviewModal({
             {isApplying ? 'Aplicando...' : 'Confirmar Importación'}
           </Button>
         </div>
-      </div>
-    </div>
+    </ModalDialog>
   );
 }

@@ -176,6 +176,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         if (duplicated) return { ok: false, code: 'DUPLICATE' };
       }
 
+      const previousUsername = user.username;
+      const previousRole = user.rol;
       if (nombre) user.nombre = nombre;
       if (username) user.username = username;
       if (hasCargo) user.departamento = nextCargo;
@@ -183,11 +185,15 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (hasActivo) user.activo = activo;
       if (password) {
         user.passwordHash = createUserPasswordHash(password);
-        revokeSessionsByUserId(user.id);
       }
-
-      if (hasActivo && activo === false) {
-        revokeSessionsByUserId(user.id);
+      const shouldRevokeSessions = Boolean(
+        password
+        || (username && username !== previousUsername)
+        || (rol && rol !== previousRole)
+        || (hasActivo && activo === false),
+      );
+      if (shouldRevokeSessions) {
+        user.authVersion = Math.max(0, Math.trunc(Number(user.authVersion) || 0)) + 1;
       }
 
       pushAuditWithContext(db, req, {
@@ -200,7 +206,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         entidadId: user.id,
         after: sanitizeUser(user),
       });
-      return { ok: true, user };
+      return { ok: true, user, shouldRevokeSessions };
     });
 
     if (!updated?.ok && updated?.code === 'NOT_FOUND') {
@@ -225,6 +231,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo actualizar el usuario.' });
     }
 
+    if (updated.shouldRevokeSessions) {
+      await revokeSessionsByUserId(updated.user.id).catch(() => undefined);
+    }
     res.json(sanitizeUser(updated.user));
   } catch (error) {
     next(error);
@@ -252,7 +261,6 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       }
 
       db.users.splice(index, 1);
-      revokeSessionsByUserId(target.id);
       pushAuditWithContext(db, req, {
         accion: 'Baja Usuario',
         item: `${target.username} | ${target.departamento || 'SIN CARGO'}`,
@@ -263,7 +271,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
         entidadId: target.id,
         before: sanitizeUser(target),
       });
-      return { ok: true };
+      return { ok: true, userId: target.id };
     });
 
     if (!removed?.ok && removed?.code === 'NOT_FOUND') {
@@ -279,6 +287,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo eliminar el usuario.' });
     }
 
+    await revokeSessionsByUserId(removed.userId).catch(() => undefined);
     res.json({ ok: true });
   } catch (error) {
     next(error);

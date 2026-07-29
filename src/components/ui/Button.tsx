@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'dark' | 'close';
+export type ButtonVariant = 'primary' | 'secondary' | 'dark' | 'danger' | 'success' | 'close' | 'plain';
 export type ButtonSize = 'bare' | 'icon' | 'sm' | 'md' | 'lg' | 'toolbar' | 'cta';
 
 const BASE = 'inline-flex items-center justify-center font-black uppercase';
@@ -10,8 +10,12 @@ const VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-brand text-white disabled:opacity-50',
   secondary: 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50',
   dark: 'bg-slate-800 text-white disabled:opacity-50',
+  danger: 'bg-red-500 text-white hover:bg-red-600 disabled:opacity-50',
+  success: 'bg-brand-green text-white hover:opacity-90 disabled:opacity-50',
   // Cerrar modal (X)
   close: 'text-slate-300 hover:text-red-500 disabled:opacity-40',
+  // Base semántica para controles cuya piel completa pertenece a un patrón consumidor.
+  plain: 'disabled:opacity-50',
 };
 
 /** Forma: padding, tipografía, radio y ancho. */

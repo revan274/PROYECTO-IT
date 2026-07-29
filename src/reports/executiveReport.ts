@@ -46,7 +46,7 @@ export interface ExecutiveReportData {
   reportSupplySnapshot: { total: number; agotados: number; bajoMinimo: number };
   sessionUserName: string;
   nowMs: number;
-  formatTicketBranchFromCatalog: (value: string) => string;
+  formatTicketBranchFromCatalog: (value?: string) => string;
 }
 
 /**

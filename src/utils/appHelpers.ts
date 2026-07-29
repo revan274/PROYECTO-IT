@@ -21,7 +21,7 @@ import {
   normalizeForCompare,
   parseDateToTimestamp,
 } from './format';
-import { normalizeTicketAttentionType } from './tickets';
+import { isTicketClosed, normalizeTicketAttentionType } from './tickets';
 import {
   normalizeIpAddress,
   normalizeMacAddress,
@@ -356,7 +356,7 @@ export function matchesReportTechnician(ticket: TicketItem, filter: string): boo
 
 export function collectResolutionHours(rows: TicketItem[]): number[] {
   return rows
-    .filter((ticket) => ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado')
+    .filter(isTicketClosed)
     .map((ticket) => {
       const start = ticketCreatedTimestamp(ticket);
       const end = parseDateToTimestamp(ticket.fechaCierre || '');

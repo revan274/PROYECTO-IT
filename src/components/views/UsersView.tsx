@@ -10,7 +10,7 @@ interface UsersViewProps {
   users: UserItem[];
   activeUsersCount: number;
   ticketEligibleUsersCount: number;
-  handleCreateUser: (e: React.FormEvent) => void;
+  handleCreateUser: (e: React.FormEvent<HTMLFormElement>) => void;
   editingUserId: number | null;
   newUserForm: {
     nombre: string;
@@ -197,10 +197,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <label htmlFor="users-search-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Buscar
                       </label>
-                      <input
+                      <Input variant="plain"
+                        id="users-search-filter"
                         value={userSearchTerm}
                         placeholder="Nombre, usuario o cargo"
                         className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-700 outline-none"
@@ -208,10 +209,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <label htmlFor="users-role-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Rol
                       </label>
-                      <select
+                      <Select variant="plain"
+                        id="users-role-filter"
                         value={userRoleFilter}
                         className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
                         onChange={(e) => setUserRoleFilter(e.target.value as 'TODOS' | UserRole)}
@@ -220,13 +222,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         {roleFilterOptions.map((role) => (
                           <option key={role.value} value={role.value}>{role.label}</option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <label htmlFor="users-status-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Estado
                       </label>
-                      <select
+                      <Select variant="plain"
+                        id="users-status-filter"
                         value={userStatusFilter}
                         className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
                         onChange={(e) => setUserStatusFilter(e.target.value as 'TODOS' | 'ACTIVOS' | 'INACTIVOS')}
@@ -234,13 +237,14 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         <option value="TODOS">Todos</option>
                         <option value="ACTIVOS">Activos</option>
                         <option value="INACTIVOS">Inactivos</option>
-                      </select>
+                      </Select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <label htmlFor="users-department-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Cargo
                       </label>
-                      <select
+                      <Select variant="plain"
+                        id="users-department-filter"
                         value={userDepartmentFilter}
                         className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-600 outline-none"
                         onChange={(e) => setUserDepartmentFilter(e.target.value)}
@@ -249,7 +253,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         {userCargoOptions.map((cargo) => (
                           <option key={cargo.value} value={cargo.value}>{cargo.label}</option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -282,30 +286,30 @@ export const UsersView: React.FC<UsersViewProps> = ({
                         </td>
                         <td className="px-8 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button
+                            <Button variant="plain" size="bare"
                               type="button"
                               disabled={userActionLoadingId === user.id}
                               onClick={() => handleEditUser(user)}
                               className="px-3 py-1 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                             >
                               Editar
-                            </button>
-                            <button
+                            </Button>
+                            <Button variant="plain" size="bare"
                               type="button"
                               disabled={userActionLoadingId === user.id || (sessionUser?.id === user.id)}
                               onClick={() => void handleToggleUserActive(user)}
                               className="px-3 py-1 rounded-lg border border-amber-200 text-[10px] font-black uppercase text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-40"
                             >
                               {user.activo !== false ? 'Desactivar' : 'Activar'}
-                            </button>
-                            <button
+                            </Button>
+                            <Button variant="plain" size="bare"
                               type="button"
                               disabled={userActionLoadingId === user.id || (sessionUser?.id === user.id)}
                               onClick={() => void handleDeleteUser(user)}
                               className="px-3 py-1 rounded-lg border border-red-200 text-[10px] font-black uppercase text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40"
                             >
                               Eliminar
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>

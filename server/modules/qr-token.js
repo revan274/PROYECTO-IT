@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 const QR_TOKEN_PREFIX = 'mtiqr1';
 export const QR_TOKEN_SCHEME = 'mti-hs256-v1';
 const DEFAULT_QR_SIGNING_SECRET = 'mesa-it-qr-dev-secret-change-me';
+const MIN_QR_SIGNING_SECRET_LENGTH = 32;
 const INSECURE_QR_SECRETS = new Set([
   '',
   'change-this-secret',
@@ -13,9 +14,16 @@ const QR_SIGNING_SECRET = String(
 ).trim() || DEFAULT_QR_SIGNING_SECRET;
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 
-if (IS_PRODUCTION && INSECURE_QR_SECRETS.has(QR_SIGNING_SECRET)) {
-  // Advertencia, NO crash: un valor por defecto no debe tirar el servidor en producción.
-  console.warn('[SEGURIDAD] QR_SIGNING_SECRET no está definido o usa un valor por defecto inseguro. Define QR_SIGNING_SECRET en las variables de entorno.');
+if (
+  IS_PRODUCTION
+  && (
+    INSECURE_QR_SECRETS.has(QR_SIGNING_SECRET)
+    || QR_SIGNING_SECRET.length < MIN_QR_SIGNING_SECRET_LENGTH
+  )
+) {
+  throw new Error(
+    `[SEGURIDAD] QR_SIGNING_SECRET es obligatorio en producción y debe tener al menos ${MIN_QR_SIGNING_SECRET_LENGTH} caracteres.`,
+  );
 }
 
 function asNonEmptyString(value) {

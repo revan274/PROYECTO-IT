@@ -235,9 +235,11 @@ html.dark .bg-orange-100    { background-color: rgba(124, 45, 18, 0.25) !importa
 html.dark .border-orange-200 { border-color: rgba(194, 65, 12, 0.4) !important; }
 html.dark .text-orange-700  { color: #fb923c !important; }
 
-/* ── Custom brand green (backend-online indicator) ── */
-html.dark [class*="bg-[#f4fce3]"]    { background-color: rgba(20, 83, 45, 0.3) !important; }
-html.dark [class*="border-[#d8f5a2]"] { border-color: rgba(74, 127, 16, 0.35) !important; }
+/* ── Lime / estado operativo ── */
+html.dark .bg-lime-50 { background-color: rgba(20, 83, 45, 0.3) !important; }
+html.dark .border-lime-200 { border-color: rgba(74, 127, 16, 0.45) !important; }
+html.dark .text-lime-700 { color: #a3e635 !important; }
+html.dark .hover\:bg-lime-100:hover { background-color: rgba(54, 83, 20, 0.45) !important; }
 
 /* ── Toggle switch thumb — must stay light in dark mode ── */
 html.dark .toggle-thumb { background-color: #e2e8f0 !important; }

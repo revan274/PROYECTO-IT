@@ -7,7 +7,7 @@ import { buildExecutiveReportHtml } from './reports/executiveReport';
 import { openAutoPrintLabelWindow, openHtmlReportWindow } from './reports/openPrintWindow';
 import { buildAssetQrLabelHtml } from './reports/qrLabelReport';
 import { buildTravelSheetHtml } from './reports/travelSheetReport';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAppStore } from './store/useAppStore';
 import { AppHeader } from './components/layout/AppHeader';
 import { AppSidebar } from './components/layout/AppSidebar';
@@ -30,6 +30,9 @@ import { useSupplyActions } from './hooks/actions/useSupplyActions';
 import { useTicketActions } from './hooks/actions/useTicketActions';
 import { useUserActions } from './hooks/actions/useUserActions';
 import { useDialogs } from './hooks/useDialogs';
+import { useAppCatalogs } from './hooks/useAppCatalogs';
+import { getViewPath, useAppNavigation, VIEW_PATHS } from './hooks/useAppNavigation';
+import { useDashboardMetrics } from './hooks/useDashboardMetrics';
 
 import { Toast } from './components/ui/Toast';
 import { ConfirmDialog } from './components/modals/ConfirmDialog';
@@ -40,8 +43,6 @@ import {
   AUTHOR_BRAND,
   AUTHOR_SIGNATURE,
   CATEGORIAS_INSUMO,
-  DEFAULT_CATALOGS,
-  NAV_ITEMS,
   TICKET_ATTENTION_TYPES,
   TICKET_STATES,
   TRAVEL_DEFAULT_FUEL_EFFICIENCY,
@@ -68,9 +69,7 @@ import type {
   TicketEstado,
   TicketItem,
   TravelDestinationRule,
-  ViewType,
   TravelReportRow,
-  UserRole,
 } from './types/app';
 import {
   apiRequest,
@@ -91,12 +90,8 @@ import {
 import {
   assetRequiresNetworkIdentity,
   assetRequiresResponsible,
-  buildAssetDisplayOptions,
   calculateAssetRiskSummary,
-  formatTicketBranch,
-  formatUserCargo,
   parseAssetLifeYears,
-  resolveAssetBranchCode,
 } from './utils/assets';
 import {
   canCreateTicketsByRole,
@@ -118,7 +113,6 @@ import {
 } from './utils/format';
 import {
   buildSuggestedTicketIssues,
-  buildTicketAssetContextSummary,
   formatTicketAttentionType,
   getSlaStatus,
   isTicketSlaExpired,
@@ -157,8 +151,6 @@ import {
   collectResolutionHours,
   startOfLocalDayTimestamp,
   startOfLocalWeekTimestamp,
-  resolveDashboardRangeWindow,
-  formatDashboardTrend,
   formatMetricTrend,
   roundHours,
   calculatePercentile,
@@ -176,27 +168,6 @@ const LazyReportsView = lazy(() => import('./components/views/ReportsView'));
 const LazyInventoryView = lazy(() => import('./components/views/InventoryView'));
 const LazySuppliesView = lazy(() => import('./components/views/SuppliesView'));
 const LazyAuditView = lazy(() => import('./components/views/AuditView'));
-
-const VIEW_PATHS: Record<ViewType, string> = {
-  dashboard: '/dashboard',
-  reports: '/reports',
-  inventory: '/inventory',
-  supplies: '/supplies',
-  tickets: '/tickets',
-  history: '/history',
-  users: '/users',
-};
-
-function getViewPath(view: ViewType): string {
-  return VIEW_PATHS[view];
-}
-
-function getViewFromPathname(pathname: string): ViewType | null {
-  const normalized = pathname.replace(/\/+$/, '') || '/';
-  const match = (Object.entries(VIEW_PATHS) as Array<[ViewType, string]>)
-    .find(([, path]) => path === normalized);
-  return match?.[0] || null;
-}
 
 const LazyQRCodeCanvas = lazy(async () => {
   const module = await import('qrcode.react');
@@ -233,10 +204,10 @@ function renderProtectedView(
 // --- APP PRINCIPAL ---
 
 export default function App() {
-  const location = useLocation();
-  const navigate = useNavigate();
   const {
     sessionUser,
+    setStoredSession,
+    logout,
     globalSearchTerm,
     setGlobalSearchTerm,
     clearGlobalSearchTerm,
@@ -245,11 +216,15 @@ export default function App() {
     sidebarOpen,
     setSidebarOpen,
     backendConnected,
+    setTickets,
+    resetCoreData,
+    resetSyncStatus,
     toast,
     setToast,
     showToast,
     clearToast,
     showConfirm,
+    showPrompt,
   } = useAppStore();
   const searchTerm = globalSearchTerm;
 
@@ -527,163 +502,38 @@ export default function App() {
   const canManageUsers = canManageUsersByRole(sessionUser?.rol);
   const isReadOnly = !canEdit;
   const isRequesterOnlyUser = isRequesterOnlyRole(sessionUser?.rol);
-  const routeView = useMemo(
-    () => getViewFromPathname(location.pathname),
-    [location.pathname],
-  );
-  const defaultView: ViewType = isRequesterOnlyUser ? 'tickets' : 'dashboard';
-  const accessibleRouteView = useMemo(() => {
-    if (routeView === null) return null;
-    if (routeView === 'users') return canManageUsers ? routeView : null;
-    if (routeView !== 'tickets' && isRequesterOnlyUser) return null;
-    return routeView;
-  }, [canManageUsers, isRequesterOnlyUser, routeView]);
-  const view: ViewType = accessibleRouteView ?? defaultView;
-  const isDashboardView = view === 'dashboard';
-  const isReportsView = view === 'reports';
-  const setView = useCallback(
-    (nextView: ViewType, options?: { replace?: boolean }) => {
-      const nextPath = getViewPath(nextView);
-      if (location.pathname === nextPath && !options?.replace) return;
-      navigate(nextPath, { replace: options?.replace ?? false });
-    },
-    [location.pathname, navigate],
-  );
-  const activeTicketBranches = useMemo(
-    () => catalogos.sucursales.filter((branch) => branch.activo !== false),
-    [catalogos],
-  );
-  const activeTicketBranchCodes = useMemo(
-    () => new Set(activeTicketBranches.map((branch) => branch.code)),
-    [activeTicketBranches],
-  );
-  const ticketBranchLabelByCode = useMemo(() => {
-    const labels: Record<string, string> = {};
-    activeTicketBranches.forEach((branch) => {
-      labels[branch.code] = `${branch.code} - ${branch.name}`;
-    });
-    return labels;
-  }, [activeTicketBranches]);
-  const ticketAssetOptions = useMemo(() => {
-    const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();
-    if (!selectedBranch) return [] as Array<{ tag: string; label: string }>;
-
-    const seenTags = new Set<string>();
-    const branchAssets = activos.filter((asset) => {
-      if (resolveAssetBranchCode(asset, activeTicketBranchCodes) !== selectedBranch) return false;
-      const tag = String(asset.tag || '').trim().toUpperCase();
-      if (!tag || seenTags.has(tag)) return false;
-      seenTags.add(tag);
-      return true;
-    });
-
-    // El solicitante elige por nombre amigable ("CAJA 1", "IMPRESORA"); el folio (tag)
-    // viaja como value, así que se autoselecciona al elegir la opción.
-    return buildAssetDisplayOptions(branchAssets).map((option) => ({
-      tag: option.tag,
-      label: `${option.displayName} · FOLIO ${option.tag}`,
-    }));
-  }, [activos, activeTicketBranchCodes, formData.sucursal]);
-  const selectedTicketAsset = useMemo(() => {
-    const selectedBranch = String(formData.sucursal || '').trim().toUpperCase();
-    const selectedTag = String(formData.activoTag || '').trim().toUpperCase();
-    if (!selectedBranch || !selectedTag) return null;
-
-    return activos.find((asset) => {
-      const assetTag = String(asset.tag || '').trim().toUpperCase();
-      return assetTag === selectedTag && resolveAssetBranchCode(asset, activeTicketBranchCodes) === selectedBranch;
-    }) || null;
-  }, [activos, activeTicketBranchCodes, formData.activoTag, formData.sucursal]);
-  const selectedTicketAssetContext = useMemo(
-    () => buildTicketAssetContextSummary(selectedTicketAsset, activeTicketBranchCodes),
-    [activeTicketBranchCodes, selectedTicketAsset],
-  );
-  const userCargoOptions = useMemo(
-    () =>
-      catalogos.cargos
-        .map((label) => {
-          const text = String(label || '').trim();
-          if (!text) return null;
-          return {
-            value: text.toUpperCase(),
-            label: text,
-          };
-        })
-        .filter((item): item is { value: string; label: string } => !!item),
-    [catalogos],
-  );
-  const userCargoLabelByValue = useMemo(
-    () =>
-      userCargoOptions.reduce(
-        (acc, cargo) => ({ ...acc, [cargo.value]: cargo.label }),
-        {} as Record<string, string>,
-      ),
-    [userCargoOptions],
-  );
-  const roleCatalogOptions = useMemo(
-    () => {
-      const active = catalogos.roles.filter((role) => {
-        const value = String(role.value || '').trim().toLowerCase();
-        return isUserRole(value) && role.activo !== false;
-      });
-      return active.length > 0 ? active : DEFAULT_CATALOGS.roles;
-    },
-    [catalogos],
-  );
-  const roleFilterOptions = useMemo(
-    () => {
-      const known = catalogos.roles.filter((role) => {
-        const value = String(role.value || '').trim().toLowerCase();
-        return isUserRole(value);
-      });
-      return known.length > 0 ? known : DEFAULT_CATALOGS.roles;
-    },
-    [catalogos],
-  );
-  const roleLabelByValue = useMemo(
-    () =>
-      catalogos.roles.reduce((acc, role) => {
-        const value = String(role.value || '').trim().toLowerCase();
-        if (!isUserRole(value)) return acc;
-        return {
-          ...acc,
-          [value]: String(role.label || USER_ROLE_LABEL[value]).trim() || USER_ROLE_LABEL[value],
-        };
-      }, {} as Record<UserRole, string>),
-    [catalogos],
-  );
-  const rolePermissionsByValue = useMemo(
-    () =>
-      catalogos.roles.reduce((acc, role) => {
-        const value = String(role.value || '').trim().toLowerCase();
-        if (!isUserRole(value)) return acc;
-        return {
-          ...acc,
-          [value]: String(role.permissions || USER_ROLE_PERMISSIONS[value]).trim() || USER_ROLE_PERMISSIONS[value],
-        };
-      }, {} as Record<UserRole, string>),
-    [catalogos],
-  );
-  const isValidTicketBranchValue = useCallback(
-    (value?: string) => {
-      const code = String(value || '').trim().toUpperCase();
-      return activeTicketBranches.some((branch) => branch.code === code);
-    },
-    [activeTicketBranches],
-  );
-  const formatTicketBranchFromCatalog = useCallback(
-    (value?: string) => formatTicketBranch(value, ticketBranchLabelByCode),
-    [ticketBranchLabelByCode],
-  );
-  const formatCargoFromCatalog = useCallback(
-    (value?: string) => formatUserCargo(value, userCargoLabelByValue),
-    [userCargoLabelByValue],
-  );
-
-  const visibleNavItems = useMemo(() => {
-    if (isRequesterOnlyUser) return NAV_ITEMS.filter((item) => item.id === 'tickets');
-    return canManageUsers ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.id !== 'users');
-  }, [canManageUsers, isRequesterOnlyUser]);
+  const {
+    view,
+    setView,
+    visibleNavItems,
+    defaultViewPath,
+    isDashboardView,
+    isReportsView,
+  } = useAppNavigation({
+    canManageUsers,
+    isRequesterOnlyUser,
+  });
+  const {
+    activeTicketBranches,
+    activeTicketBranchCodes,
+    ticketAssetOptions,
+    selectedTicketAsset,
+    selectedTicketAssetContext,
+    userCargoOptions,
+    userCargoLabelByValue,
+    roleCatalogOptions,
+    roleFilterOptions,
+    roleLabelByValue,
+    rolePermissionsByValue,
+    isValidTicketBranchValue,
+    formatTicketBranchFromCatalog,
+    formatCargoFromCatalog,
+  } = useAppCatalogs({
+    activos,
+    catalogos,
+    selectedTicketBranch: formData.sucursal,
+    selectedTicketAssetTag: formData.activoTag,
+  });
   const applyReportFilterSnapshot = useCallback((snapshot: ReportFilterSnapshot) => {
     setReportDateFrom(snapshot.dateFrom);
     setReportDateTo(snapshot.dateTo);
@@ -704,6 +554,11 @@ export default function App() {
     setReportTechnicianFilter,
   ]);
   const { clearSession } = useSessionActions({
+    logout,
+    resetCoreData,
+    resetSyncStatus,
+    clearToast,
+    clearGlobalSearchTerm,
     setView,
     applyReportFilterSnapshot,
     setAuditRemoteRows,
@@ -792,7 +647,11 @@ export default function App() {
     loginLoading,
     handleLogin,
     handleLogout,
-  } = useAuthActions({ clearSession });
+  } = useAuthActions({
+    clearSession,
+    setStoredSession,
+    showToast,
+  });
 
   useEffect(() => {
     if (!sessionUser) {
@@ -834,6 +693,12 @@ export default function App() {
     eliminarActivo,
     eliminarTodosActivos,
   } = useAssetActions({
+    sessionUser,
+    activos,
+    backendConnected,
+    refreshAppData: refreshData,
+    showToast,
+    showConfirm,
     onAfterBulkDelete: () => setSelectedAsset(null),
   });
 
@@ -844,6 +709,13 @@ export default function App() {
     reponerCriticos,
     confirmarStockManual,
   } = useSupplyActions({
+    sessionUser,
+    insumos,
+    backendConnected,
+    refreshAppData: refreshData,
+    showToast,
+    showConfirm,
+    showPrompt,
     setInsumoTouched,
     getSupplyHealthStatus,
     setSupplyStockDrafts,
@@ -885,6 +757,13 @@ export default function App() {
     descargarAdjuntoTicket,
     eliminarAdjuntoTicket,
   } = useTicketActions({
+    sessionUser,
+    backendConnected,
+    refreshAppData: refreshData,
+    showToast,
+    showConfirm,
+    tickets,
+    setTickets,
     canEdit,
     canCreateTickets,
     canCreateComments: canCreateTickets,
@@ -1084,6 +963,12 @@ export default function App() {
     handleToggleUserActive,
     handleDeleteUser,
   } = useUserActions({
+    sessionUser,
+    users,
+    backendConnected,
+    refreshAppData: refreshData,
+    showToast,
+    showConfirm,
     canManageUsers,
     editingUserId,
     newUserForm,
@@ -1595,149 +1480,35 @@ export default function App() {
     [openTickets],
   );
 
-  const dashboardWindow = useMemo(
-    () => resolveDashboardRangeWindow(dashboardRange, liveNow),
-    [dashboardRange, liveNow],
-  );
-  const dashboardTicketsCurrent = useMemo(
-    () =>
-      !isDashboardView
-        ? []
-        :
-        scopedTickets.filter((ticket) => {
-          const ts = ticketCreatedTimestamp(ticket);
-          return ts >= dashboardWindow.startMs && ts <= dashboardWindow.endMs;
-        }),
-    [dashboardWindow.endMs, dashboardWindow.startMs, isDashboardView, scopedTickets],
-  );
-  const dashboardTicketsPrevious = useMemo(
-    () =>
-      !isDashboardView
-        ? []
-        :
-        scopedTickets.filter((ticket) => {
-          const ts = ticketCreatedTimestamp(ticket);
-          return ts >= dashboardWindow.previousStartMs && ts <= dashboardWindow.previousEndMs;
-        }),
-    [dashboardWindow.previousEndMs, dashboardWindow.previousStartMs, isDashboardView, scopedTickets],
-  );
-  const dashboardOpenTicketsCurrent = useMemo(
-    () => dashboardTicketsCurrent.filter(isTicketOpen),
-    [dashboardTicketsCurrent, isTicketOpen],
-  );
-  const dashboardOpenTicketsPrevious = useMemo(
-    () => dashboardTicketsPrevious.filter(isTicketOpen),
-    [dashboardTicketsPrevious, isTicketOpen],
-  );
-  const dashboardCriticalTicketsCurrent = useMemo(
-    () => dashboardOpenTicketsCurrent.filter((ticket) => ticket.prioridad === 'CRITICA'),
-    [dashboardOpenTicketsCurrent],
-  );
-  const dashboardCriticalTicketsPrevious = useMemo(
-    () => dashboardOpenTicketsPrevious.filter((ticket) => ticket.prioridad === 'CRITICA'),
-    [dashboardOpenTicketsPrevious],
-  );
-  const dashboardSlaExpiredCurrent = useMemo(
-    () => dashboardOpenTicketsCurrent.filter((ticket) => isTicketSlaExpired(ticket, liveNow)),
-    [dashboardOpenTicketsCurrent, liveNow],
-  );
-  const dashboardSlaExpiredPrevious = useMemo(
-    () => dashboardOpenTicketsPrevious.filter((ticket) => isTicketSlaExpired(ticket, liveNow)),
-    [dashboardOpenTicketsPrevious, liveNow],
-  );
-  const dashboardUnassignedCount = useMemo(
-    () => dashboardOpenTicketsCurrent.filter((ticket) => !(ticket.asignadoA || '').trim()).length,
-    [dashboardOpenTicketsCurrent],
-  );
-  const dashboardInProcessCount = useMemo(
-    () => dashboardOpenTicketsCurrent.filter((ticket) => ticket.estado === 'En Proceso').length,
-    [dashboardOpenTicketsCurrent],
-  );
-  const dashboardRecentTickets = useMemo(
-    () => [...dashboardTicketsCurrent].sort((a, b) => ticketTimestamp(b) - ticketTimestamp(a)).slice(0, 5),
-    [dashboardTicketsCurrent],
-  );
-  const dashboardTopOwners = useMemo(() => {
-    const counts = new Map<string, number>();
-    dashboardOpenTicketsCurrent.forEach((ticket) => {
-      const assignee = String(ticket.asignadoA || '').trim();
-      if (!assignee) return;
-      counts.set(assignee, (counts.get(assignee) || 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-  }, [dashboardOpenTicketsCurrent]);
-  const dashboardStateBars = useMemo(
-    () => TICKET_STATES.map((state) => ({
-      label: state,
-      count: dashboardTicketsCurrent.filter((ticket) => ticket.estado === state).length,
-    })),
-    [dashboardTicketsCurrent],
-  );
-  const dashboardBranchBars = useMemo(() => {
-    const counts = new Map<string, number>();
-    dashboardTicketsCurrent.forEach((ticket) => {
-      const label = formatTicketBranchFromCatalog(ticket.sucursal);
-      counts.set(label, (counts.get(label) || 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [dashboardTicketsCurrent, formatTicketBranchFromCatalog]);
-  const dashboardAgingBars = useMemo(() => {
-    const buckets = [
-      { label: '0-4h', minHours: 0, maxHours: 4, count: 0 },
-      { label: '4-8h', minHours: 4, maxHours: 8, count: 0 },
-      { label: '8-24h', minHours: 8, maxHours: 24, count: 0 },
-      { label: '>24h', minHours: 24, maxHours: Number.POSITIVE_INFINITY, count: 0 },
-    ];
-    const nowMs = liveNow;
-    dashboardOpenTicketsCurrent.forEach((ticket) => {
-      const ageHours = Math.max(0, (nowMs - ticketCreatedTimestamp(ticket)) / (60 * 60 * 1000));
-      const target = buckets.find((bucket) => ageHours >= bucket.minHours && ageHours < bucket.maxHours);
-      if (target) target.count += 1;
-    });
-    return buckets;
-  }, [dashboardOpenTicketsCurrent, liveNow]);
-  const dashboardSlaTotalCount = dashboardTicketsCurrent.length;
-  const dashboardSlaExpiredCount = dashboardSlaExpiredCurrent.length;
-  const { dashboardSlaCompliantCount, dashboardSlaCompliancePct } = useMemo(() => {
-    const compliant = Math.max(0, dashboardSlaTotalCount - dashboardSlaExpiredCount);
-    const pct = dashboardSlaTotalCount > 0
-      ? Math.round((compliant / dashboardSlaTotalCount) * 100)
-      : 100;
-    return { dashboardSlaCompliantCount: compliant, dashboardSlaCompliancePct: pct };
-  }, [dashboardSlaTotalCount, dashboardSlaExpiredCount]);
-  const dashboardOpenTrend = useMemo(
-    () => formatDashboardTrend(dashboardOpenTicketsCurrent.length, dashboardOpenTicketsPrevious.length, false),
-    [dashboardOpenTicketsCurrent.length, dashboardOpenTicketsPrevious.length],
-  );
-  const dashboardCriticalTrend = useMemo(
-    () => formatDashboardTrend(dashboardCriticalTicketsCurrent.length, dashboardCriticalTicketsPrevious.length, false),
-    [dashboardCriticalTicketsCurrent.length, dashboardCriticalTicketsPrevious.length],
-  );
-  const dashboardSlaTrend = useMemo(
-    () => formatDashboardTrend(dashboardSlaExpiredCurrent.length, dashboardSlaExpiredPrevious.length, false),
-    [dashboardSlaExpiredCurrent.length, dashboardSlaExpiredPrevious.length],
-  );
-  const dashboardStateMax = useMemo(
-    () => Math.max(1, ...dashboardStateBars.map((item) => item.count)),
-    [dashboardStateBars],
-  );
-  const dashboardBranchMax = useMemo(
-    () => Math.max(1, ...dashboardBranchBars.map((item) => item.count)),
-    [dashboardBranchBars],
-  );
-  const dashboardOwnerMax = useMemo(
-    () => Math.max(1, ...dashboardTopOwners.map((item) => item[1])),
-    [dashboardTopOwners],
-  );
-  const dashboardAgingMax = useMemo(
-    () => Math.max(1, ...dashboardAgingBars.map((item) => item.count)),
-    [dashboardAgingBars],
-  );
+  const {
+    dashboardWindow,
+    dashboardOpenTicketsCurrent,
+    dashboardCriticalTicketsCurrent,
+    dashboardUnassignedCount,
+    dashboardInProcessCount,
+    dashboardRecentTickets,
+    dashboardTopOwners,
+    dashboardStateBars,
+    dashboardBranchBars,
+    dashboardAgingBars,
+    dashboardSlaTotalCount,
+    dashboardSlaExpiredCount,
+    dashboardSlaCompliantCount,
+    dashboardSlaCompliancePct,
+    dashboardOpenTrend,
+    dashboardCriticalTrend,
+    dashboardSlaTrend,
+    dashboardStateMax,
+    dashboardBranchMax,
+    dashboardOwnerMax,
+    dashboardAgingMax,
+  } = useDashboardMetrics({
+    scopedTickets,
+    dashboardRange,
+    liveNow,
+    isDashboardView,
+    formatTicketBranch: formatTicketBranchFromCatalog,
+  });
 
   const filteredTickets = useMemo(() => {
     const rows = scopedTickets.filter((ticket) => {
@@ -2678,7 +2449,6 @@ export default function App() {
       : 100,
     [activos],
   );
-  const defaultViewPath = getViewPath(defaultView);
   const protectedViewOptions = { canManageUsers, isRequesterOnlyUser, defaultViewPath };
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
@@ -2806,7 +2576,7 @@ export default function App() {
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">
           {isSyncing && (
-            <div className="max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-[#f4fce3] border border-[#d8f5a2] text-[#4a7f10] text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
+            <div className="max-w-7xl mx-auto mb-4 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-lime-50 border border-lime-200 text-lime-700 text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
               Sincronizando datos con backend...
             </div>
           )}

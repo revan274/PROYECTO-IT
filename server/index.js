@@ -55,7 +55,6 @@ import {
   normalizeUserRole,
   normalizeUserCargo,
   canEditByRole,
-  canCreateTicketsByRole,
   countActiveAdmins,
   // Travel helpers
   normalizeTravelAdjustmentMonth,
@@ -69,16 +68,10 @@ import {
   // SLA helpers
   calcDueDate,
   isSlaBreached,
-  slaRemainingMinutes,
   // Auth helpers
-  parseBearerToken,
-  createAuthToken,
-  getRequestIp,
-  getLoginAttemptKey,
   isDemoPasswordUser,
   // Audit helpers
   getRequestActor,
-  buildAuditPayload,
   pushAuditWithContext,
   normalizeAuditModuleFilter,
   normalizeAuditResultFilter,
@@ -199,6 +192,7 @@ function configureCommonMiddleware(app) {
       callback(new Error('Origen no permitido por CORS.'));
     },
     credentials: true,
+    exposedHeaders: ['ETag', 'X-Request-Id'],
   }));
   app.use('/api', rateLimit({
     windowMs: 60 * 1000,
@@ -324,7 +318,9 @@ function summarizeAssetRisks(activos) {
 
 function stripSensitiveAssetFields(asset, role) {
   void role;
-  const { passwordRemota, pass, ...safe } = asset;
+  const safe = { ...asset };
+  delete safe.passwordRemota;
+  delete safe.pass;
   return safe;
 }
 
@@ -670,6 +666,20 @@ function importAssets(db, options) {
 
 // --- Route registration ---
 
+function buildBootstrapEtag(req) {
+  const version = Math.max(0, Math.trunc(Number(req.appDbVersion) || 0));
+  const userId = Math.max(0, Math.trunc(Number(req.authUser?.id) || 0));
+  const role = asNonEmptyString(req.authUser?.rol).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  return `W/"mesa-it-bootstrap-v2-${version}-${userId}-${role || 'unknown'}"`;
+}
+
+function requestAcceptsEtag(req, etag) {
+  return String(req.headers['if-none-match'] || '')
+    .split(',')
+    .map((value) => value.trim())
+    .includes(etag);
+}
+
 function registerRoutes(app, authRuntime) {
   const {
     clearLoginFailures,
@@ -793,7 +803,7 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
       });
       return res.status(400).json({ error: 'Usuario y password son requeridos.' });
     }
-    const throttle = getLoginThrottle(req, username);
+    const throttle = await getLoginThrottle(req, username);
     if (throttle) {
       await writeSecurityAudit(req, {
         accion: 'Login Bloqueado',
@@ -819,7 +829,7 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
     );
 
     if (!user) {
-      const failed = registerLoginFailure(req, username);
+      const failed = await registerLoginFailure(req, username);
       if (failed.locked) {
         await writeSecurityAudit(req, {
           accion: 'Login Bloqueado',
@@ -876,8 +886,8 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
       });
     }
 
-    clearLoginFailures(req, username);
-    const token = registerSession(user);
+    await clearLoginFailures(req, username);
+    const token = await registerSession(user);
     await writeSecurityAudit(req, {
       accion: 'Login Exitoso',
       item: user.username,
@@ -902,7 +912,7 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
 app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
   try {
     const actor = getRequestActor(req);
-    destroySession(req.authToken);
+    await destroySession(req.authToken);
     await writeSecurityAudit(req, {
       accion: 'Logout',
       item: actor.username || actor.usuario || 'N/A',
@@ -921,7 +931,15 @@ app.post('/api/auth/logout', requireAuth, async (req, res, next) => {
 
 app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const etag = buildBootstrapEtag(req);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, no-cache, max-age=0');
+    res.vary('Authorization');
+    if (requestAcceptsEtag(req, etag)) {
+      return res.status(304).end();
+    }
+
+    const db = req.appDb || await readDb();
     const rol = req.authUser?.rol || '';
     const requesterOnly = rol === 'solicitante';
     const users = buildBootstrapUsers(db.users, rol);
@@ -941,7 +959,10 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
       ticketStates: TICKET_STATES,
       slaPolicyHours: SLA_HOURS,
       travelAdjustments: requesterOnly ? [] : (Array.isArray(db.travelAdjustments) ? db.travelAdjustments.map(serializeTravelAdjustment).filter(Boolean) : []),
-      meta: { generatedAt: new Date().toISOString() },
+      meta: {
+        generatedAt: new Date().toISOString(),
+        revision: Math.max(0, Math.trunc(Number(req.appDbVersion) || Number(db.meta?.revision) || 0)),
+      },
     });
   } catch (error) {
     next(error);

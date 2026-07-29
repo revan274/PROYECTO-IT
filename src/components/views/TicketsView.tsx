@@ -3,8 +3,9 @@ import { Ticket, Trash2 } from 'lucide-react';
 import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import { ticketRequiresTravel } from '../../utils/tickets';
+import { isTicketClosed, ticketRequiresTravel } from '../../utils/tickets';
 import type {
   CatalogBranch,
   FormDataState,
@@ -169,34 +170,34 @@ export function TicketsView({
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <button
+        <Button variant="plain" size="bare"
           onClick={() => onApplyTicketFocus('ABIERTOS')}
-          className="rounded-2xl border border-slate-100 bg-white px-5 py-4 text-left shadow-sm hover:border-slate-200"
+          className="flex-col items-stretch rounded-2xl border border-slate-100 bg-white px-5 py-4 text-left shadow-sm hover:border-slate-200"
         >
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Abiertos</p>
-          <p className="text-2xl font-black text-[#F58220] sm:text-3xl">{openTicketsCount}</p>
-        </button>
-        <button
+          <p className="text-2xl font-black text-brand sm:text-3xl">{openTicketsCount}</p>
+        </Button>
+        <Button variant="plain" size="bare"
           onClick={() => onApplyTicketFocus('CRITICA')}
-          className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-left shadow-sm hover:border-amber-200"
+          className="flex-col items-stretch rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-left shadow-sm hover:border-amber-200"
         >
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Críticos</p>
           <p className="text-2xl font-black text-amber-700 sm:text-3xl">{criticalTicketsCount}</p>
-        </button>
-        <button
+        </Button>
+        <Button variant="plain" size="bare"
           onClick={() => onApplyTicketFocus('SIN_ASIGNAR')}
-          className="rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-left shadow-sm hover:border-indigo-200"
+          className="flex-col items-stretch rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-left shadow-sm hover:border-indigo-200"
         >
           <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Sin asignar</p>
           <p className="text-2xl font-black text-indigo-700 sm:text-3xl">{unassignedTicketsCount}</p>
-        </button>
-        <button
+        </Button>
+        <Button variant="plain" size="bare"
           onClick={() => onApplyTicketFocus('SLA')}
-          className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-left shadow-sm hover:border-red-200"
+          className="flex-col items-stretch rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-left shadow-sm hover:border-red-200"
         >
           <p className="text-[10px] font-black uppercase tracking-widest text-red-500">SLA vencido</p>
           <p className="text-2xl font-black text-red-600 sm:text-3xl">{slaExpiredCount}</p>
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
@@ -270,7 +271,7 @@ export function TicketsView({
           >
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="flex min-w-0 items-start gap-4 sm:gap-6">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-orange-50 text-[#F58220] sm:h-16 sm:w-16">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-orange-50 text-brand sm:h-16 sm:w-16">
                   <Ticket size={28} />
                 </div>
                 <div className="min-w-0">
@@ -333,12 +334,13 @@ export function TicketsView({
                     <option key={type} value={type}>{formatTicketAttentionType(type)}</option>
                   ))}
                 </Select>
-                <label className="flex min-w-[12rem] items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                <label htmlFor={`ticket-travel-${ticket.id}`} className="flex min-w-[12rem] items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3">
                   <span className="text-[10px] font-black uppercase text-slate-500">
                     Se ocupo traslado
                   </span>
                   <span className="relative inline-flex h-6 w-11 shrink-0">
-                    <input
+                    <Input variant="plain"
+                      id={`ticket-travel-${ticket.id}`}
                       type="checkbox"
                       disabled={!canEdit}
                       checked={ticketRequiresTravel(ticket)}
@@ -362,21 +364,21 @@ export function TicketsView({
                       <option key={user.id} value={user.nombre}>{user.nombre}</option>
                     ))}
                 </Select>
-                <button
+                <Button variant="plain" size="bare"
                   onClick={() => onViewAsset(ticket.activoTag)}
                   className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
                 >
                   Ver activo
-                </button>
-                <button
-                  disabled={!canEdit || ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado'}
+                </Button>
+                <Button variant="success" size="bare"
+                  disabled={!canEdit || isTicketClosed(ticket)}
                   onClick={() => onResolveTicket(ticket.id)}
-                  className="rounded-2xl bg-[#8CC63F] px-6 py-4 text-[10px] font-black uppercase text-white disabled:opacity-50"
+                  className="rounded-2xl bg-brand-green px-6 py-4 text-[10px] font-black uppercase text-white disabled:opacity-50"
                 >
                   Resolver
-                </button>
+                </Button>
                 {(canEdit || canRequesterDelete) && (
-                  <button
+                  <Button variant="plain" size="bare"
                     type="button"
                     disabled={!canDeleteTicket(ticket)}
                     onClick={() => onDeleteTicket(ticket.id)}
@@ -384,7 +386,7 @@ export function TicketsView({
                   >
                     <Trash2 size={14} />
                     Eliminar
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -397,7 +399,7 @@ export function TicketsView({
                   </p>
                   <label className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wider ${canCreateTickets ? 'cursor-pointer border-slate-200 bg-white text-slate-600 hover:bg-slate-50' : 'cursor-not-allowed border-slate-100 bg-slate-100 text-slate-400'}`}>
                     {ticketAttachmentLoadingId === ticket.id ? 'Subiendo...' : 'Adjuntar archivo'}
-                    <input
+                    <Input variant="plain"
                       type="file"
                       disabled={!canCreateTickets || ticketAttachmentLoadingId === ticket.id}
                       className="hidden"
@@ -421,21 +423,21 @@ export function TicketsView({
                         </p>
                       </div>
                       <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
+                        <Button variant="plain" size="bare"
                           type="button"
                           onClick={() => onDownloadAttachment(ticket.id, attachment)}
                           className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50"
                         >
                           Descargar
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="plain" size="bare"
                           type="button"
                           disabled={!canEdit}
                           onClick={() => onDeleteAttachment(ticket.id, attachment)}
                           className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-black uppercase text-red-600 hover:bg-red-100 disabled:opacity-40"
                         >
                           Eliminar
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -450,7 +452,7 @@ export function TicketsView({
               <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
+                  <Input variant="plain"
                     type="text"
                     value={ticketCommentDrafts[ticket.id] || ''}
                     disabled={!canCreateComments}
@@ -464,14 +466,14 @@ export function TicketsView({
                     placeholder="Agregar comentario..."
                     className="flex-1 rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs font-bold text-slate-600 outline-none disabled:opacity-50"
                   />
-                  <button
+                  <Button variant="plain" size="bare"
                     type="button"
                     disabled={!canCreateComments}
                     onClick={() => onSaveComment(ticket.id)}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                   >
                     Guardar
-                  </button>
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   {historyWithComment.map((entry, index) => (

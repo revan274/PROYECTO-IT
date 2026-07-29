@@ -7,16 +7,18 @@ import {
   canEditByRole as roleCanEdit,
   normalizeKnownUserRole,
 } from '../domain/roles.js';
+import {
+  CLOSED_TICKET_STATES,
+  SLA_POLICY_HOURS,
+  TICKET_STATES,
+} from '../../shared/ticket-rules.js';
 
 export { DEFAULT_ROLE_CATALOG, USER_ROLES };
+export { TICKET_STATES };
 
 // --- Domain constants ---
 
-export const SLA_HOURS = {
-  MEDIA: 24,
-  ALTA: 8,
-  CRITICA: 2,
-};
+export const SLA_HOURS = SLA_POLICY_HOURS;
 
 export const DEFAULT_CARGO_CATALOG = [
   'Coordinador de Sistemas',
@@ -37,8 +39,7 @@ export const DEFAULT_BRANCH_CATALOG = [
 
 export const DEFAULT_BRANCH_CODES = new Set(DEFAULT_BRANCH_CATALOG.map((branch) => branch.code));
 
-export const TICKET_STATES = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
-export const CLOSED_STATES = new Set(['Resuelto', 'Cerrado']);
+export const CLOSED_STATES = new Set(CLOSED_TICKET_STATES);
 
 export const AUDIT_MODULES = new Set(['activos', 'insumos', 'tickets', 'otros']);
 export const AUDIT_RESULTS = new Set(['ok', 'error']);
@@ -620,6 +621,7 @@ export function roleIsEnabledByCatalog(db, roleValue) {
 
 export function sanitizeUploadFileName(fileName) {
   const base = asNonEmptyString(fileName) || 'archivo';
+  // eslint-disable-next-line no-control-regex -- Los controles ASCII no son seguros en nombres de archivo.
   const normalized = base.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, ' ').trim();
   return normalized.slice(0, 150) || 'archivo';
 }

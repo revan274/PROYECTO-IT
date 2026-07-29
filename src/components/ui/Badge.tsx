@@ -1,15 +1,14 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes } from 'react';
 import { normalizeForCompare } from '../../utils/format';
 
-interface BadgeProps {
-  children: ReactNode;
+export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: string;
 }
 
-export function Badge({ children, variant }: BadgeProps) {
+export function Badge({ children, variant, className, ...rest }: BadgeProps) {
   const styles: Record<string, string> = {
     critica: 'bg-orange-100 text-orange-700 border-orange-200',
-    operativo: 'bg-[#f4fce3] text-[#4a7f10] border-[#d8f5a2]',
+    operativo: 'bg-lime-50 text-lime-700 border-lime-200',
     falla: 'bg-red-50 text-red-700 border-red-100',
     abierto: 'bg-blue-50 text-blue-700 border-blue-100',
     'en proceso': 'bg-indigo-50 text-indigo-700 border-indigo-100',
@@ -57,7 +56,14 @@ export function Badge({ children, variant }: BadgeProps) {
   }
 
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${style}`}>
+    <span
+      className={[
+        'px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider',
+        style,
+        className,
+      ].filter(Boolean).join(' ')}
+      {...rest}
+    >
       {children}
     </span>
   );

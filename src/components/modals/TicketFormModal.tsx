@@ -1,7 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import { Save } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
+import { TextArea } from '../ui/TextArea';
 import { SLA_POLICY, TICKET_AREA_OPTIONS, TICKET_ATTENTION_TYPES, TICKET_STATES } from '../../constants/app';
+import { isClosedTicketState } from '../../../shared/ticket-rules.js';
 import type {
   CatalogBranch,
   FormDataState,
@@ -11,8 +15,6 @@ import type {
   UserSession,
 } from '../../types/app';
 import { ModalLayout } from './ModalLayout';
-
-const CLOSED_TICKET_STATES: TicketEstado[] = ['Resuelto', 'Cerrado'];
 
 function toDateTimeLocalMax(): string {
   const now = new Date();
@@ -94,13 +96,18 @@ export function TicketFormModal({
   const isAdmin = sessionUser?.rol === 'admin';
   const isHistorical = isAdmin && !!formData.esHistorico;
   const historicalEstado = formData.estadoHistorico || 'Cerrado';
-  const historicalIsClosed = CLOSED_TICKET_STATES.includes(historicalEstado);
+  const historicalIsClosed = isClosedTicketState(historicalEstado);
   const dateTimeMax = useMemo(() => toDateTimeLocalMax(), []);
+  const travelRequiredId = useId();
+  const historicalToggleId = useId();
+  const historicalCreatedAtId = useId();
+  const historicalStateId = useId();
+  const historicalClosedAtId = useId();
 
   return (
     <ModalLayout isOpen={isOpen} title={title} onClose={onClose} isBusy={isSaving}>
       <form onSubmit={onSubmit} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
-        <select
+        <Select variant="plain"
           required
           className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
           value={formData.sucursal || ''}
@@ -113,8 +120,8 @@ export function TicketFormModal({
               <option key={branch.code} value={branch.code}>{branch.code} - {branch.name}</option>
             ))
           )}
-        </select>
-        <select
+        </Select>
+        <Select variant="plain"
           required
           disabled={!formData.sucursal || ticketAssetOptions.length === 0}
           className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
@@ -133,7 +140,7 @@ export function TicketFormModal({
               {assetOption.label}
             </option>
           ))}
-        </select>
+        </Select>
         <p className="text-[10px] text-slate-400 font-black uppercase">
           Activos en sucursal seleccionada: {ticketAssetOptions.length}
         </p>
@@ -152,7 +159,7 @@ export function TicketFormModal({
             )}
           </div>
         )}
-        <select
+        <Select variant="plain"
           required
           value={formData.areaAfectada || ''}
           onChange={(e) => onChange({ areaAfectada: e.target.value, fallaComun: '' })}
@@ -162,10 +169,10 @@ export function TicketFormModal({
           {TICKET_AREA_OPTIONS.map((area) => (
             <option key={`afe-${area}`} value={area}>{area}</option>
           ))}
-        </select>
+        </Select>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
           {canEdit && (
-            <select
+            <Select variant="plain"
               required
               value={formData.atencionTipo || ''}
               onChange={(e) => {
@@ -187,10 +194,10 @@ export function TicketFormModal({
               {TICKET_ATTENTION_TYPES.map((type) => (
                 <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
               ))}
-            </select>
+            </Select>
           )}
           {canEdit && (
-            <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+            <label htmlFor={travelRequiredId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Traslado
@@ -200,7 +207,8 @@ export function TicketFormModal({
                 </p>
               </div>
               <span className="relative inline-flex h-7 w-12 shrink-0">
-                <input
+                <Input variant="plain"
+                  id={travelRequiredId}
                   type="checkbox"
                   checked={!!formData.trasladoRequerido}
                   onChange={(e) => onChange({ trasladoRequerido: e.target.checked })}
@@ -212,7 +220,7 @@ export function TicketFormModal({
             </label>
           )}
         </div>
-        <textarea
+        <TextArea variant="plain"
           required
           placeholder="DESCRIPCION DE LA FALLA"
           value={formData.descripcion || ''}
@@ -223,7 +231,7 @@ export function TicketFormModal({
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Falla sugerida por sucursal y lugar
           </p>
-          <select
+          <Select variant="plain"
             value={formData.fallaComun || ''}
             disabled={issueOptionsForSelectedArea.length === 0}
             onChange={(e) =>
@@ -246,10 +254,10 @@ export function TicketFormModal({
             {issueOptionsForSelectedArea.map((issue) => (
               <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
-        <select
+        <Select variant="plain"
           className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
           value={formData.prioridad || 'MEDIA'}
           onChange={(e) => onChange({ prioridad: e.target.value as PrioridadTicket })}
@@ -257,9 +265,9 @@ export function TicketFormModal({
           <option value="MEDIA">Media</option>
           <option value="ALTA">Alta</option>
           <option value="CRITICA">Critica</option>
-        </select>
+        </Select>
         {canEdit ? (
-          <select
+          <Select variant="plain"
             className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
             value={formData.asignadoA || ''}
             onChange={(e) => onChange({ asignadoA: e.target.value })}
@@ -268,19 +276,19 @@ export function TicketFormModal({
             {assignableUsers.map((user) => (
               <option key={user.id} value={user.nombre}>{user.nombre}</option>
             ))}
-          </select>
+          </Select>
         ) : (
           <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
             El ticket se registrará sin asignación inicial.
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
+          <Input variant="plain"
             disabled
             value={sessionUser?.nombre || ''}
             className="w-full p-4 bg-slate-100 glass-input rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
           />
-          <input
+          <Input variant="plain"
             disabled
             value={formatTicketBranchFromCatalog(formData.sucursal)}
             className="w-full p-4 bg-slate-100 glass-input rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
@@ -295,7 +303,7 @@ export function TicketFormModal({
 
         {isAdmin && (
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
-            <label className="flex items-center justify-between gap-3">
+            <label htmlFor={historicalToggleId} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
                   Registro retroactivo
@@ -305,7 +313,8 @@ export function TicketFormModal({
                 </p>
               </div>
               <span className="relative inline-flex h-7 w-12 shrink-0">
-                <input
+                <Input variant="plain"
+                  id={historicalToggleId}
                   type="checkbox"
                   checked={!!formData.esHistorico}
                   onChange={(e) =>
@@ -326,10 +335,11 @@ export function TicketFormModal({
             {isHistorical && (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <label htmlFor={historicalCreatedAtId} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Fecha de creación (pasada)
                   </label>
-                  <input
+                  <Input variant="plain"
+                    id={historicalCreatedAtId}
                     type="datetime-local"
                     required
                     max={dateTimeMax}
@@ -339,10 +349,11 @@ export function TicketFormModal({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <label htmlFor={historicalStateId} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Estado final
                   </label>
-                  <select
+                  <Select variant="plain"
+                    id={historicalStateId}
                     value={historicalEstado}
                     onChange={(e) => onChange({ estadoHistorico: e.target.value as TicketEstado })}
                     className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-100"
@@ -350,14 +361,15 @@ export function TicketFormModal({
                     {TICKET_STATES.map((state) => (
                       <option key={`hist-estado-${state}`} value={state}>{state}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 {historicalIsClosed && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <label htmlFor={historicalClosedAtId} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Fecha de cierre
                     </label>
-                    <input
+                    <Input variant="plain"
+                      id={historicalClosedAtId}
                       type="datetime-local"
                       required
                       max={dateTimeMax}
@@ -368,7 +380,7 @@ export function TicketFormModal({
                     />
                   </div>
                 )}
-                <textarea
+                <TextArea variant="plain"
                   placeholder="RESOLUCIÓN / COMENTARIO (OPCIONAL)"
                   value={formData.resolucionHistorica || ''}
                   onChange={(e) => onChange({ resolucionHistorica: e.target.value })}

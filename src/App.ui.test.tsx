@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -82,6 +82,7 @@ function installFetchMock(routes: Array<{
       ? match.response(input, init)
       : match.response;
 
+    if (body instanceof Response) return body;
     return createJsonResponse(body, match.status);
   });
 
@@ -287,7 +288,23 @@ describe('App UI flow', () => {
       {
         method: 'GET',
         path: '/api/bootstrap',
-        response: buildAdminBootstrap(),
+        response: (_input: string | URL | Request, init?: RequestInit) => {
+          const headers = new Headers(init?.headers);
+          const etag = 'W/"mesa-it-bootstrap-v2-10-501-admin"';
+          if (headers.get('If-None-Match') === etag) {
+            return new Response(null, {
+              status: 304,
+              headers: { ETag: etag },
+            });
+          }
+          return new Response(JSON.stringify(buildAdminBootstrap()), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ETag: etag,
+            },
+          });
+        },
       },
     ]);
 
@@ -310,6 +327,18 @@ describe('App UI flow', () => {
     expect(bootstrapCall).toBeTruthy();
     const bootstrapHeaders = new Headers(bootstrapCall?.[1]?.headers);
     expect(bootstrapHeaders.get('Authorization')).toBe('Bearer token-admin-ui');
+
+    await act(async () => {
+      await useAppStore.getState().refreshAppData?.({ silent: true });
+    });
+    const bootstrapCalls = fetchMock.mock.calls.filter(
+      ([input]) => getRequestPath(input) === '/api/bootstrap',
+    );
+    expect(bootstrapCalls.length).toBeGreaterThanOrEqual(2);
+    const conditionalCall = bootstrapCalls.at(-1);
+    const conditionalHeaders = new Headers(conditionalCall?.[1]?.headers);
+    expect(conditionalHeaders.get('If-None-Match')).toBe('W/"mesa-it-bootstrap-v2-10-501-admin"');
+    expect(useAppStore.getState().tickets).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
 

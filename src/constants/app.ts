@@ -21,6 +21,10 @@ import type {
   UserRole,
   Insumo,
 } from '../types/app';
+import {
+  SLA_POLICY_HOURS,
+  TICKET_STATES as SHARED_TICKET_STATES,
+} from '../../shared/ticket-rules.js';
 export const INVENTARIO_ACTIVOS_INICIAL: Activo[] = [
   { id: 1, tag: 'POS-001', tipo: 'POS', marca: 'IBM SurePOS', ubicacion: 'Caja Rápida 1', estado: 'Operativo', serial: 'SN-99201', fechaCompra: '2022-01-15' },
   { id: 2, tag: 'POS-002', tipo: 'POS', marca: 'IBM SurePOS', ubicacion: 'Caja Rápida 2', estado: 'Operativo', serial: 'SN-99202', fechaCompra: '2022-01-15' },
@@ -66,7 +70,7 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const CATEGORIAS_INSUMO = ['REDES', 'CONSUMIBLES', 'HARDWARE', 'PERIFERICOS'] as const;
 export const SUPPLY_UNIT_OPTIONS = ['Piezas', 'Rollos', 'Metros', 'Cajas', 'Litros'] as const;
-export const TICKET_STATES: TicketEstado[] = ['Abierto', 'En Proceso', 'En Espera', 'Resuelto', 'Cerrado'];
+export const TICKET_STATES: TicketEstado[] = [...SHARED_TICKET_STATES];
 export const TICKET_ATTENTION_TYPES: TicketAttentionType[] = [
   'PRESENCIAL',
   'PRESENCIAL_FUERA_DE_HORARIO',
@@ -79,11 +83,7 @@ export const DASHBOARD_RANGES: Array<{ value: DashboardRange; label: string; day
   { value: '30D', label: '30 días', days: 30 },
   { value: '90D', label: '90 días', days: 90 },
 ];
-export const SLA_POLICY: Record<PrioridadTicket, number> = {
-  MEDIA: 24,
-  ALTA: 8,
-  CRITICA: 2,
-};
+export const SLA_POLICY: Record<PrioridadTicket, number> = { ...SLA_POLICY_HOURS };
 export const TICKET_BRANCHES = [
   { code: 'TJ01', name: 'Sucursal Estrella' },
   { code: 'TC01', name: 'Sucursal Camargo' },

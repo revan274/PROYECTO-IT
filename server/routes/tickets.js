@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { readDb, updateDb, now, nextId } from '../store.js';
+import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
 
 export function createTicketsRouter({
   requireAuth,
@@ -40,7 +41,6 @@ export function createTicketsRouter({
   paginateList,
 }) {
   const router = express.Router();
-  const ACTIVE_ASSET_TICKET_STATES = new Set(['Abierto', 'En Proceso']);
   const SAFE_DOWNLOAD_MIME_TYPES = new Set([
     'application/pdf',
     'image/png',
@@ -52,6 +52,98 @@ export function createTicketsRouter({
     'application/octet-stream',
   ]);
 
+  function normalizeSupplyUsageInput(items, { allowZero = false } = {}) {
+    const normalized = [];
+    const seenIds = new Set();
+
+    for (const item of items) {
+      const insumoId = toInt(item?.insumoId);
+      const cantidad = toInt(item?.cantidad);
+      const minimumQuantity = allowZero ? 0 : 1;
+
+      if (insumoId === null || insumoId <= 0 || cantidad === null || cantidad < minimumQuantity) {
+        return { ok: false, code: 'INVALID_SUPPLY_USAGE' };
+      }
+      if (seenIds.has(insumoId)) {
+        return { ok: false, code: 'DUPLICATE_SUPPLY_USAGE', insumoId };
+      }
+
+      seenIds.add(insumoId);
+      normalized.push({ insumoId, cantidad });
+    }
+
+    return { ok: true, items: normalized };
+  }
+
+  function prepareSupplyUsage(db, requestedItems, currentItems = []) {
+    const currentById = new Map();
+    for (const item of currentItems) {
+      const insumoId = toInt(item?.insumoId);
+      const cantidad = toInt(item?.cantidad);
+      if (insumoId === null || insumoId <= 0 || cantidad === null || cantidad < 0) continue;
+
+      const existing = currentById.get(insumoId);
+      currentById.set(insumoId, {
+        insumoId,
+        cantidad: (existing?.cantidad || 0) + cantidad,
+        nombre: asNonEmptyString(item?.nombre || existing?.nombre),
+      });
+    }
+
+    const operations = [];
+    for (const requested of requestedItems) {
+      const supply = db.insumos.find((item) => Number(item.id) === requested.insumoId);
+      if (!supply) {
+        return { ok: false, code: 'SUPPLY_NOT_FOUND', insumoId: requested.insumoId };
+      }
+
+      const previousQuantity = currentById.get(requested.insumoId)?.cantidad || 0;
+      const stockDelta = requested.cantidad - previousQuantity;
+      if (supply.activo === false && stockDelta > 0) {
+        return { ok: false, code: 'SUPPLY_INACTIVE', insumoId: requested.insumoId };
+      }
+
+      const availableStock = Math.max(0, toInt(supply.stock) || 0);
+      if (stockDelta > availableStock) {
+        return {
+          ok: false,
+          code: 'INSUFFICIENT_STOCK',
+          insumoId: requested.insumoId,
+          requested: stockDelta,
+          available: availableStock,
+        };
+      }
+
+      currentById.set(requested.insumoId, {
+        insumoId: requested.insumoId,
+        cantidad: requested.cantidad,
+        nombre: asNonEmptyString(supply.nombre),
+      });
+      operations.push({ supply, stockDelta });
+    }
+
+    return {
+      ok: true,
+      items: Array.from(currentById.values()),
+      operations,
+    };
+  }
+
+  function sendSupplyUsageError(res, result) {
+    if (result?.code === 'SUPPLY_NOT_FOUND') {
+      return res.status(400).json({ error: `El insumo ${result.insumoId} no existe.` });
+    }
+    if (result?.code === 'SUPPLY_INACTIVE') {
+      return res.status(409).json({ error: `El insumo ${result.insumoId} está dado de baja.` });
+    }
+    if (result?.code === 'INSUFFICIENT_STOCK') {
+      return res.status(409).json({
+        error: `Stock insuficiente para el insumo ${result.insumoId}. Disponible: ${result.available}.`,
+      });
+    }
+    return null;
+  }
+
   function syncAssetOperationalState(db, activoTag) {
     const tagKey = normalizeTextKey(activoTag);
     if (!tagKey) return;
@@ -61,7 +153,7 @@ export function createTicketsRouter({
 
     const hasRelatedOpenTickets = db.tickets.some((item) => (
       normalizeTextKey(item?.activoTag) === tagKey
-      && ACTIVE_ASSET_TICKET_STATES.has(item.estado)
+      && keepsAssetInFailureState(item.estado)
     ));
     activo.estado = hasRelatedOpenTickets ? 'Falla' : 'Operativo';
   }
@@ -77,12 +169,16 @@ router.post('/', requireAuth, async (req, res, next) => {
     const atencionTipo = isEditorRole ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const hasTrasladoField = isEditorRole && req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
-    const insumosUsados = isEditorRole && Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
+    const hasSupplyUsage = req.body?.insumosUsados !== undefined;
+    const rawSupplyUsage = isEditorRole && Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
     const asignadoA = isEditorRole ? asNonEmptyString(req.body?.asignadoA) : '';
     const { usuario, departamento } = getRequestActor(req);
 
     if (!isEditorRole && Array.isArray(req.body?.insumosUsados) && req.body.insumosUsados.length > 0) {
       return res.status(403).json({ error: 'No autorizado para registrar consumo de insumos.' });
+    }
+    if (isEditorRole && hasSupplyUsage && !Array.isArray(req.body?.insumosUsados)) {
+      return res.status(400).json({ error: 'insumosUsados debe ser una lista.' });
     }
     if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (isEditorRole && !atencionTipo)) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
@@ -90,12 +186,12 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (hasTrasladoField && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no válido.' });
     }
-    for (const item of insumosUsados) {
-      const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
-      const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
-      if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad <= 0) {
-        return res.status(400).json({ error: 'Insumo inválido en insumosUsados.' });
-      }
+    const parsedSupplyUsage = normalizeSupplyUsageInput(rawSupplyUsage);
+    if (!parsedSupplyUsage.ok) {
+      const message = parsedSupplyUsage.code === 'DUPLICATE_SUPPLY_USAGE'
+        ? `El insumo ${parsedSupplyUsage.insumoId} está repetido en insumosUsados.`
+        : 'Insumo inválido en insumosUsados.';
+      return res.status(400).json({ error: message });
     }
 
     const created = await updateDb((db) => {
@@ -107,11 +203,16 @@ router.post('/', requireAuth, async (req, res, next) => {
         assignedUser = findTicketAssignee(db.users, asignadoA);
         if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
       }
+      const asset = db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag));
+      if (!asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
+
+      const supplyUsage = prepareSupplyUsage(db, parsedSupplyUsage.items);
+      if (!supplyUsage.ok) return supplyUsage;
 
       const createdAtIso = new Date().toISOString();
       const ticket = {
         id: nextId(db),
-        activoTag,
+        activoTag: asset.tag,
         descripcion,
         sucursal,
         prioridad,
@@ -126,7 +227,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         solicitadoPorId: Number(req.authUser?.id) || null,
         solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
         departamento,
-        insumosUsados,
+        insumosUsados: supplyUsage.items,
         attachments: [],
         historial: [
           {
@@ -140,15 +241,14 @@ router.post('/', requireAuth, async (req, res, next) => {
       };
       db.tickets.push(ticket);
 
-      if (Array.isArray(insumosUsados) && insumosUsados.length > 0) {
-        for (const item of insumosUsados) {
-          const supply = db.insumos.find(s => s.id === item.insumoId);
-          if (supply && supply.activo) {
-            supply.stock = Math.max(0, supply.stock - item.cantidad);
+      if (supplyUsage.operations.length > 0) {
+        for (const { supply, stockDelta } of supplyUsage.operations) {
+          if (stockDelta > 0) {
+            supply.stock -= stockDelta;
             pushAuditWithContext(db, req, {
               accion: 'Salida (Ticket)',
               item: supply.nombre,
-              cantidad: item.cantidad,
+              cantidad: stockDelta,
               usuario,
               modulo: 'insumos',
               entidad: 'insumo',
@@ -163,8 +263,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       // Solo roles editores (técnico/admin) pueden derivar el estado operativo del activo
       // desde un ticket; un solicitante no debe poder marcar activos como "Falla".
       if (prioridad === 'CRITICA' && isEditorRole) {
-        const activo = db.activos.find((a) => normalizeTextKey(a.tag) === normalizeTextKey(activoTag));
-        if (activo) activo.estado = 'Falla';
+        asset.estado = 'Falla';
       }
 
       pushAuditWithContext(db, req, {
@@ -186,6 +285,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!created?.ok && created?.code === 'INVALID_BRANCH') {
       return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
     }
+    if (!created?.ok && created?.code === 'ASSET_NOT_FOUND') {
+      return res.status(400).json({ error: 'El activo indicado no existe.' });
+    }
+    if (!created?.ok && sendSupplyUsageError(res, created)) return;
     if (!created?.ok) {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
     }
@@ -265,6 +368,8 @@ router.post('/historical', requireAuth, async (req, res, next) => {
         assignedUser = findTicketAssignee(db.users, asignadoA);
         if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
       }
+      const asset = db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag));
+      if (!asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
 
       const historial = [
         {
@@ -287,7 +392,7 @@ router.post('/historical', requireAuth, async (req, res, next) => {
 
       const ticket = {
         id: nextId(db),
-        activoTag,
+        activoTag: asset.tag,
         descripcion,
         sucursal,
         prioridad,
@@ -312,7 +417,7 @@ router.post('/historical', requireAuth, async (req, res, next) => {
 
       // Solo recalculamos el estado del activo si el ticket histórico queda activo;
       // un histórico cerrado no debe sobrescribir el estado operativo actual del activo.
-      if (ACTIVE_ASSET_TICKET_STATES.has(estado)) {
+      if (keepsAssetInFailureState(estado)) {
         syncAssetOperationalState(db, activoTag);
       }
 
@@ -335,6 +440,9 @@ router.post('/historical', requireAuth, async (req, res, next) => {
     if (!created?.ok && created?.code === 'INVALID_BRANCH') {
       return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
     }
+    if (!created?.ok && created?.code === 'ASSET_NOT_FOUND') {
+      return res.status(400).json({ error: 'El activo indicado no existe.' });
+    }
     if (!created?.ok) {
       return res.status(500).json({ error: 'No se pudo registrar el ticket histórico.' });
     }
@@ -356,7 +464,13 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const hasTrasladoUpdate = req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoUpdate ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
     const hasInsumosUpdate = req.body?.insumosUsados !== undefined;
-    const insumosUsados = Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
+    if (hasInsumosUpdate && !Array.isArray(req.body?.insumosUsados)) {
+      return res.status(400).json({ error: 'insumosUsados debe ser una lista.' });
+    }
+    const parsedSupplyUsage = normalizeSupplyUsageInput(
+      Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [],
+      { allowZero: true },
+    );
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
 
@@ -373,14 +487,11 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (hasTrasladoUpdate && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no válido.' });
     }
-    if (hasInsumosUpdate) {
-      for (const item of insumosUsados) {
-        const itemId = Number.isFinite(Number(item?.insumoId)) ? Math.trunc(Number(item.insumoId)) : null;
-        const itemCantidad = Number.isFinite(Number(item?.cantidad)) ? Math.trunc(Number(item.cantidad)) : null;
-        if (!itemId || itemId <= 0 || itemCantidad === null || itemCantidad < 0) {
-          return res.status(400).json({ error: 'Insumo inválido en insumosUsados.' });
-        }
-      }
+    if (!parsedSupplyUsage.ok) {
+      const message = parsedSupplyUsage.code === 'DUPLICATE_SUPPLY_USAGE'
+        ? `El insumo ${parsedSupplyUsage.insumoId} está repetido en insumosUsados.`
+        : 'Insumo inválido en insumosUsados.';
+      return res.status(400).json({ error: message });
     }
 
     const updated = await updateDb((db) => {
@@ -397,6 +508,11 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           nextAssignee = assignedUser.nombre;
         }
       }
+
+      const supplyUsage = hasInsumosUpdate
+        ? prepareSupplyUsage(db, parsedSupplyUsage.items, ticket.insumosUsados)
+        : null;
+      if (supplyUsage && !supplyUsage.ok) return supplyUsage;
 
       const previousState = ticket.estado;
       const previousAttentionType = normalizeTicketAttentionType(ticket.atencionTipo);
@@ -486,49 +602,22 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       }
 
       if (hasInsumosUpdate) {
-        const currentInsumos = Array.isArray(ticket.insumosUsados) ? ticket.insumosUsados : [];
-        for (const item of insumosUsados) {
-          const exists = currentInsumos.find(i => i.insumoId === item.insumoId);
-          if (!exists) {
-            currentInsumos.push(item);
-            const supply = db.insumos.find(s => s.id === item.insumoId);
-            if (supply && supply.activo) {
-              supply.stock = Math.max(0, supply.stock - item.cantidad);
-              pushAuditWithContext(db, req, {
-                accion: 'Salida (Ticket)',
-                item: supply.nombre,
-                cantidad: item.cantidad,
-                usuario,
-                modulo: 'insumos',
-                entidad: 'insumo',
-                entidadId: supply.id,
-                after: supply,
-                meta: { ticketId: ticket.id }
-              });
-            }
-          } else {
-            const diff = item.cantidad - exists.cantidad;
-            exists.cantidad = item.cantidad;
-            if (diff !== 0) {
-              const supply = db.insumos.find(s => s.id === item.insumoId);
-              if (supply && supply.activo) {
-                supply.stock = Math.max(0, supply.stock - diff);
-                pushAuditWithContext(db, req, {
-                  accion: diff > 0 ? 'Salida (Ticket)' : 'Ajuste Entrada (Ticket)',
-                  item: supply.nombre,
-                  cantidad: Math.abs(diff),
-                  usuario,
-                  modulo: 'insumos',
-                  entidad: 'insumo',
-                  entidadId: supply.id,
-                  after: supply,
-                  meta: { ticketId: ticket.id }
-                });
-              }
-            }
-          }
+        ticket.insumosUsados = supplyUsage.items;
+        for (const { supply, stockDelta } of supplyUsage.operations) {
+          if (stockDelta === 0) continue;
+          supply.stock -= stockDelta;
+          pushAuditWithContext(db, req, {
+            accion: stockDelta > 0 ? 'Salida (Ticket)' : 'Ajuste Entrada (Ticket)',
+            item: supply.nombre,
+            cantidad: Math.abs(stockDelta),
+            usuario,
+            modulo: 'insumos',
+            entidad: 'insumo',
+            entidadId: supply.id,
+            after: supply,
+            meta: { ticketId: ticket.id }
+          });
         }
-        ticket.insumosUsados = currentInsumos;
       }
 
       return { ok: true, ticket };
@@ -540,6 +629,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (!updated?.ok && updated?.code === 'ASSIGNEE_INVALID') {
       return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
     }
+    if (!updated?.ok && sendSupplyUsageError(res, updated)) return;
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el ticket.' });
     }
@@ -620,7 +710,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
           .filter(Boolean)
         : [];
 
-      if (ACTIVE_ASSET_TICKET_STATES.has(deleted.estado)) {
+      if (keepsAssetInFailureState(deleted.estado)) {
         syncAssetOperationalState(db, deleted.activoTag);
       }
 

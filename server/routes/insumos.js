@@ -190,7 +190,14 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
       if (!isSupplyActive(item)) return { ok: false, code: 'INACTIVE' };
 
       const current = item.stock;
-      const nextStock = stockInput !== null ? Math.max(0, stockInput) : Math.max(0, current + delta);
+      const nextStock = stockInput !== null ? stockInput : current + delta;
+      if (nextStock < 0) {
+        return {
+          ok: false,
+          code: 'INSUFFICIENT_STOCK',
+          available: current,
+        };
+      }
       const diff = nextStock - current;
       if (diff === 0) return { ok: true, item };
 
@@ -218,6 +225,11 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
     }
     if (!updated?.ok && updated?.code === 'INACTIVE') {
       return res.status(409).json({ error: 'El insumo está dado de baja y no se puede editar.' });
+    }
+    if (!updated?.ok && updated?.code === 'INSUFFICIENT_STOCK') {
+      return res.status(409).json({
+        error: `Stock insuficiente para aplicar la salida. Disponible: ${updated.available}.`,
+      });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el stock.' });

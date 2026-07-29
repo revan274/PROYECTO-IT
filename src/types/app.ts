@@ -446,6 +446,10 @@ export interface BootstrapResponse {
   ticketStates?: TicketEstado[];
   slaPolicyHours?: Record<PrioridadTicket, number>;
   travelAdjustments?: TravelTripAdjustment[];
+  meta?: {
+    generatedAt?: string;
+    revision?: number;
+  };
 }
 
 export interface LoginResponse {

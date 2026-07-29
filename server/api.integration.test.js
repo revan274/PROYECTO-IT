@@ -297,11 +297,17 @@ after(async () => {
   }
 });
 
-async function requestJson(urlPath, { method = 'GET', token, body } = {}) {
+async function requestJson(urlPath, {
+  method = 'GET',
+  token,
+  body,
+  headers: extraHeaders = {},
+} = {}) {
   assert.ok(serverRuntime?.baseUrl, 'El servidor de integracion no fue inicializado.');
 
   const headers = {
     Accept: 'application/json',
+    ...extraHeaders,
   };
 
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -380,6 +386,29 @@ test('GET /api/bootstrap limita el payload para solicitantes', async () => {
   assert.equal(data.riskSummary, undefined);
   assert.equal(Array.isArray(data.ticketStates), true);
   assert.equal(typeof data.meta.generatedAt, 'string');
+});
+
+test('GET /api/bootstrap responde 304 cuando la revisión no cambió', async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const first = await requestJson('/api/bootstrap', {
+    token: session.token,
+  });
+
+  assert.equal(first.response.status, 200, JSON.stringify(first.data));
+  const etag = first.response.headers.get('etag');
+  assert.equal(typeof etag, 'string');
+  assert.ok(etag?.startsWith('W/"mesa-it-bootstrap-v2-'));
+  assert.equal(Number.isFinite(Number(first.data?.meta?.revision)), true);
+  assert.match(first.response.headers.get('vary') || '', /Authorization/i);
+
+  const unchanged = await requestJson('/api/bootstrap', {
+    token: session.token,
+    headers: { 'If-None-Match': etag },
+  });
+
+  assert.equal(unchanged.response.status, 304);
+  assert.equal(unchanged.data, null);
+  assert.equal(unchanged.response.headers.get('etag'), etag);
 });
 
 test('GET /api/tickets pagina y ordena tickets para administradores', async () => {
@@ -1138,4 +1167,183 @@ test('H4: un solicitante no accede a tickets legacy sin id/username aunque coinc
   assert.equal(ids.includes(950), false, 'El ticket legacy homónimo no debe ser accesible.');
   // Control positivo: el ticket propio por id (701) sí debe verse.
   assert.equal(ids.includes(701), true, 'El solicitante debe seguir viendo sus tickets propios por id.');
+});
+
+test('P1: crear ticket rechaza activo inexistente sin persistir cambios', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const before = await readPersistedDb();
+
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'ACTIVO-INEXISTENTE',
+      descripcion: 'No debe persistirse',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+    },
+  });
+
+  assert.equal(created.response.status, 400, JSON.stringify(created.data));
+  assert.equal(created.data.error, 'El activo indicado no existe.');
+
+  const after = await readPersistedDb();
+  assert.equal(after.tickets.length, before.tickets.length);
+  assert.equal(after.meta.nextId, before.meta.nextId);
+  assert.equal(after.auditoria.length, before.auditoria.length);
+});
+
+test('P1: crear ticket rechaza insumo inexistente o stock insuficiente de forma atómica', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const before = await readPersistedDb();
+  const supplyBefore = before.insumos.find((item) => item.id === 11);
+  assert.ok(supplyBefore);
+
+  const missingSupply = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Insumo inexistente',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      insumosUsados: [{ insumoId: 999999, cantidad: 1 }],
+    },
+  });
+  assert.equal(missingSupply.response.status, 400, JSON.stringify(missingSupply.data));
+
+  const insufficientStock = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Stock insuficiente',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      insumosUsados: [{ insumoId: 11, cantidad: supplyBefore.stock + 1 }],
+    },
+  });
+  assert.equal(insufficientStock.response.status, 409, JSON.stringify(insufficientStock.data));
+
+  const after = await readPersistedDb();
+  const supplyAfter = after.insumos.find((item) => item.id === 11);
+  assert.ok(supplyAfter);
+  assert.equal(supplyAfter.stock, supplyBefore.stock);
+  assert.equal(after.tickets.length, before.tickets.length);
+  assert.equal(after.meta.nextId, before.meta.nextId);
+  assert.equal(after.auditoria.length, before.auditoria.length);
+});
+
+test('P1: PATCH de ticket con stock insuficiente no aplica cambios parciales', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Validación atómica de actualización',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+    },
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+
+  const before = await readPersistedDb();
+  const supplyBefore = before.insumos.find((item) => item.id === 11);
+  const ticketBefore = before.tickets.find((item) => item.id === created.data.id);
+  assert.ok(supplyBefore);
+  assert.ok(ticketBefore);
+
+  const updated = await requestJson(`/api/tickets/${created.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: {
+      estado: 'En Proceso',
+      insumosUsados: [{ insumoId: 11, cantidad: supplyBefore.stock + 1 }],
+    },
+  });
+  assert.equal(updated.response.status, 409, JSON.stringify(updated.data));
+
+  const after = await readPersistedDb();
+  const supplyAfter = after.insumos.find((item) => item.id === 11);
+  const ticketAfter = after.tickets.find((item) => item.id === created.data.id);
+  assert.ok(supplyAfter);
+  assert.ok(ticketAfter);
+  assert.equal(supplyAfter.stock, supplyBefore.stock);
+  assert.equal(ticketAfter.estado, ticketBefore.estado);
+  assert.deepEqual(ticketAfter.insumosUsados || [], ticketBefore.insumosUsados || []);
+  assert.equal(after.meta.nextId, before.meta.nextId);
+  assert.equal(after.auditoria.length, before.auditoria.length);
+});
+
+test('P1: ajuste de insumo rechaza una salida mayor al stock disponible', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const before = await readPersistedDb();
+  const supplyBefore = before.insumos.find((item) => item.id === 11);
+  assert.ok(supplyBefore);
+
+  const adjusted = await requestJson('/api/insumos/11/stock', {
+    method: 'PATCH',
+    token: session.token,
+    body: { delta: -(supplyBefore.stock + 1) },
+  });
+
+  assert.equal(adjusted.response.status, 409, JSON.stringify(adjusted.data));
+  const after = await readPersistedDb();
+  const supplyAfter = after.insumos.find((item) => item.id === 11);
+  assert.ok(supplyAfter);
+  assert.equal(supplyAfter.stock, supplyBefore.stock);
+  assert.equal(after.meta.nextId, before.meta.nextId);
+  assert.equal(after.auditoria.length, before.auditoria.length);
+});
+
+test('P1: consumo válido normaliza IDs y cantidades antes de descontar stock', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const before = await readPersistedDb();
+  const supplyBefore = before.insumos.find((item) => item.id === 11);
+  assert.ok(supplyBefore);
+
+  const created = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'pos-001',
+      descripcion: 'Consumo normalizado',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      insumosUsados: [{ insumoId: '11', cantidad: '2' }],
+    },
+  });
+
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.activoTag, 'POS-001');
+  assert.deepEqual(created.data.insumosUsados, [{
+    insumoId: 11,
+    cantidad: 2,
+    nombre: supplyBefore.nombre,
+  }]);
+
+  const after = await readPersistedDb();
+  const supplyAfter = after.insumos.find((item) => item.id === 11);
+  assert.ok(supplyAfter);
+  assert.equal(supplyAfter.stock, supplyBefore.stock - 2);
+});
+
+test('Fase 2: una sesión sigue válida después de reiniciar el servidor', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const previousRuntime = serverRuntime;
+
+  await stopTestServer(previousRuntime.child);
+  serverRuntime = await startTestServer(dbFilePath);
+
+  const bootstrap = await requestJson('/api/bootstrap', {
+    token: session.token,
+  });
+  assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.data));
+  assert.equal(Array.isArray(bootstrap.data?.tickets), true);
 });

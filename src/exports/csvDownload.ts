@@ -3,8 +3,20 @@
  * Única fuente del patrón blob → object URL → click → revoke.
  */
 
+export function neutralizeSpreadsheetFormula(value: string): string {
+  const firstMeaningfulCharacter = value.trimStart().charAt(0);
+  const startsWithControlPrefix = /^[\t\r]/.test(value);
+  if (startsWithControlPrefix || ['=', '+', '-', '@'].includes(firstMeaningfulCharacter)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 export function buildCsvContent(headers: string[], rows: string[][]): string {
-  const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const escapeCsv = (value: string) => {
+    const safeValue = neutralizeSpreadsheetFormula(value);
+    return `"${safeValue.replace(/"/g, '""')}"`;
+  };
   return [headers, ...rows]
     .map((row) => row.map(escapeCsv).join(','))
     .join('\n');

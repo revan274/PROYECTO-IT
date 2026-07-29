@@ -1,5 +1,7 @@
 import { X } from 'lucide-react';
+import { useId } from 'react';
 import { Button } from '../ui/Button';
+import { ModalDialog } from '../ui/ModalDialog';
 
 interface SupplyHistoryItem {
   nombre: string;
@@ -29,20 +31,25 @@ export function SupplyHistoryModal({
   formatDateTime,
   onClose,
 }: SupplyHistoryModalProps) {
+  const titleId = useId();
   if (!item) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-6">
-      <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden">
+    <ModalDialog
+      open={Boolean(item)}
+      onClose={onClose}
+      aria-labelledby={titleId}
+      className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+    >
         <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Historial de movimientos</p>
-            <h3 className="text-lg font-black uppercase text-slate-800">{item.nombre}</h3>
+            <h3 id={titleId} className="text-lg font-black uppercase text-slate-800">{item.nombre}</h3>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
               Registros: {movements.length} | Unidad: {item.unidad || 'Piezas'}
             </p>
           </div>
-          <Button variant="close" size="bare" onClick={onClose}>
+          <Button variant="close" size="bare" onClick={onClose} aria-label="Cerrar historial de insumo">
             <X size={22} />
           </Button>
         </div>
@@ -75,7 +82,6 @@ export function SupplyHistoryModal({
             ))
           )}
         </div>
-      </div>
-    </div>
+    </ModalDialog>
   );
 }
