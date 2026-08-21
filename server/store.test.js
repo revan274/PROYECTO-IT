@@ -11,6 +11,7 @@ test('sanitizeUser removes password and preserves public fields', () => {
     password: 'secret',
     rol: 'tecnico',
     departamento: 'IT',
+    email: 'operador@ejemplo.com',
     activo: true,
   };
 
@@ -22,6 +23,7 @@ test('sanitizeUser removes password and preserves public fields', () => {
     username: 'operador',
     rol: 'tecnico',
     departamento: 'IT',
+    email: 'operador@ejemplo.com',
     activo: true,
   });
   assert.equal(Object.prototype.hasOwnProperty.call(result, 'password'), false);

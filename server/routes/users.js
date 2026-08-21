@@ -16,6 +16,7 @@ export function createUsersRouter({
   nextId,
   countActiveAdmins,
   revokeSessionsByUserId,
+  isValidEmail,
 }) {
   const router = express.Router();
 
@@ -38,6 +39,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     const password = asNonEmptyString(req.body?.password);
     const cargoInput = req.body?.cargo ?? req.body?.departamento;
     const rol = normalizeUserRole(req.body?.rol) || 'solicitante';
+    const emailInput = asNonEmptyString(req.body?.email).toLowerCase();
     const { usuario } = getRequestActor(req);
 
     if (!nombre || !username || !password || !asNonEmptyString(cargoInput)) {
@@ -48,6 +50,9 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'El password debe tener al menos 6 caracteres.' });
+    }
+    if (emailInput && !isValidEmail(emailInput)) {
+      return res.status(400).json({ error: 'El correo no tiene un formato válido.' });
     }
 
     const created = await updateDb((db) => {
@@ -66,6 +71,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         passwordHash: createUserPasswordHash(password),
         rol,
         departamento: cargo,
+        email: emailInput,
         activo: true,
       };
       db.users.push(user);
@@ -113,8 +119,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const hasCargo = req.body?.cargo !== undefined || req.body?.departamento !== undefined;
     const hasRol = req.body?.rol !== undefined;
     const hasActivo = req.body?.activo !== undefined;
+    const hasEmail = req.body?.email !== undefined;
 
-    if (!hasNombre && !hasUsername && !hasPassword && !hasCargo && !hasRol && !hasActivo) {
+    if (!hasNombre && !hasUsername && !hasPassword && !hasCargo && !hasRol && !hasActivo && !hasEmail) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
 
@@ -124,6 +131,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const cargoInput = req.body?.cargo !== undefined ? req.body?.cargo : req.body?.departamento;
     const rol = hasRol ? normalizeUserRole(req.body?.rol) : undefined;
     const activo = hasActivo ? req.body?.activo : undefined;
+    const email = hasEmail ? asNonEmptyString(req.body?.email).toLowerCase() : undefined;
     const { usuario } = getRequestActor(req);
 
     if (hasNombre && !nombre) {
@@ -146,6 +154,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
     if (hasActivo && typeof activo !== 'boolean') {
       return res.status(400).json({ error: 'El estado activo debe ser booleano.' });
+    }
+    if (hasEmail && email && !isValidEmail(email)) {
+      return res.status(400).json({ error: 'El correo no tiene un formato válido.' });
     }
 
     const updated = await updateDb((db) => {
@@ -183,6 +194,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (hasCargo) user.departamento = nextCargo;
       if (rol) user.rol = rol;
       if (hasActivo) user.activo = activo;
+      if (hasEmail) user.email = email;
       if (password) {
         user.passwordHash = createUserPasswordHash(password);
       }

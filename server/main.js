@@ -1,3 +1,8 @@
+// Debe ser la primera importación: carga server/../.env (si existe) ANTES de que
+// cualquier otro módulo lea process.env al inicializarse (store.js, index.js, mailer.js...).
+// No sobreescribe variables ya definidas por el entorno real (ej. Railway), y no falla
+// si el archivo .env no existe (útil en producción, donde las variables llegan del hosting).
+import 'dotenv/config';
 import { takeCoverage } from 'node:v8';
 import { startServer } from './index.js';
 import { closeStore } from './store.js';

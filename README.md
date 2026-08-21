@@ -61,6 +61,17 @@ Revisa `.env.example`. Variables principales:
 - `DB_FILE`
 - `DB_BACKUP_ENABLE`
 - `DB_BACKUP_KEEP`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (notificaciones por correo; deshabilitadas si `SMTP_USER`/`SMTP_PASS` están vacíos)
+- `NOTIFY_TICKET_EMAIL` (correo fijo que recibe siempre la notificación de ticket nuevo)
+
+## Notificaciones por correo de tickets nuevos
+Al crear un ticket (`POST /api/tickets`), el sistema intenta notificar por correo (SMTP) a:
+- `NOTIFY_TICKET_EMAIL`, si está configurado (siempre).
+- El correo del técnico asignado (campo `email` del usuario), si el ticket ya viene asignado y ese usuario tiene correo cargado.
+
+El envío es asíncrono y best-effort: si SMTP falla o no está configurado, la creación del ticket
+nunca se ve afectada; el error solo queda en el log del servidor. Los tickets históricos
+(`POST /api/tickets/historical`) no generan notificación.
 
 ## Datos locales
 - El repo conserva un seed sanitizado en `server/data/db.seed.json`.

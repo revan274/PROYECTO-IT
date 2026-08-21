@@ -56,6 +56,7 @@ import {
   normalizeUserCargo,
   canEditByRole,
   countActiveAdmins,
+  isValidEmail,
   // Travel helpers
   normalizeTravelAdjustmentMonth,
   normalizeTravelScopeKey,
@@ -1328,6 +1329,7 @@ const usersRouteDeps = {
   nextId,
   countActiveAdmins,
   revokeSessionsByUserId,
+  isValidEmail,
 };
 
 app.use('/api/tickets/:id/attachments', uploadLimiter);

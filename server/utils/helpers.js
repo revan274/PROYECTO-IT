@@ -94,6 +94,18 @@ export function normalizeTextKey(value) {
     .toLowerCase();
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(value) {
+  const raw = asNonEmptyString(value);
+  return raw.length > 0 && raw.length <= 254 && EMAIL_PATTERN.test(raw);
+}
+
+export function normalizeEmail(value) {
+  const raw = asNonEmptyString(value).toLowerCase();
+  return isValidEmail(raw) ? raw : '';
+}
+
 // --- Ticket normalize ---
 
 export function normalizePrioridad(value) {

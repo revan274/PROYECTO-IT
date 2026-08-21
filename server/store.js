@@ -789,6 +789,14 @@ function normalizeIpAddress(value) {
   return normalized.join('.');
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeUserEmail(value) {
+  const raw = text(value).toLowerCase();
+  if (!raw || raw.length > 254 || !EMAIL_PATTERN.test(raw)) return '';
+  return raw;
+}
+
 function normalizeDate(value) {
   const raw = text(value);
   if (!raw) return new Date().toISOString().slice(0, 10);
@@ -848,6 +856,7 @@ function normalizeDbShape(db) {
       copy.username = String(copy.username || '').trim().toLowerCase();
       copy.nombre = String(copy.nombre || '').trim();
       copy.departamento = String(copy.departamento || '').trim().toUpperCase();
+      copy.email = normalizeUserEmail(copy.email);
       copy.rol = normalizeUserRole(copy.rol);
       copy.activo = copy.activo !== false;
       copy.authVersion = Math.max(0, Math.trunc(Number(copy.authVersion) || 0));
@@ -1199,6 +1208,7 @@ export function sanitizeUser(user) {
     username: user.username,
     rol: user.rol,
     departamento: text(user.departamento).toUpperCase(),
+    email: normalizeUserEmail(user.email),
     activo: user.activo !== false,
   };
 }

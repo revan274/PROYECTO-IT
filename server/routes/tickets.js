@@ -4,6 +4,7 @@ import path from 'node:path';
 import express from 'express';
 import { readDb, updateDb, now, nextId } from '../store.js';
 import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
+import { sendMail, getNotifyTicketEmail } from '../modules/mailer.js';
 
 export function createTicketsRouter({
   requireAuth,
@@ -158,6 +159,64 @@ export function createTicketsRouter({
     activo.estado = hasRelatedOpenTickets ? 'Falla' : 'Operativo';
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function buildNewTicketEmail(ticket) {
+    const subject = `[Mesa IT] Nuevo ticket #${ticket.id} — ${ticket.prioridad}`;
+    const rows = [
+      ['Ticket', `#${ticket.id}`],
+      ['Prioridad', ticket.prioridad],
+      ['Activo', ticket.activoTag],
+      ['Sucursal', ticket.sucursal],
+      ['Tipo de atención', ticket.atencionTipo || 'Sin definir'],
+      ['Descripción', ticket.descripcion],
+      ['Solicitado por', ticket.solicitadoPor],
+      ['Asignado a', ticket.asignadoA || 'Sin asignar'],
+      ['Fecha límite (SLA)', ticket.fechaLimite],
+    ];
+    const text = [
+      'Se registró un nuevo ticket en Mesa IT.',
+      '',
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+    ].join('\n');
+    const html = `
+      <div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;">
+        <p>Se registró un nuevo ticket en <strong>Mesa IT</strong>.</p>
+        <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+          ${rows.map(([label, value]) => `
+            <tr>
+              <td style="font-weight:bold;border-bottom:1px solid #e5e7eb;">${escapeHtml(label)}</td>
+              <td style="border-bottom:1px solid #e5e7eb;">${escapeHtml(value)}</td>
+            </tr>`).join('')}
+        </table>
+      </div>`;
+    return { subject, text, html };
+  }
+
+  // Nunca debe bloquear ni fallar la creación del ticket: se dispara sin esperar (fire-and-forget)
+  // y cualquier error de envío queda solo en el log del servidor.
+  function notifyNewTicketByEmail(ticket, assignedUser) {
+    const recipients = [getNotifyTicketEmail(), assignedUser?.email].filter(Boolean);
+    if (recipients.length === 0) return;
+
+    const { subject, text, html } = buildNewTicketEmail(ticket);
+    sendMail({ to: recipients, subject, text, html })
+      .then((result) => {
+        if (!result.sent && result.reason === 'SEND_ERROR') {
+          console.error(`No se pudo notificar el ticket #${ticket.id} por correo:`, result.error);
+        }
+      })
+      .catch((error) => {
+        console.error(`No se pudo notificar el ticket #${ticket.id} por correo:`, error);
+      });
+  }
+
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     if (!ensureCanCreateTickets(req, res)) return;
@@ -276,7 +335,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         entidadId: ticket.id,
         after: ticket,
       });
-      return { ok: true, ticket };
+      return { ok: true, ticket, assignedUser };
     });
 
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
@@ -293,6 +352,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
     }
 
+    notifyNewTicketByEmail(created.ticket, created.assignedUser);
     res.status(201).json(serializeTicket(created.ticket));
   } catch (error) {
     next(error);
