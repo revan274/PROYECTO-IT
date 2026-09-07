@@ -11,8 +11,10 @@ function createFakePool() {
   const filas = new Map();
   return {
     filas,
+    sentencias: [],
     async query(sql, params = []) {
       const s = String(sql).trim();
+      this.sentencias.push(s);
       if (s.startsWith('CREATE TABLE') || s.startsWith('CREATE INDEX')) return { rows: [], rowCount: 0 };
       if (s.startsWith('INSERT')) {
         const [storagePath, ticketId, fileName, mimeType, size, content] = params;
@@ -204,3 +206,66 @@ test('listStoredPaths devuelve lista vacia sin Neon', async () => {
   const store = createAttachmentStore({ getPool: async () => null, uploadDir: '.', backend: 'file' });
   assert.deepEqual(await store.listStoredPaths(), []);
 });
+
+// En un sistema vivo el arranque puede coincidir con Neon dormido: si la creacion de la
+// tabla se pierde ahi, toda subida fallaria hasta reiniciar el proceso.
+test('save() crea la tabla si el arranque no lo consiguio', async () => {
+  const dir = await tempDir();
+  try {
+    const pool = createFakePool();
+    const store = createAttachmentStore({ getPool: async () => pool, uploadDir: dir, backend: 'postgres' });
+
+    // Sin llamar a ensureSchema: simula el arranque en el que fallo.
+    await store.save({ ...META, content: CONTENIDO });
+
+    assert.equal(pool.sentencias.some((s) => s.startsWith('CREATE TABLE')), true, 'debe crear la tabla');
+    assert.deepEqual(await store.read(META), CONTENIDO);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('el DDL no se repite en cada subida', async () => {
+  const dir = await tempDir();
+  try {
+    const pool = createFakePool();
+    const store = createAttachmentStore({ getPool: async () => pool, uploadDir: dir, backend: 'postgres' });
+
+    await store.save({ ...META, content: CONTENIDO });
+    await store.save({ ...META, storagePath: 'uploads/b.txt', content: CONTENIDO });
+    await store.save({ ...META, storagePath: 'uploads/c.txt', content: CONTENIDO });
+
+    const ddl = pool.sentencias.filter((s) => s.startsWith('CREATE TABLE')).length;
+    assert.equal(ddl, 1, `el DDL debe ejecutarse una sola vez, se ejecuto ${ddl}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('un DDL fallido no queda envenenado: el siguiente intento reintenta', async () => {
+  const dir = await tempDir();
+  try {
+    const pool = createFakePool();
+    let fallar = true;
+    const original = pool.query.bind(pool);
+    pool.query = async (sql, params) => {
+      if (fallar && String(sql).trim().startsWith('CREATE TABLE')) {
+        throw Object.assign(new Error('Connection terminated unexpectedly'), {});
+      }
+      return original(sql, params);
+    };
+
+    await assert.rejects(store0(pool, dir).save({ ...META, content: CONTENIDO }));
+
+    fallar = false;
+    const store = store0(pool, dir);
+    await store.save({ ...META, content: CONTENIDO });
+    assert.deepEqual(await store.read(META), CONTENIDO);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function store0(pool, dir) {
+  return createAttachmentStore({ getPool: async () => pool, uploadDir: dir, backend: 'postgres' });
+}

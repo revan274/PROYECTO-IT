@@ -75,15 +75,29 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
     }
   }
 
+  // El DDL se ejecuta una sola vez, pero NO puede quedar solo en el arranque: si Neon estaba
+  // dormido en ese instante, la tabla nunca se crearia y toda subida fallaria hasta reiniciar
+  // el proceso. Se memoriza la promesa y, si falla, se descarta para poder reintentar.
+  let schemaPromise = null;
+
+  async function ensureSchema() {
+    const pool = await poolOrNull();
+    if (!pool) return;
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await pool.query(CREATE_TABLE_SQL);
+        await pool.query(CREATE_INDEX_SQL);
+      })().catch((error) => {
+        schemaPromise = null;
+        throw error;
+      });
+    }
+    await schemaPromise;
+  }
+
   return {
     backend,
-
-    async ensureSchema() {
-      const pool = await poolOrNull();
-      if (!pool) return;
-      await pool.query(CREATE_TABLE_SQL);
-      await pool.query(CREATE_INDEX_SQL);
-    },
+    ensureSchema,
 
     async save({ ticketId, fileName, mimeType, content, storagePath }) {
       const pool = await poolOrNull();
@@ -95,6 +109,7 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
         return;
       }
 
+      await ensureSchema();
       await withPgRetry(() => pool.query(INSERT_SQL, [
         storagePath,
         ticketId,
