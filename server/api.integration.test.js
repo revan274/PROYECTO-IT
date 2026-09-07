@@ -876,8 +876,12 @@ test('POST /api/tickets/historical registra un ticket pasado cerrado con fechas 
   assert.equal(created.data.fechaCierre, fechaCierre);
   assert.equal(created.data.atencionTipo, 'REMOTO');
   assert.equal(created.data.asignadoA, TECH_USER.nombre);
-  // SLA calculado desde la fecha histórica (ALTA = 8h), no desde ahora.
-  assert.equal(created.data.fechaLimite, '2026-01-10T17:00:00.000Z');
+  // SLA calculado desde la fecha histórica (ALTA = 8h), no desde ahora, y solo con horas
+  // hábiles: el ticket nace el sábado 10/01 a las 03:00 (cerrado), así que arranca a las
+  // 09:00, consume las 3 h del sábado corto, salta el domingo y termina el lunes 12/01 a
+  // las 13:00 local. El cálculo anterior devolvía sábado 11:00 porque cobraba como SLA las
+  // seis horas de madrugada en que nadie podía atenderlo.
+  assert.equal(created.data.fechaLimite, '2026-01-12T19:00:00.000Z');
   assert.equal(Array.isArray(created.data.historial), true);
   assert.equal(created.data.historial.length, 2);
   assert.equal(created.data.historial[0].estado, 'Cerrado');

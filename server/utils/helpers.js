@@ -7,6 +7,7 @@ import {
   canEditByRole as roleCanEdit,
   normalizeKnownUserRole,
 } from '../domain/roles.js';
+import { calcSlaDueDate } from '../modules/sla-calendar.js';
 import {
   CLOSED_TICKET_STATES,
   SLA_POLICY_HOURS,
@@ -218,10 +219,10 @@ export function isLowStock(item) {
 
 // --- SLA helpers ---
 
+// Delega en el calendario laboral: las horas de SLA solo se consumen dentro de la jornada.
+// Un ALTA (8 h) creado el viernes a las 15:00 ya no vence de madrugada el sábado.
 export function calcDueDate(prioridad, baseMs = Date.now()) {
-  const hours = SLA_HOURS[prioridad] || SLA_HOURS.MEDIA;
-  const base = Number.isFinite(baseMs) ? baseMs : Date.now();
-  return new Date(base + hours * 60 * 60 * 1000).toISOString();
+  return calcSlaDueDate(prioridad, baseMs);
 }
 
 export function isSlaBreached(ticket) {

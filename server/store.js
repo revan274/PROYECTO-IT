@@ -8,6 +8,7 @@ import {
   normalizeStoredUserRole,
 } from './domain/roles.js';
 import { mutatePostgresStateWithLock } from './modules/postgres-state.js';
+import { calcSlaDueDate } from './modules/sla-calendar.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -283,7 +284,9 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
     copy.fechaCreacion = new Date().toISOString();
   }
   if (!copy.fechaLimite) {
-    copy.fechaLimite = new Date(Date.now() + (copy.prioridad === 'CRITICA' ? 2 : copy.prioridad === 'ALTA' ? 8 : 24) * 60 * 60 * 1000).toISOString();
+    // Antes duplicaba la política SLA con números mágicos (2/8/24) y saltaba el calendario
+    // laboral: cualquier cambio en SLA_POLICY_HOURS no llegaba hasta aquí.
+    copy.fechaLimite = calcSlaDueDate(copy.prioridad);
   }
   if (!Array.isArray(copy.historial)) {
     copy.historial = [
