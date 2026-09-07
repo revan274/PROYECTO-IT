@@ -1,7 +1,11 @@
 // Auditoría de integridad del estado de Mesa IT. Solo lectura: no modifica nada.
 //
 //   npm run integrity:check
-//   railway run npm run integrity:check     (contra el entorno real)
+//   DATABASE_URL="postgresql://...neon.tech/..." npm run integrity:check
+//
+// Contra la base real solo hace falta la cadena de conexión: la auditoría habla con Neon
+// directamente. Lo que NO ve desde fuera es el disco del contenedor, así que para los
+// adjuntos heredados el dato fiable es `GET /api/diagnostics/storage`, que corre dentro.
 //
 // Sale con código 1 si encuentra hallazgos, para poder engancharlo a un monitoreo.
 import 'dotenv/config';

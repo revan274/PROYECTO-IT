@@ -222,7 +222,8 @@ comando `npm run integrity:check` verifica esas garantías (solo lectura) y sale
 
 ```bash
 npm run integrity:check              # local
-railway run npm run integrity:check  # contra el entorno real
+# Contra la base real: basta la cadena de conexión de Neon, no hace falta ninguna CLI.
+DATABASE_URL="postgresql://...neon.tech/...?sslmode=require" npm run integrity:check
 ```
 
 Detecta: adjuntos cuyo archivo ya no está en disco, archivos huérfanos que nadie
