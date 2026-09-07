@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, promises as fs } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,7 @@ import {
 import {
   createUserPasswordHash,
   getDataDirPath,
+  getSharedPostgresPool,
   getStorageBackend,
   nextId,
   readDb,
@@ -100,6 +101,7 @@ import {
 import { createAuthRuntime } from './middleware/authRuntime.js';
 import { resolveAttachmentStorage, resolveAttachmentPath } from './modules/attachment-storage.js';
 import { touchStorageMarker, STORAGE_MARKER_FILE } from './modules/storage-marker.js';
+import { createAttachmentStore } from './modules/attachment-store.js';
 import { auditIntegrity } from './modules/integrity.js';
 
 const PORT = Number(process.env.PORT || 4000);
@@ -150,6 +152,12 @@ const ATTACHMENT_STORAGE = resolveAttachmentStorage({
   storageBackend: getStorageBackend(),
 });
 const UPLOAD_DIR = ATTACHMENT_STORAGE.dir;
+// Con Neon los binarios adjuntos van a su propia tabla, no al disco efimero del contenedor.
+const attachmentStore = createAttachmentStore({
+  getPool: getSharedPostgresPool,
+  uploadDir: UPLOAD_DIR,
+  backend: getStorageBackend(),
+});
 const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
 const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const HAS_CLIENT_DIST = existsSync(CLIENT_INDEX_FILE);
@@ -225,10 +233,6 @@ function configureCommonMiddleware(app) {
 }
 
 // --- File / upload helpers ---
-
-async function ensureUploadDir() {
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-}
 
 function toAbsoluteAttachmentPath(storagePath) {
   return resolveAttachmentPath(storagePath, UPLOAD_DIR);
@@ -716,9 +720,13 @@ app.get('/api/diagnostics/storage', requireAuth, async (req, res, next) => {
     if (!ensurePermission(req, res, 'diagnostics.read')) return;
 
     const marker = await touchStorageMarker(UPLOAD_DIR);
+    // Una sola consulta en lugar de una por adjunto.
+    const enBase = new Set(await attachmentStore.listStoredPaths());
     const db = await getRequestDb(req);
     const integridad = auditIntegrity(db, {
       attachmentExists: (storagePath) => {
+        if (enBase.has(storagePath)) return true;
+        // Adjunto anterior a la migración: puede seguir en disco.
         const absolute = resolveAttachmentPath(storagePath, UPLOAD_DIR);
         return Boolean(absolute) && existsSync(absolute);
       },
@@ -730,10 +738,13 @@ app.get('/api/diagnostics/storage', requireAuth, async (req, res, next) => {
     res.json({
       storageBackend: getStorageBackend(),
       attachments: {
+        // Con Neon los binarios viven en la base; el directorio solo conserva los heredados.
+        backend: attachmentStore.backend,
+        storedInDatabase: await attachmentStore.countStored(),
         dir: ATTACHMENT_STORAGE.dir,
         source: ATTACHMENT_STORAGE.source,
-        durabilityRisk: ATTACHMENT_STORAGE.durabilityRisk,
-        warning: ATTACHMENT_STORAGE.warning || null,
+        durabilityRisk: attachmentStore.backend === 'postgres' ? false : ATTACHMENT_STORAGE.durabilityRisk,
+        warning: attachmentStore.backend === 'postgres' ? null : (ATTACHMENT_STORAGE.warning || null),
         marker,
       },
       integrity: integridad.counts,
@@ -1309,7 +1320,7 @@ const ticketRouteDeps = {
   canAccessTicketByAuthUser,
   sanitizeUploadFileName,
   TICKET_ATTACHMENT_MAX_BYTES,
-  ensureUploadDir,
+  attachmentStore,
   TICKET_ATTACHMENT_MAX_COUNT,
   buildTicketAttachmentResponse,
   filterTicketsForUser,
@@ -1432,9 +1443,18 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
-    console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
-    if (ATTACHMENT_STORAGE.durabilityRisk) {
-      console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
+    if (attachmentStore.backend === 'postgres') {
+      // Los binarios ya no dependen del disco del contenedor: viven en la misma base que
+      // el estado, con sus respaldos. El directorio solo conserva los adjuntos heredados.
+      console.log('Adjuntos de tickets en PostgreSQL (tabla mesa_it_attachments).');
+      void attachmentStore.ensureSchema().catch((error) => {
+        console.error('No se pudo preparar la tabla de adjuntos:', error?.message || error);
+      });
+    } else {
+      console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
+      if (ATTACHMENT_STORAGE.durabilityRisk) {
+        console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
+      }
     }
     // Deja constancia en cada arranque. Si tras un redespliegue la fecha de creacion se
     // conserva, el almacenamiento es persistente; si se reinicia a hoy, es efimero y los

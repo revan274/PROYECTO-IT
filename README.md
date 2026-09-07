@@ -151,10 +151,23 @@ forma parte de la configuración actual.
    - `AUTH_DISALLOW_DEMO_PASSWORDS=true`.
 4. Verifica `https://<servicio-railway>/api/health` antes de publicar el frontend.
 
-Los adjuntos y respaldos son archivos locales y no se almacenan en PostgreSQL. Para
-conservarlos entre despliegues, Railway debe tener un volumen persistente montado y
-`ATTACHMENTS_DIR` debe apuntar a ese volumen (o los binarios deben migrarse a
-almacenamiento de objetos).
+### Dónde viven los adjuntos
+
+**Con `DATABASE_URL` definido (Neon), los binarios adjuntos se guardan en PostgreSQL**, en
+la tabla `mesa_it_attachments`, junto al estado y cubiertos por los mismos respaldos. Ya no
+dependen del disco del contenedor, que en Railway es efímero salvo que haya un volumen
+montado: antes cada despliegue los borraba mientras la base conservaba los metadatos,
+dejando tickets que listaban evidencia imposible de descargar.
+
+Los bytes van a una **tabla propia, nunca al documento JSONB**: ese documento se reescribe
+entero bajo un lock global en cada mutación, así que meterle megabytes serializaría toda la
+aplicación.
+
+La lectura cae a disco cuando no hay fila, así que los adjuntos anteriores a la migración que
+aún sobrevivan se siguen descargando con normalidad. No hay que migrar nada a mano.
+
+Sin `DATABASE_URL` (desarrollo local) se sigue usando el sistema de archivos, y ahí sí
+aplican `ATTACHMENTS_DIR` y la advertencia de arranque descritas abajo.
 
 Si `ATTACHMENTS_DIR` no se define, el destino se deriva del directorio de `DB_FILE`.
 Esa derivación es una trampa cuando se usa PostgreSQL: `DB_FILE` deja de tener efecto

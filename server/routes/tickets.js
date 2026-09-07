@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { updateDb, now, nextId } from '../store.js';
@@ -32,7 +31,7 @@ export function createTicketsRouter({
   canAccessTicketByAuthUser,
   sanitizeUploadFileName,
   TICKET_ATTACHMENT_MAX_BYTES,
-  ensureUploadDir,
+  attachmentStore,
   TICKET_ATTACHMENT_MAX_COUNT,
   buildTicketAttachmentResponse,
   filterTicketsForUser,
@@ -799,11 +798,8 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo eliminar el ticket.' });
     }
 
-    for (const path of removed.attachmentPaths) {
-      const absPath = toAbsoluteAttachmentPath(path);
-      if (absPath) {
-        await fs.unlink(absPath).catch(() => undefined);
-      }
+    for (const storagePath of removed.attachmentPaths) {
+      await attachmentStore.remove({ storagePath }).catch(() => undefined);
     }
 
     res.json({ ok: true, removedId: removed.ticket.id });
@@ -890,18 +886,23 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       return res.status(413).json({ error: `Adjunto excede limite de ${Math.round(TICKET_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB.` });
     }
 
-    await ensureUploadDir();
     const storedName = `tk_${id}_${Date.now()}_${randomUUID()}_${fileName}`;
     const storagePath = path.join('uploads', storedName).replace(/\\/g, '/');
-    const absPath = toAbsoluteAttachmentPath(storagePath);
-    if (!absPath) {
+    if (!toAbsoluteAttachmentPath(storagePath)) {
       return res.status(500).json({ error: 'No se pudo preparar almacenamiento del adjunto.' });
     }
 
     let fileSaved = false;
     let persisted = false;
     try {
-      await fs.writeFile(absPath, contentBuffer);
+      // Con Neon configurado los bytes van a la tabla de adjuntos, no al disco del contenedor.
+      await attachmentStore.save({
+        ticketId: id,
+        fileName,
+        mimeType,
+        content: contentBuffer,
+        storagePath,
+      });
       fileSaved = true;
 
       const result = await updateDb((db) => {
@@ -950,19 +951,19 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       });
 
       if (!result?.ok && result?.code === 'NOT_FOUND') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(404).json({ error: 'Ticket no encontrado.' });
       }
       if (!result?.ok && result?.code === 'FORBIDDEN') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(403).json({ error: 'No autorizado para acceder a este ticket.' });
       }
       if (!result?.ok && result?.code === 'MAX_ATTACHMENTS') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(409).json({ error: `Limite de ${TICKET_ATTACHMENT_MAX_COUNT} adjuntos por ticket alcanzado.` });
       }
       if (!result?.ok) {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(500).json({ error: 'No se pudo guardar el adjunto.' });
       }
 
@@ -973,7 +974,7 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       });
     } catch (error) {
       if (fileSaved && !persisted) {
-        await fs.unlink(absPath).catch(() => undefined);
+        await attachmentStore.remove({ storagePath }).catch(() => undefined);
       }
       throw error;
     }
@@ -999,14 +1000,9 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
       : null;
     if (!attachment) return res.status(404).json({ error: 'Adjunto no encontrado.' });
 
-    const absPath = toAbsoluteAttachmentPath(attachment.storagePath);
-    if (!absPath) return res.status(404).json({ error: 'Ruta de adjunto inválida.' });
-    let content;
-    try {
-      content = await fs.readFile(absPath);
-    } catch {
-      return res.status(404).json({ error: 'Archivo adjunto no disponible.' });
-    }
+    // Busca primero en la base; cae a disco para los adjuntos anteriores a la migración.
+    const content = await attachmentStore.read({ storagePath: attachment.storagePath });
+    if (!content) return res.status(404).json({ error: 'Archivo adjunto no disponible.' });
 
     const fileName = sanitizeUploadFileName(attachment.fileName || `adjunto_${attachmentId}`);
     const rawMime = asNonEmptyString(attachment.mimeType).toLowerCase();
@@ -1069,10 +1065,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
     if (!result?.ok) {
       return res.status(500).json({ error: 'No se pudo eliminar el adjunto.' });
     }
-    const absPath = toAbsoluteAttachmentPath(result.removedStoragePath);
-    if (absPath) {
-      await fs.unlink(absPath).catch(() => undefined);
-    }
+    await attachmentStore.remove({ storagePath: result.removedStoragePath }).catch(() => undefined);
     res.json(serializeTicket(result.ticket));
   } catch (error) {
     next(error);

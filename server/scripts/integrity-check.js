@@ -7,9 +7,10 @@
 import 'dotenv/config';
 import { existsSync, readdirSync } from 'node:fs';
 
-import { readDb, getDataDirPath, getStorageBackend, closeStore } from '../store.js';
+import { readDb, getDataDirPath, getStorageBackend, getSharedPostgresPool, closeStore } from '../store.js';
 import { resolveAttachmentStorage, resolveAttachmentPath } from '../modules/attachment-storage.js';
 import { auditIntegrity } from '../modules/integrity.js';
+import { createAttachmentStore } from '../modules/attachment-store.js';
 import { touchStorageMarker, STORAGE_MARKER_FILE } from '../modules/storage-marker.js';
 
 const SEVERITY_LABEL = { alta: 'ALTA ', media: 'MEDIA' };
@@ -21,10 +22,20 @@ async function main() {
     storageBackend: getStorageBackend(),
   });
 
+  const attachmentStore = createAttachmentStore({
+    getPool: getSharedPostgresPool,
+    uploadDir: storage.dir,
+    backend: getStorageBackend(),
+  });
+  // Una sola consulta: preguntar por cada adjunto seria una consulta por adjunto.
+  const enBase = new Set(await attachmentStore.listStoredPaths());
+
   const db = await readDb();
 
   const result = auditIntegrity(db, {
     attachmentExists: (storagePath) => {
+      if (enBase.has(storagePath)) return true;
+      // Adjunto anterior a la migracion: puede seguir en disco.
       const absolute = resolveAttachmentPath(storagePath, storage.dir);
       return Boolean(absolute) && existsSync(absolute);
     },
@@ -37,7 +48,14 @@ async function main() {
 
   console.log('Auditoría de integridad — Mesa IT');
   console.log(`  Backend de estado : ${getStorageBackend()}`);
-  console.log(`  Adjuntos          : ${storage.dir} (origen: ${storage.source})`);
+  const enPostgres = attachmentStore.backend === 'postgres';
+  console.log(`  Adjuntos          : ${enPostgres ? 'PostgreSQL, tabla mesa_it_attachments' : storage.dir}`);
+  if (enPostgres) {
+    console.log(`  Binarios en base  : ${enBase.size}`);
+    console.log(`  Disco (heredado)  : ${storage.dir} (origen: ${storage.source})`);
+  } else {
+    console.log(`  Origen del destino: ${storage.source}`);
+  }
   if (marker.error) {
     console.log(`  Persistencia      : no se pudo comprobar (${marker.error})`);
   } else {
