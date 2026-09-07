@@ -9,8 +9,7 @@ import { sendMail, getNotifyTicketEmail } from '../modules/mailer.js';
 
 export function createTicketsRouter({
   requireAuth,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
@@ -23,7 +22,6 @@ export function createTicketsRouter({
   calcDueDate,
   pushAuditWithContext,
   serializeTicket,
-  ensureCanEdit,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -220,7 +218,7 @@ export function createTicketsRouter({
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.create')) return;
     const activoTag = asNonEmptyString(req.body?.activoTag);
     const descripcion = asNonEmptyString(req.body?.descripcion);
     const sucursalInput = req.body?.sucursal;
@@ -363,7 +361,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // Registro de tickets pasados (histórico). Solo admin.
 router.post('/historical', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.historical')) return;
 
     const formatLocal = (iso) => new Date(iso).toLocaleString('es-MX', { hour12: false });
     const parseDate = (value) => {
@@ -516,7 +514,7 @@ router.post('/historical', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.update')) return;
     const id = toInt(req.params.id);
     const estado = req.body?.estado ? normalizeEstadoTicket(req.body?.estado) : null;
     const asignadoA = req.body?.asignadoA !== undefined ? asNonEmptyString(req.body?.asignadoA) : undefined;
@@ -702,7 +700,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.resolve')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     const comentario = asNonEmptyString(req.body?.comentario) || 'Ticket resuelto';
@@ -816,7 +814,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
 
 router.post('/:id/comments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.comment')) return;
     const id = toInt(req.params.id);
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
@@ -867,7 +865,7 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
 
 router.post('/:id/attachments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.attach')) return;
     const id = toInt(req.params.id);
     const fileName = sanitizeUploadFileName(req.body?.fileName);
     const mimeType = asNonEmptyString(req.body?.mimeType || req.body?.contentType) || 'application/octet-stream';
@@ -1025,7 +1023,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
 
 router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.attachments.delete')) return;
     const id = toInt(req.params.id);
     const attachmentId = toInt(req.params.attachmentId);
     const { usuario } = getRequestActor(req);

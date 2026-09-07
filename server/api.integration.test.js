@@ -13,6 +13,7 @@ import { createUserPasswordHash } from './store.js';
 const ADMIN_PASSWORD = 'Admin.Integration.123';
 const REQUESTER_PASSWORD = 'Solicitante.Integration.123';
 const TECH_PASSWORD = 'Tecnico.Integration.123';
+const READONLY_PASSWORD = 'Consulta.Integration.123';
 
 const ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
@@ -54,6 +55,16 @@ const REQUESTER_USER = {
   passwordHash: createUserPasswordHash(REQUESTER_PASSWORD),
   rol: 'solicitante',
   departamento: 'VENTAS',
+  activo: true,
+};
+
+const READONLY_USER = {
+  id: 701,
+  nombre: 'Consulta Integracion',
+  username: 'consulta.integration',
+  passwordHash: createUserPasswordHash(READONLY_PASSWORD),
+  rol: 'consulta',
+  departamento: 'IT',
   activo: true,
 };
 
@@ -113,7 +124,7 @@ function buildFixtureDb() {
       cargos: CARGO_CATALOG,
       roles: ROLE_CATALOG,
     },
-    users: [ADMIN_USER, TECH_USER, REQUESTER_USER],
+    users: [ADMIN_USER, TECH_USER, REQUESTER_USER, READONLY_USER],
     activos: [
       {
         id: 1,
@@ -1471,4 +1482,79 @@ test('las respuestas pequeñas no pagan el costo de comprimir', { concurrency: f
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('content-encoding'), null);
+});
+
+// Matriz de autorización a nivel HTTP. Antes de esto el rol `consulta` no tenía NINGUNA
+// prueba: ni siquiera existía en el fixture. Estas pruebas fijan quién puede hacer qué,
+// para que un cambio en la matriz de permisos no abra un acceso en silencio.
+const ESCRITURAS = [
+  ['POST', '/api/activos', { tag: 'NUEVO-001', tipo: 'POS' }],
+  ['PATCH', '/api/activos/1', { ubicacion: 'Caja 9' }],
+  ['DELETE', '/api/activos/1', undefined],
+  ['POST', '/api/insumos', { nombre: 'Cable X', unidad: 'Piezas', stock: 1, min: 1 }],
+  ['PATCH', '/api/insumos/11/stock', { delta: -1 }],
+  ['PATCH', '/api/tickets/701', { estado: 'En Proceso' }],
+  ['PATCH', '/api/tickets/701/resolve', { comentarioResolucion: 'listo' }],
+  ['PATCH', '/api/catalogos', { sucursales: [] }],
+  ['POST', '/api/users', { nombre: 'X', username: 'x', password: 'Aa1.aaaaaaaa', rol: 'consulta' }],
+];
+
+test('autorización: el rol consulta es rechazado en toda operación de escritura', { concurrency: false }, async () => {
+  const session = await login(READONLY_USER.username, READONLY_PASSWORD);
+
+  for (const [method, url, body] of ESCRITURAS) {
+    const { response } = await requestJson(url, { method, token: session.token, body });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para consulta`);
+  }
+});
+
+test('autorización: el solicitante no puede operar inventario ni administrar', { concurrency: false }, async () => {
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+
+  for (const [method, url, body] of ESCRITURAS) {
+    const { response } = await requestJson(url, { method, token: session.token, body });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para solicitante`);
+  }
+});
+
+test('autorización: el técnico opera inventario pero no administra usuarios ni catálogos', { concurrency: false }, async () => {
+  // Una prueba anterior de la suite deja el rol `tecnico` deshabilitado en el catálogo y no
+  // lo restaura. Se reactiva aquí para que esta prueba no dependa del orden de ejecución.
+  const admin = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  await requestJson('/api/catalogos', {
+    method: 'PATCH',
+    token: admin.token,
+    body: { roles: ROLE_CATALOG },
+  });
+
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+
+  const permitido = await requestJson('/api/insumos/11/stock', {
+    method: 'PATCH', token: session.token, body: { delta: -1 },
+  });
+  assert.notEqual(permitido.response.status, 403, 'el técnico sí opera insumos');
+
+  for (const url of ['/api/catalogos', '/api/users']) {
+    const method = url === '/api/catalogos' ? 'PATCH' : 'POST';
+    const { response } = await requestJson(url, {
+      method, token: session.token, body: { sucursales: [], nombre: 'X', username: 'x2', password: 'Aa1.aaaaaaaa', rol: 'consulta' },
+    });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para técnico`);
+  }
+});
+
+test('autorización: el solicitante sí puede crear y comentar sus tickets', { concurrency: false }, async () => {
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+
+  const creado = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: { activoTag: 'POS-001', descripcion: 'Falla reportada por el solicitante', sucursal: 'TJ01', prioridad: 'MEDIA', atencionTipo: 'REMOTO' },
+  });
+  assert.equal(creado.response.status, 201, JSON.stringify(creado.data));
+
+  const comentario = await requestJson(`/api/tickets/${creado.data.id}/comments`, {
+    method: 'POST', token: session.token, body: { comentario: 'Sigue fallando.' },
+  });
+  assert.notEqual(comentario.response.status, 403, 'el solicitante puede comentar su propio ticket');
 });

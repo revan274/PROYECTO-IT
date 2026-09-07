@@ -14,7 +14,7 @@ export function createActivosRouter({
   parsePagination,
   paginateList,
   toInt,
-  ensureCanEdit,
+  ensurePermission,
   getRequestActor,
   normalizeAssetPayload,
   finalizeAsset,
@@ -23,7 +23,6 @@ export function createActivosRouter({
   pushAuditWithContext,
   IMPORT_MAX_ROWS,
   importAssets,
-  ensureAdmin,
   buildSignedAssetQrToken,
 }) {
   const router = express.Router();
@@ -158,7 +157,7 @@ router.get('/:id/qr-token', requireAuth, async (req, res, next) => {
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.create')) return;
     const { usuario } = getRequestActor(req);
 
     const parsed = normalizeAssetPayload(req.body, { mode: 'create' });
@@ -203,7 +202,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.update')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
@@ -257,7 +256,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.post('/import', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.import')) return;
     const { usuario } = getRequestActor(req);
     const fileName = asNonEmptyString(req.body?.fileName) || 'Importación Excel';
     const dryRun = req.body?.dryRun === true;
@@ -307,7 +306,7 @@ router.post('/import', requireAuth, async (req, res, next) => {
 
 router.delete('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.deleteAll')) return;
     const { usuario } = getRequestActor(req);
 
     const result = await updateDb((db) => {
@@ -335,7 +334,7 @@ router.delete('/', requireAuth, async (req, res, next) => {
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.delete')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });

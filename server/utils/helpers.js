@@ -7,12 +7,17 @@ import {
   canEditByRole as roleCanEdit,
   normalizeKnownUserRole,
 } from '../domain/roles.js';
-import { calcSlaDueDate } from '../modules/sla-calendar.js';
 import {
   CLOSED_TICKET_STATES,
   SLA_POLICY_HOURS,
   TICKET_STATES,
 } from '../../shared/ticket-rules.js';
+import { calcSlaDueDate } from '../modules/sla-calendar.js';
+import {
+  ADMIN_ONLY_PERMISSIONS,
+  TICKET_AUTHOR_PERMISSIONS,
+  roleHasPermission,
+} from '../../shared/permissions.js';
 
 export { DEFAULT_ROLE_CATALOG, USER_ROLES };
 export { TICKET_STATES };
@@ -699,6 +704,32 @@ export function ensureCanEdit(req, res) {
 export function ensureCanCreateTickets(req, res) {
   if (!canCreateTicketsByRole(req.authUser?.rol)) {
     res.status(403).json({ error: 'No autorizado para crear tickets.' });
+    return false;
+  }
+  return true;
+}
+
+// Mensajes conservados tal cual los emitían ensureAdmin / ensureCanEdit /
+// ensureCanCreateTickets, para que el cambio a permisos no altere ninguna respuesta.
+const ADMIN_ONLY_SET = new Set(ADMIN_ONLY_PERMISSIONS);
+const TICKET_AUTHOR_SET = new Set(TICKET_AUTHOR_PERMISSIONS);
+
+function permissionDeniedMessage(permission) {
+  if (ADMIN_ONLY_SET.has(permission)) return 'Solo administradores pueden ejecutar esta operación.';
+  if (TICKET_AUTHOR_SET.has(permission)) return 'No autorizado para crear tickets.';
+  return 'No autorizado para ejecutar esta operación.';
+}
+
+/**
+ * Guardia de autorización por permiso concreto en lugar de por rol.
+ *
+ * El call site declara QUÉ operación necesita (`activos.delete`), no QUIÉN puede hacerla.
+ * Quién la puede hacer vive en la matriz de `shared/permissions.js`, así que introducir un
+ * rol nuevo ya no obliga a revisar cada ruta.
+ */
+export function ensurePermission(req, res, permission) {
+  if (!roleHasPermission(req.authUser?.rol, permission)) {
+    res.status(403).json({ error: permissionDeniedMessage(permission) });
     return false;
   }
   return true;

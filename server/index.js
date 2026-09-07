@@ -94,9 +94,7 @@ import {
   paginateList,
   getBootstrapAuditRows,
   // Authorization guards
-  ensureCanEdit,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
   getRequestDb,
 } from './utils/helpers.js';
 import { createAuthRuntime } from './middleware/authRuntime.js';
@@ -721,7 +719,7 @@ app.get('/api/catalogos', requireAuth, async (req, res, next) => {
 
 app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'catalogos.manage')) return;
     const { usuario } = getRequestActor(req);
 
     const hasBranchUpdate = req.body?.sucursales !== undefined;
@@ -978,7 +976,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
 
 app.put('/api/travel-adjustments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'travel.manage')) return;
 
     const month = normalizeTravelAdjustmentMonth(req.body?.month);
     const technicianScopeKey = normalizeTravelScopeKey(req.body?.technicianScopeKey);
@@ -1250,8 +1248,7 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
 
 const ticketRouteDeps = {
   requireAuth,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
@@ -1264,7 +1261,6 @@ const ticketRouteDeps = {
   calcDueDate,
   pushAuditWithContext,
   serializeTicket,
-  ensureCanEdit,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -1296,7 +1292,7 @@ const activosRouteDeps = {
   parsePagination,
   paginateList,
   toInt,
-  ensureCanEdit,
+  ensurePermission,
   getRequestActor,
   normalizeAssetPayload,
   finalizeAsset,
@@ -1305,13 +1301,12 @@ const activosRouteDeps = {
   pushAuditWithContext,
   IMPORT_MAX_ROWS,
   importAssets,
-  ensureAdmin,
   buildSignedAssetQrToken,
 };
 
 const insumosRouteDeps = {
   requireAuth,
-  ensureCanEdit,
+  ensurePermission,
   asNonEmptyString,
   toInt,
   getRequestActor,
@@ -1322,7 +1317,7 @@ const insumosRouteDeps = {
 
 const usersRouteDeps = {
   requireAuth,
-  ensureAdmin,
+  ensurePermission,
   createUserPasswordHash,
   roleIsEnabledByCatalog,
   getRequestActor,
@@ -1399,12 +1394,11 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
-    // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
-    // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
     if (ATTACHMENT_STORAGE.durabilityRisk) {
       console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
     }
+    // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
     const publicUrl = process.env.PUBLIC_URL;
     if (publicUrl) startKeepAlive(`${publicUrl}/api/health`);
