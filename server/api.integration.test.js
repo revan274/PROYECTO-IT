@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -229,7 +229,7 @@ async function waitForServer(baseUrl, child, getLogs) {
   throw new Error(`El servidor de integracion no estuvo listo a tiempo.\n${getLogs()}`);
 }
 
-async function startTestServer(dbFile) {
+async function startTestServer(dbFile, attachmentsDir) {
   const port = await reservePort();
   let logs = '';
   const child = spawn(process.execPath, ['server/main.js'], {
@@ -239,6 +239,9 @@ async function startTestServer(dbFile) {
       NODE_ENV: 'test',
       PORT: String(port),
       DB_FILE: dbFile,
+      // Deliberadamente FUERA del árbol de DB_FILE: es la configuración de producción
+      // recomendada (volumen persistente) y la que rompía la resolución de rutas.
+      ATTACHMENTS_DIR: attachmentsDir,
       DB_BACKUP_ENABLE: 'false',
       AUTH_RATE_LIMIT_MAX: '10000',
       AUTH_DISALLOW_DEMO_PASSWORDS: 'false',
@@ -283,13 +286,15 @@ async function stopTestServer(child) {
 
 let tempDir = '';
 let dbFilePath = '';
+let attachmentsDirPath = '';
 let serverRuntime = null;
 
 before(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'mesa-it-integration-'));
   dbFilePath = path.join(tempDir, 'db.json');
+  attachmentsDirPath = path.join(tempDir, 'volumen-adjuntos');
   await writeFile(dbFilePath, JSON.stringify(buildFixtureDb(), null, 2), 'utf8');
-  serverRuntime = await startTestServer(dbFilePath);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
 });
 
 after(async () => {
@@ -1386,11 +1391,56 @@ test('Fase 2: una sesión sigue válida después de reiniciar el servidor', { co
   const previousRuntime = serverRuntime;
 
   await stopTestServer(previousRuntime.child);
-  serverRuntime = await startTestServer(dbFilePath);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
 
   const bootstrap = await requestJson('/api/bootstrap', {
     token: session.token,
   });
   assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.data));
   assert.equal(Array.isArray(bootstrap.data?.tickets), true);
+});
+
+// El ciclo subir -> descargar no tenía cobertura, y por eso pasó inadvertida una regresión
+// que bloqueaba TODOS los adjuntos cuando ATTACHMENTS_DIR apunta fuera del árbol de datos
+// (la configuración recomendada en producción: un volumen persistente).
+test('adjuntos: ciclo completo subir/descargar con ATTACHMENTS_DIR fuera del árbol de datos', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const contenido = Buffer.from('evidencia de la falla del POS', 'utf8');
+
+  const subida = await requestJson('/api/tickets/701/attachments', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      fileName: 'evidencia.txt',
+      mimeType: 'text/plain',
+      contentBase64: contenido.toString('base64'),
+    },
+  });
+
+  assert.equal(subida.response.status, 201, JSON.stringify(subida.data));
+  const attachmentId = subida.data.attachment.id;
+  assert.ok(attachmentId, 'la subida debe devolver el id del adjunto');
+  assert.equal(subida.data.ticket.attachments.length, 1);
+  assert.equal(subida.data.attachment.size, contenido.length);
+
+  // El archivo debe existir físicamente en el volumen configurado, no junto al db.json.
+  const enVolumen = await readdir(attachmentsDirPath);
+  assert.equal(enVolumen.length, 1, `se esperaba 1 archivo en ${attachmentsDirPath}`);
+  assert.equal(enVolumen[0].endsWith('evidencia.txt'), true);
+
+  const descarga = await fetch(
+    `${serverRuntime.baseUrl}/api/tickets/701/attachments/${attachmentId}/download`,
+    { headers: { Authorization: `Bearer ${session.token}` } },
+  );
+  assert.equal(descarga.status, 200);
+  assert.equal(await descarga.text(), contenido.toString('utf8'));
+});
+
+test('adjuntos: un ticket ajeno no puede descargar el adjunto de otro', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const inexistente = await fetch(
+    `${serverRuntime.baseUrl}/api/tickets/702/attachments/999999/download`,
+    { headers: { Authorization: `Bearer ${session.token}` } },
+  );
+  assert.equal(inexistente.status, 404);
 });

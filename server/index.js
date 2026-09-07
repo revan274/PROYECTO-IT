@@ -98,6 +98,7 @@ import {
   ensureAdmin,
 } from './utils/helpers.js';
 import { createAuthRuntime } from './middleware/authRuntime.js';
+import { resolveAttachmentStorage, resolveAttachmentPath } from './modules/attachment-storage.js';
 
 const PORT = Number(process.env.PORT || 4000);
 const __filename = fileURLToPath(import.meta.url);
@@ -141,7 +142,12 @@ const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VP
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
 const DATA_DIR_PATH = getDataDirPath ? getDataDirPath() : path.join(__dirname, 'data');
-const UPLOAD_DIR = path.join(DATA_DIR_PATH, 'uploads');
+const ATTACHMENT_STORAGE = resolveAttachmentStorage({
+  attachmentsDir: process.env.ATTACHMENTS_DIR,
+  dataDir: DATA_DIR_PATH,
+  storageBackend: getStorageBackend(),
+});
+const UPLOAD_DIR = ATTACHMENT_STORAGE.dir;
 const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
 const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const HAS_CLIENT_DIST = existsSync(CLIENT_INDEX_FILE);
@@ -219,13 +225,7 @@ async function ensureUploadDir() {
 }
 
 function toAbsoluteAttachmentPath(storagePath) {
-  const normalized = asNonEmptyString(storagePath).replace(/\\/g, '/');
-  if (!normalized) return '';
-  const absolute = path.resolve(DATA_DIR_PATH, normalized);
-  const root = path.resolve(UPLOAD_DIR);
-  const relative = path.relative(root, absolute);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return '';
-  return absolute;
+  return resolveAttachmentPath(storagePath, UPLOAD_DIR);
 }
 
 // --- Asset helpers ---
@@ -1394,6 +1394,10 @@ export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
     // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
+    console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
+    if (ATTACHMENT_STORAGE.durabilityRisk) {
+      console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
+    }
     // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
     const publicUrl = process.env.PUBLIC_URL;
     if (publicUrl) startKeepAlive(`${publicUrl}/api/health`);

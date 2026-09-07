@@ -151,10 +151,21 @@ forma parte de la configuración actual.
    - `AUTH_DISALLOW_DEMO_PASSWORDS=true`.
 4. Verifica `https://<servicio-railway>/api/health` antes de publicar el frontend.
 
-Los adjuntos y respaldos son archivos locales y no se almacenan en PostgreSQL. Si
-se necesitan conservar entre despliegues, Railway debe tener un volumen persistente
-montado y `DB_FILE` debe apuntar a ese volumen, o los binarios deben migrarse a
-almacenamiento de objetos.
+Los adjuntos y respaldos son archivos locales y no se almacenan en PostgreSQL. Para
+conservarlos entre despliegues, Railway debe tener un volumen persistente montado y
+`ATTACHMENTS_DIR` debe apuntar a ese volumen (o los binarios deben migrarse a
+almacenamiento de objetos).
+
+Si `ATTACHMENTS_DIR` no se define, el destino se deriva del directorio de `DB_FILE`.
+Esa derivación es una trampa cuando se usa PostgreSQL: `DB_FILE` deja de tener efecto
+sobre el estado, nadie lo configura, y los adjuntos caen en el disco efímero del
+contenedor. En ese caso el servidor emite una advertencia explícita en el arranque:
+
+```
+ADVERTENCIA: Los adjuntos de tickets se guardan en "...", derivado del directorio de datos.
+```
+
+Si ves esa línea en los logs de Railway, los adjuntos no están a salvo.
 
 ### Frontend en Cloudflare
 
