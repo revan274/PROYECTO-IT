@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { pushAudit } from '../store.js';
+import { pushAudit, readDb } from '../store.js';
 import {
   DEFAULT_ROLE_CATALOG,
   USER_ROLES,
@@ -670,6 +670,20 @@ export function paginateList(rows, page, pageSize) {
 export function getBootstrapAuditRows(rows) {
   if (!Array.isArray(rows) || BOOTSTRAP_AUDIT_LIMIT <= 0) return [];
   return rows.slice(0, BOOTSTRAP_AUDIT_LIMIT);
+}
+
+/**
+ * Documento de estado para un handler de solo lectura.
+ *
+ * `requireAuth` ya leyó y normalizó el documento completo para validar la sesión y lo dejó
+ * en `req.appDb`. Como todo el estado vive en un único documento, esa lectura es el costo
+ * dominante de cada petición: releerlo en el handler lo duplica sin ganar nada. Reutilizarlo
+ * además mejora la consistencia, porque autorización y datos salen del mismo snapshot.
+ *
+ * Solo para lecturas: las mutaciones deben pasar por `updateDb`, que toma su propio lock.
+ */
+export async function getRequestDb(req, loadDb = readDb) {
+  return req?.appDb || loadDb();
 }
 
 // --- Authorization guards (send HTTP error and return false if not allowed) ---

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import { readDb, updateDb, now, nextId } from '../store.js';
+import { updateDb, now, nextId } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
 import { sendMail, getNotifyTicketEmail } from '../modules/mailer.js';
 
@@ -989,7 +990,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
     const attachmentId = toInt(req.params.attachmentId);
     if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID inválido.' });
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const ticket = db.tickets.find((item) => Number(item.id) === Number(id));
     if (!ticket) return res.status(404).json({ error: 'Ticket no encontrado.' });
     if (!canAccessTicketByAuthUser(req, ticket)) {
@@ -1082,7 +1083,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const estado = req.query.estado ? normalizeEstadoTicket(req.query.estado) : null;
     const prioridad = req.query.prioridad ? normalizePrioridad(req.query.prioridad) : null;
     const atencionTipo = req.query.atencion !== undefined ? normalizeTicketAttentionType(req.query.atencion) : '';

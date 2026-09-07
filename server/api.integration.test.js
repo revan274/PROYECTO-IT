@@ -1448,3 +1448,27 @@ test('adjuntos: un ticket ajeno no puede descargar el adjunto de otro', { concur
   );
   assert.equal(inexistente.status, 404);
 });
+
+// Express no comprime por defecto. El bootstrap envía el dominio completo y es JSON muy
+// repetitivo: sin compresión cada usuario descarga megabytes en cada arranque de sesión.
+test('las respuestas grandes viajan comprimidas', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const response = await fetch(`${serverRuntime.baseUrl}/api/bootstrap`, {
+    headers: { Authorization: `Bearer ${session.token}`, 'Accept-Encoding': 'gzip' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-encoding'), 'gzip');
+  const payload = await response.json();
+  assert.equal(Array.isArray(payload.tickets), true, 'el cuerpo debe seguir siendo JSON válido');
+});
+
+test('las respuestas pequeñas no pagan el costo de comprimir', { concurrency: false }, async () => {
+  const response = await fetch(`${serverRuntime.baseUrl}/api/health`, {
+    headers: { 'Accept-Encoding': 'gzip' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-encoding'), null);
+});

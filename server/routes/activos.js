@@ -1,5 +1,6 @@
 import express from 'express';
 import { readDb, updateDb, nextId } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 
 export function createActivosRouter({
   requireAuth,
@@ -32,7 +33,7 @@ router.get('/riesgos', requireAuth, async (req, res, next) => {
     if (req.authUser?.rol === 'solicitante') {
       return res.status(403).json({ error: 'No autorizado para consultar riesgos de activos.' });
     }
-    const db = await readDb();
+    const db = await getRequestDb(req);
     res.json({
       ...summarizeAssetRisks(db.activos),
       generatedAt: new Date().toISOString(),
@@ -47,7 +48,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     if (req.authUser?.rol === 'solicitante') {
       return res.status(403).json({ error: 'No autorizado para consultar inventario.' });
     }
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const role = req.authUser?.rol || '';
     const search = normalizeTextKey(req.query.search || '');
     const estado = asNonEmptyString(req.query.estado);
@@ -139,7 +140,7 @@ router.get('/:id/qr-token', requireAuth, async (req, res, next) => {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const asset = db.activos.find((item) => Number(item.id) === Number(id));
     if (!asset) return res.status(404).json({ error: 'Activo no encontrado.' });
 

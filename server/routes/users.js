@@ -1,5 +1,6 @@
 import express from 'express';
-import { readDb, updateDb, sanitizeUser } from '../store.js';
+import { updateDb, sanitizeUser } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 
 export function createUsersRouter({
   requireAuth,
@@ -23,7 +24,7 @@ export function createUsersRouter({
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     if (!ensureAdmin(req, res)) return;
-    const db = await readDb();
+    const db = await getRequestDb(req);
     res.json(db.users.map(sanitizeUser));
   } catch (error) {
     next(error);

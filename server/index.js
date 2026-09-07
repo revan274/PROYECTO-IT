@@ -2,6 +2,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -96,6 +97,7 @@ import {
   ensureCanEdit,
   ensureCanCreateTickets,
   ensureAdmin,
+  getRequestDb,
 } from './utils/helpers.js';
 import { createAuthRuntime } from './middleware/authRuntime.js';
 import { resolveAttachmentStorage, resolveAttachmentPath } from './modules/attachment-storage.js';
@@ -172,6 +174,10 @@ function configureTrustProxy(app) {
 }
 
 function configureCommonMiddleware(app) {
+  // Express no comprime por defecto. El estado completo viaja en /api/bootstrap como JSON
+  // muy repetitivo: medido con 5.000 tickets, 7.7 MB se reducen a 0.25 MB (31x). El umbral
+  // evita gastar CPU en respuestas pequeñas, donde comprimir cuesta más de lo que ahorra.
+  app.use(compression({ threshold: 1024 }));
   app.use(helmet({
     contentSecurityPolicy: {
       useDefaults: true,
@@ -701,9 +707,9 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.get('/api/catalogos', requireAuth, async (_req, res, next) => {
+app.get('/api/catalogos', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const db = await getRequestDb(req);
     res.json({
       ...getCatalogsFromDb(db),
       updatedAt: new Date().toISOString(),
@@ -940,7 +946,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
       return res.status(304).end();
     }
 
-    const db = req.appDb || await readDb();
+    const db = await getRequestDb(req);
     const rol = req.authUser?.rol || '';
     const requesterOnly = rol === 'solicitante';
     const users = buildBootstrapUsers(db.users, rol);
@@ -1058,7 +1064,7 @@ app.put('/api/travel-adjustments', requireAuth, async (req, res, next) => {
 
 app.get('/api/summary', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const requesterOnly = req.authUser?.rol === 'solicitante';
     const ticketsSource = requesterOnly ? filterTicketsForUser(db.tickets, req.authUser) : db.tickets;
     const activosOperativos = db.activos.filter((a) => a.estado === 'Operativo').length;
@@ -1118,7 +1124,7 @@ app.get('/api/qr/resolve/:token', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'QR inválido o manipulado.' });
     }
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const asset = db.activos.find((item) => Number(item.id) === Number(verified.payload.aid));
     if (!asset) return res.status(404).json({ error: 'Activo no encontrado para este QR.' });
 
@@ -1145,7 +1151,7 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: 'No autorizado para consultar auditoría.' });
     }
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const moduleFilter = normalizeAuditModuleFilter(req.query.module);
     const resultFilter = normalizeAuditResultFilter(req.query.result);
     const userFilter = normalizeTextKey(req.query.user || '');
@@ -1393,6 +1399,7 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
+    // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
     if (ATTACHMENT_STORAGE.durabilityRisk) {
