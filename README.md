@@ -167,6 +167,39 @@ ADVERTENCIA: Los adjuntos de tickets se guardan en "...", derivado del directori
 
 Si ves esa línea en los logs de Railway, los adjuntos no están a salvo.
 
+#### Comprobar si el volumen es realmente persistente
+
+La configuración de volúmenes vive en el panel de Railway, no en el repositorio, así que el
+código no puede saberla. El servidor la comprueba de forma empírica: en cada arranque
+escribe `.storage-marker.json` en el directorio de adjuntos y registra desde cuándo está en
+uso. En los logs aparece como:
+
+```
+Almacenamiento de adjuntos en uso desde 2026-09-07T16:47:38.065Z (arranque #2, sobrevivio a reinicios anteriores).
+```
+
+**Procedimiento:** despliega, anota esa fecha, fuerza un redespliegue y vuelve a mirar.
+
+- La fecha **se conserva** y el contador sube → el volumen es persistente. Los adjuntos están a salvo.
+- La fecha **se reinicia** a hoy y el contador vuelve a `#1` → el disco es efímero. Cada
+  despliegue borra los adjuntos.
+
+El mismo dato está en `npm run integrity:check` y en `GET /api/diagnostics/storage`
+(solo administradores), que además reporta el resumen de integridad:
+
+```json
+{
+  "storageBackend": "postgres",
+  "attachments": {
+    "dir": "/mnt/volumen/adjuntos",
+    "source": "ATTACHMENTS_DIR",
+    "durabilityRisk": false,
+    "marker": { "firstSeenAt": "...", "bootCount": 4, "survivedRestart": true }
+  },
+  "integrity": { "total": 0, "byType": {} }
+}
+```
+
 ### Auditoría de integridad
 
 El estado vive en un único documento JSONB sin foreign keys: la base de datos no puede

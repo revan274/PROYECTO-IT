@@ -18,6 +18,9 @@ export const ADMIN_ONLY_PERMISSIONS = Object.freeze([
   'users.manage',
   'activos.deleteAll',
   'tickets.historical',
+  // El diagnostico expone rutas del sistema de archivos y el estado de integridad:
+  // informacion util para operar, pero que no debe salir del rol administrador.
+  'diagnostics.read',
 ]);
 
 /** Operación IT: hoy admin y técnico (equivalente a `canEditByRole`). */

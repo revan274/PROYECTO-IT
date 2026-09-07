@@ -1439,7 +1439,8 @@ test('adjuntos: ciclo completo subir/descargar con ATTACHMENTS_DIR fuera del ár
   assert.equal(subida.data.attachment.size, contenido.length);
 
   // El archivo debe existir físicamente en el volumen configurado, no junto al db.json.
-  const enVolumen = await readdir(attachmentsDirPath);
+  // El marcador de persistencia vive en el mismo directorio pero no es un adjunto.
+  const enVolumen = (await readdir(attachmentsDirPath)).filter((n) => n !== '.storage-marker.json');
   assert.equal(enVolumen.length, 1, `se esperaba 1 archivo en ${attachmentsDirPath}`);
   assert.equal(enVolumen[0].endsWith('evidencia.txt'), true);
 
@@ -1557,4 +1558,51 @@ test('autorización: el solicitante sí puede crear y comentar sus tickets', { c
     method: 'POST', token: session.token, body: { comentario: 'Sigue fallando.' },
   });
   assert.notEqual(comentario.response.status, 403, 'el solicitante puede comentar su propio ticket');
+});
+
+// Diagnostico de almacenamiento: responde "¿los adjuntos sobreviven a un redespliegue?"
+// desde la propia aplicacion, sin necesitar acceso al dashboard de Railway.
+test('diagnostico: solo un admin puede consultar el estado del almacenamiento', { concurrency: false }, async () => {
+  for (const [usuario, password] of [[TECH_USER.username, TECH_PASSWORD], [READONLY_USER.username, READONLY_PASSWORD]]) {
+    const session = await login(usuario, password);
+    const { response } = await requestJson('/api/diagnostics/storage', { token: session.token });
+    assert.equal(response.status, 403, `${usuario} no debe ver el diagnostico`);
+  }
+});
+
+test('diagnostico: reporta el destino de los adjuntos y el marcador de persistencia', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const { response, data } = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  assert.equal(response.status, 200, JSON.stringify(data));
+  assert.equal(data.storageBackend, 'file');
+
+  assert.equal(data.attachments.source, 'ATTACHMENTS_DIR');
+  assert.equal(data.attachments.dir, attachmentsDirPath);
+  // Con backend de archivo, estado y adjuntos comparten destino: no hay divergencia.
+  assert.equal(data.attachments.durabilityRisk, false);
+
+  assert.equal(typeof data.attachments.marker.firstSeenAt, 'string');
+  assert.equal(data.attachments.marker.bootCount >= 1, true);
+  assert.equal(data.attachments.marker.error, null);
+
+  assert.equal(typeof data.integrity.total, 'number');
+});
+
+test('diagnostico: el marcador conserva su fecha original tras reiniciar el servidor', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const antes = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  await stopTestServer(serverRuntime.child);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
+
+  const despues = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  assert.equal(
+    despues.data.attachments.marker.firstSeenAt,
+    antes.data.attachments.marker.firstSeenAt,
+    'la fecha original debe sobrevivir al reinicio',
+  );
+  assert.equal(despues.data.attachments.marker.bootCount > antes.data.attachments.marker.bootCount, true);
+  assert.equal(despues.data.attachments.marker.survivedRestart, true);
 });

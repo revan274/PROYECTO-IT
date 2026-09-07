@@ -1,4 +1,4 @@
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, readdirSync, promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +99,8 @@ import {
 } from './utils/helpers.js';
 import { createAuthRuntime } from './middleware/authRuntime.js';
 import { resolveAttachmentStorage, resolveAttachmentPath } from './modules/attachment-storage.js';
+import { touchStorageMarker, STORAGE_MARKER_FILE } from './modules/storage-marker.js';
+import { auditIntegrity } from './modules/integrity.js';
 
 const PORT = Number(process.env.PORT || 4000);
 const __filename = fileURLToPath(import.meta.url);
@@ -703,6 +705,42 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     storageBackend: getStorageBackend(),
   });
+});
+
+// Responde, desde la propia aplicacion, si los adjuntos sobreviven a un redespliegue.
+// La configuracion de volumenes vive en el panel del hosting y no en el repositorio, asi
+// que sin este endpoint la unica forma de saberlo es entrar al dashboard. Admin only: expone
+// rutas del sistema de archivos.
+app.get('/api/diagnostics/storage', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensurePermission(req, res, 'diagnostics.read')) return;
+
+    const marker = await touchStorageMarker(UPLOAD_DIR);
+    const db = await getRequestDb(req);
+    const integridad = auditIntegrity(db, {
+      attachmentExists: (storagePath) => {
+        const absolute = resolveAttachmentPath(storagePath, UPLOAD_DIR);
+        return Boolean(absolute) && existsSync(absolute);
+      },
+      listStoredFiles: () => (existsSync(UPLOAD_DIR)
+        ? readdirSync(UPLOAD_DIR).filter((name) => name !== STORAGE_MARKER_FILE)
+        : []),
+    });
+
+    res.json({
+      storageBackend: getStorageBackend(),
+      attachments: {
+        dir: ATTACHMENT_STORAGE.dir,
+        source: ATTACHMENT_STORAGE.source,
+        durabilityRisk: ATTACHMENT_STORAGE.durabilityRisk,
+        warning: ATTACHMENT_STORAGE.warning || null,
+        marker,
+      },
+      integrity: integridad.counts,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/catalogos', requireAuth, async (req, res, next) => {
@@ -1398,6 +1436,19 @@ export function startServer(port = PORT, appInstance = app) {
     if (ATTACHMENT_STORAGE.durabilityRisk) {
       console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
     }
+    // Deja constancia en cada arranque. Si tras un redespliegue la fecha de creacion se
+    // conserva, el almacenamiento es persistente; si se reinicia a hoy, es efimero y los
+    // adjuntos se estan perdiendo. Best-effort: nunca debe impedir que la API arranque.
+    void touchStorageMarker(UPLOAD_DIR).then((marker) => {
+      if (marker.error) {
+        console.warn(`No se pudo escribir el marcador de almacenamiento: ${marker.error}`);
+        return;
+      }
+      const veredicto = marker.survivedRestart
+        ? 'sobrevivio a reinicios anteriores'
+        : 'primer arranque registrado';
+      console.log(`Almacenamiento de adjuntos en uso desde ${marker.firstSeenAt} (arranque #${marker.bootCount}, ${veredicto}).`);
+    });
     // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
     const publicUrl = process.env.PUBLIC_URL;
