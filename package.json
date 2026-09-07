@@ -17,7 +17,8 @@
     "test:ui": "vitest run",
     "test:ui:coverage": "vitest run --coverage",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "integrity:check": "node server/scripts/integrity-check.js"
   },
   "engines": {
     "node": ">=20.19.0"

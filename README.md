@@ -167,6 +167,21 @@ ADVERTENCIA: Los adjuntos de tickets se guardan en "...", derivado del directori
 
 Si ves esa línea en los logs de Railway, los adjuntos no están a salvo.
 
+### Auditoría de integridad
+
+El estado vive en un único documento JSONB sin foreign keys: la base de datos no puede
+rechazar un ticket que apunta a un activo borrado ni dos registros con el mismo id. El
+comando `npm run integrity:check` verifica esas garantías (solo lectura) y sale con código
+1 si encuentra hallazgos, para poder engancharlo a un monitoreo:
+
+```bash
+npm run integrity:check              # local
+railway run npm run integrity:check  # contra el entorno real
+```
+
+Detecta: adjuntos cuyo archivo ya no está en disco, archivos huérfanos que nadie
+referencia, tickets apuntando a activos o usuarios inexistentes, e ids duplicados.
+
 ### Frontend en Cloudflare
 
 1. Define en `.env.production` la URL absoluta de la API:
