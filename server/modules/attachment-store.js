@@ -21,6 +21,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { resolveAttachmentPath } from './attachment-storage.js';
+import { withPgRetry } from './postgres-pool.js';
 
 export const PG_ATTACHMENTS_TABLE = 'mesa_it_attachments';
 
@@ -94,20 +95,20 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
         return;
       }
 
-      await pool.query(INSERT_SQL, [
+      await withPgRetry(() => pool.query(INSERT_SQL, [
         storagePath,
         ticketId,
         fileName,
         mimeType,
         content.length,
         content,
-      ]);
+      ]));
     },
 
     async read({ storagePath }) {
       const pool = await poolOrNull();
       if (pool) {
-        const result = await pool.query(SELECT_SQL, [storagePath]);
+        const result = await withPgRetry(() => pool.query(SELECT_SQL, [storagePath]));
         const fila = result.rows[0];
         if (fila?.content) return Buffer.from(fila.content);
       }
@@ -123,7 +124,7 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
     async has({ storagePath }) {
       const pool = await poolOrNull();
       if (pool) {
-        const result = await pool.query(EXISTS_SQL, [storagePath]);
+        const result = await withPgRetry(() => pool.query(EXISTS_SQL, [storagePath]));
         if (result.rowCount > 0) return true;
       }
       const absolute = legacyPath(storagePath);
@@ -133,7 +134,7 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
 
     async remove({ storagePath }) {
       const pool = await poolOrNull();
-      if (pool) await pool.query(DELETE_SQL, [storagePath]);
+      if (pool) await withPgRetry(() => pool.query(DELETE_SQL, [storagePath]));
       const absolute = legacyPath(storagePath);
       if (absolute) await unlink(absolute).catch(() => undefined);
     },
@@ -145,7 +146,7 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
     async listStoredPaths() {
       const pool = await poolOrNull();
       if (!pool) return [];
-      const result = await pool.query(LIST_PATHS_SQL);
+      const result = await withPgRetry(() => pool.query(LIST_PATHS_SQL));
       return result.rows.map((fila) => fila.storage_path).filter(Boolean);
     },
 
@@ -153,7 +154,7 @@ export function createAttachmentStore({ getPool, uploadDir, backend }) {
     async countStored() {
       const pool = await poolOrNull();
       if (!pool) return null;
-      const result = await pool.query(COUNT_SQL);
+      const result = await withPgRetry(() => pool.query(COUNT_SQL));
       return Math.max(0, Math.trunc(Number(result.rows[0]?.total) || 0));
     },
   };
