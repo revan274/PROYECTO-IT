@@ -1,4 +1,4 @@
-import { existsSync, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,19 +10,21 @@ import {
 import { mutatePostgresStateWithLock } from './modules/postgres-state.js';
 import { calcSlaDueDate } from './modules/sla-calendar.js';
 import { buildPoolOptions, attachPoolErrorHandler, withPgRetry } from './modules/postgres-pool.js';
+import { resolveRuntimePaths } from './modules/runtime-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
-const RENDER_DISK_DIR = '/var/data';
-const DEFAULT_SEED_FILE = path.join(DEFAULT_DATA_DIR, 'db.seed.json');
-const DEFAULT_RUNTIME_DIR = path.join(existsSync(RENDER_DISK_DIR) ? RENDER_DISK_DIR : DEFAULT_DATA_DIR, 'runtime');
-const DB_FILE = process.env.DB_FILE
-  ? path.resolve(process.cwd(), process.env.DB_FILE)
-  : path.join(DEFAULT_RUNTIME_DIR, 'db.json');
-const DATA_DIR = path.dirname(DB_FILE);
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+// `DB_FILE` es el único control sobre dónde vive el estado en disco. Antes, además, el runtime
+// se mudaba solo a /var/data si ese directorio existía: era la convención de Render, que este
+// proyecto ya no usa, y quedaba como una resolución implícita imposible de revisar.
+const {
+  dbFile: DB_FILE,
+  dataDir: DATA_DIR,
+  backupDir: BACKUP_DIR,
+  seedFile: DEFAULT_SEED_FILE,
+} = resolveRuntimePaths({ dbFile: process.env.DB_FILE, defaultDataDir: DEFAULT_DATA_DIR });
 const DB_BACKUP_KEEP = Math.max(1, Math.trunc(Number(process.env.DB_BACKUP_KEEP || 50)));
 const DB_BACKUP_ENABLE = String(process.env.DB_BACKUP_ENABLE || 'true').toLowerCase() !== 'false';
 const IS_PRODUCTION = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
