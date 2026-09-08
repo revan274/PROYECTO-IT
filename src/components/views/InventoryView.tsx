@@ -210,7 +210,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     <>
       <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
         <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-          <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-xl">Activos IT</h3>
+          <h3 className="font-black font-['Outfit'] text-slate-800 uppercase tracking-tight text-xl whitespace-nowrap">Activos IT</h3>
           <div className="grid grid-cols-1 min-[460px]:grid-cols-2 xl:flex items-stretch xl:items-center gap-3 w-full xl:w-auto">
             <Input
               variant="plain"
@@ -220,8 +220,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               className="hidden"
               onChange={(event) => void handleImportInventory(event)}
             />
+            {/* Secundario, como exportar y escanear: la única acción principal es "Nuevo activo". */}
             <Button
-              variant="dark"
               size="toolbar"
               disabled={!canEdit || isImportingInventory}
               onClick={() => inventoryImportInputRef.current?.click()}
@@ -231,13 +231,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <Button size="toolbar" onClick={exportarInventarioFiltrado}>
               <Download size={16} /> Exportar CSV
             </Button>
-            <Button variant="plain" size="bare"
+            <Button
+              size="toolbar"
               onClick={() => {
                 setQrManualInput('');
                 setQrScannerStatus('Escanea un QR firmado (mtiqr1).');
                 setShowQrScanner(true);
               }}
-              className="w-full xl:w-auto min-w-0 bg-white border border-blue-200 text-blue-700 px-5 py-3 sm:px-6 sm:py-4 rounded-2xl font-black text-[11px] uppercase leading-tight flex items-center justify-center gap-2 hover:bg-blue-50"
             >
               <ScanLine size={16} /> Escanear QR
             </Button>
