@@ -159,7 +159,7 @@ export function TicketsView({
           <h3 className="text-xl font-black uppercase text-slate-800">Tickets IT</h3>
         </div>
         <Button
-          variant="dark"
+          variant="primary"
           size="bare"
           disabled={!canCreateTickets}
           onClick={onOpenTicketModal}
