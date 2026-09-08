@@ -134,57 +134,93 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/*
+        Una sola definición de tarjeta alimentada por datos. Antes eran cinco bloques escritos
+        a mano con cinco tratamientos distintos: dos rellenos sólidos (Stock bajo en naranja,
+        Activos en verde) y tres fondos tenues. El peso visual quedaba invertido respecto a la
+        urgencia — lo que más gritaba era un conteo neutro, mientras Críticos y SLA vencido,
+        que son los que exigen actuar, quedaban apagados.
+
+        Ahora el tono codifica gravedad de forma creciente (neutro → marca → ámbar → naranja →
+        rojo) y la estructura es idéntica en las cinco, así que la fila se escanea de un golpe.
+        La etiqueta reserva dos líneas para que todos los números compartan línea base aunque
+        unos títulos envuelvan y otros no.
+      */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
-        <Button
-          variant="plain"
-          size="bare"
-          onClick={() => setView('supplies')}
-          className="w-full flex-col items-stretch justify-start text-left bg-brand p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
-        >
-          <p className="text-xs font-black uppercase opacity-60 mb-2">Stock Bajo</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length}</h2>
-          <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-        </Button>
-        <Button
-          variant="plain"
-          size="bare"
-          onClick={() => applyTicketFocus('ABIERTOS')}
-          className="w-full flex-col items-stretch justify-start text-left bg-white p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-slate-800 border border-slate-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
-        >
-          <p className="text-xs font-black uppercase text-slate-400 mb-2">Tickets Abiertos</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-brand">{dashboardOpenTicketsCurrent.length}</h2>
-          <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardOpenTrend.toneClass}`}>{dashboardOpenTrend.label}</p>
-        </Button>
-        <Button
-          variant="plain"
-          size="bare"
-          onClick={() => setView('inventory')}
-          className="w-full flex-col items-stretch justify-start text-left bg-brand-green p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-lime-200"
-        >
-          <p className="text-xs font-black uppercase opacity-60 mb-2">Activos</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{activos.length}</h2>
-          <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-white/70">Snapshot actual</p>
-        </Button>
-        <Button
-          variant="plain"
-          size="bare"
-          onClick={() => applyTicketFocus('CRITICA')}
-          className="w-full flex-col items-stretch justify-start text-left bg-amber-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-amber-700 border border-amber-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-200"
-        >
-          <p className="text-xs font-black uppercase opacity-60 mb-2">Críticos</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardCriticalTicketsCurrent.length}</h2>
-          <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardCriticalTrend.toneClass}`}>{dashboardCriticalTrend.label}</p>
-        </Button>
-        <Button
-          variant="plain"
-          size="bare"
-          onClick={() => applyTicketFocus('SLA')}
-          className="w-full flex-col items-stretch justify-start text-left bg-red-50 p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[2.5rem] text-red-600 border border-red-100 shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200"
-        >
-          <p className="text-xs font-black uppercase opacity-60 mb-2">SLA Vencido</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black">{dashboardSlaExpiredCount}</h2>
-          <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${dashboardSlaTrend.toneClass}`}>{dashboardSlaTrend.label}</p>
-        </Button>
+        {[
+          {
+            key: 'activos',
+            label: 'Activos',
+            value: activos.length,
+            note: 'Snapshot actual',
+            noteClass: 'text-slate-400',
+            skin: 'bg-slate-50 border-slate-200 hover:border-slate-300',
+            labelClass: 'text-slate-400',
+            valueClass: 'text-slate-600',
+            ring: 'focus-visible:ring-slate-200',
+            onClick: () => setView('inventory'),
+          },
+          {
+            key: 'abiertos',
+            label: 'Tickets abiertos',
+            value: dashboardOpenTicketsCurrent.length,
+            note: dashboardOpenTrend.label,
+            noteClass: dashboardOpenTrend.toneClass,
+            skin: 'bg-white border-slate-200 hover:border-slate-300',
+            labelClass: 'text-slate-400',
+            valueClass: 'text-brand',
+            ring: 'focus-visible:ring-orange-200',
+            onClick: () => applyTicketFocus('ABIERTOS'),
+          },
+          {
+            key: 'stock',
+            label: 'Stock bajo',
+            value: insumos.filter((i) => getSupplyHealthStatus(i) !== 'OK').length,
+            note: 'Snapshot actual',
+            noteClass: 'text-indigo-400',
+            skin: 'bg-indigo-50 border-indigo-100 hover:border-indigo-200',
+            labelClass: 'text-indigo-600',
+            valueClass: 'text-indigo-700',
+            ring: 'focus-visible:ring-indigo-200',
+            onClick: () => setView('supplies'),
+          },
+          {
+            key: 'criticos',
+            label: 'Críticos',
+            value: dashboardCriticalTicketsCurrent.length,
+            note: dashboardCriticalTrend.label,
+            noteClass: dashboardCriticalTrend.toneClass,
+            skin: 'bg-amber-50 border-amber-200 hover:border-amber-300',
+            labelClass: 'text-amber-600',
+            valueClass: 'text-amber-700',
+            ring: 'focus-visible:ring-amber-300',
+            onClick: () => applyTicketFocus('CRITICA'),
+          },
+          {
+            key: 'sla',
+            label: 'SLA vencido',
+            value: dashboardSlaExpiredCount,
+            note: dashboardSlaTrend.label,
+            noteClass: dashboardSlaTrend.toneClass,
+            skin: 'bg-red-50 border-red-200 hover:border-red-300',
+            labelClass: 'text-red-600',
+            valueClass: 'text-red-700',
+            ring: 'focus-visible:ring-red-300',
+            onClick: () => applyTicketFocus('SLA'),
+          },
+        ].map((tile) => (
+          <Button
+            key={tile.key}
+            variant="plain"
+            size="bare"
+            onClick={tile.onClick}
+            className={`w-full flex-col items-stretch justify-start text-left border p-6 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-4 ${tile.skin} ${tile.ring}`}
+          >
+            <p className={`text-xs font-black uppercase tracking-wider min-h-[2.5em] ${tile.labelClass}`}>{tile.label}</p>
+            <h2 className={`text-4xl sm:text-5xl lg:text-6xl font-black tabular-nums ${tile.valueClass}`}>{tile.value}</h2>
+            <p className={`mt-3 text-[10px] font-black uppercase tracking-wider ${tile.noteClass}`}>{tile.note}</p>
+          </Button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
