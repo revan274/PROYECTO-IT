@@ -3,7 +3,7 @@ import { updateDb, nextId } from '../store.js';
 
 export function createInsumosRouter({
   requireAuth,
-  ensureCanEdit,
+  ensurePermission,
   asNonEmptyString,
   toInt,
   getRequestActor,
@@ -15,7 +15,7 @@ export function createInsumosRouter({
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'insumos.create')) return;
     const nombre = asNonEmptyString(req.body?.nombre);
     const unidad = asNonEmptyString(req.body?.unidad) || 'Piezas';
     const categoria = (asNonEmptyString(req.body?.categoria) || 'HARDWARE').toUpperCase();
@@ -81,7 +81,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'insumos.update')) return;
     const id = toInt(req.params.id);
     const nombre = asNonEmptyString(req.body?.nombre);
     const unidad = asNonEmptyString(req.body?.unidad) || 'Piezas';
@@ -161,7 +161,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.patch('/:id/stock', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'insumos.stock')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
@@ -234,7 +234,7 @@ router.patch('/:id/stock', requireAuth, async (req, res, next) => {
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'insumos.delete')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });

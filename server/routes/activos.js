@@ -1,5 +1,6 @@
 import express from 'express';
 import { readDb, updateDb, nextId } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 
 export function createActivosRouter({
   requireAuth,
@@ -13,7 +14,7 @@ export function createActivosRouter({
   parsePagination,
   paginateList,
   toInt,
-  ensureCanEdit,
+  ensurePermission,
   getRequestActor,
   normalizeAssetPayload,
   finalizeAsset,
@@ -22,7 +23,6 @@ export function createActivosRouter({
   pushAuditWithContext,
   IMPORT_MAX_ROWS,
   importAssets,
-  ensureAdmin,
   buildSignedAssetQrToken,
 }) {
   const router = express.Router();
@@ -32,7 +32,7 @@ router.get('/riesgos', requireAuth, async (req, res, next) => {
     if (req.authUser?.rol === 'solicitante') {
       return res.status(403).json({ error: 'No autorizado para consultar riesgos de activos.' });
     }
-    const db = await readDb();
+    const db = await getRequestDb(req);
     res.json({
       ...summarizeAssetRisks(db.activos),
       generatedAt: new Date().toISOString(),
@@ -47,7 +47,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     if (req.authUser?.rol === 'solicitante') {
       return res.status(403).json({ error: 'No autorizado para consultar inventario.' });
     }
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const role = req.authUser?.rol || '';
     const search = normalizeTextKey(req.query.search || '');
     const estado = asNonEmptyString(req.query.estado);
@@ -139,7 +139,7 @@ router.get('/:id/qr-token', requireAuth, async (req, res, next) => {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const asset = db.activos.find((item) => Number(item.id) === Number(id));
     if (!asset) return res.status(404).json({ error: 'Activo no encontrado.' });
 
@@ -157,7 +157,7 @@ router.get('/:id/qr-token', requireAuth, async (req, res, next) => {
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.create')) return;
     const { usuario } = getRequestActor(req);
 
     const parsed = normalizeAssetPayload(req.body, { mode: 'create' });
@@ -202,7 +202,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.update')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
@@ -256,7 +256,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.post('/import', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.import')) return;
     const { usuario } = getRequestActor(req);
     const fileName = asNonEmptyString(req.body?.fileName) || 'Importación Excel';
     const dryRun = req.body?.dryRun === true;
@@ -306,7 +306,7 @@ router.post('/import', requireAuth, async (req, res, next) => {
 
 router.delete('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.deleteAll')) return;
     const { usuario } = getRequestActor(req);
 
     const result = await updateDb((db) => {
@@ -334,7 +334,7 @@ router.delete('/', requireAuth, async (req, res, next) => {
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'activos.delete')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });

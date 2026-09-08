@@ -1,15 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import { readDb, updateDb, now, nextId } from '../store.js';
+import { updateDb, now, nextId } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
 import { sendMail, getNotifyTicketEmail } from '../modules/mailer.js';
 
 export function createTicketsRouter({
   requireAuth,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
@@ -22,7 +21,6 @@ export function createTicketsRouter({
   calcDueDate,
   pushAuditWithContext,
   serializeTicket,
-  ensureCanEdit,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -33,7 +31,7 @@ export function createTicketsRouter({
   canAccessTicketByAuthUser,
   sanitizeUploadFileName,
   TICKET_ATTACHMENT_MAX_BYTES,
-  ensureUploadDir,
+  attachmentStore,
   TICKET_ATTACHMENT_MAX_COUNT,
   buildTicketAttachmentResponse,
   filterTicketsForUser,
@@ -219,7 +217,7 @@ export function createTicketsRouter({
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.create')) return;
     const activoTag = asNonEmptyString(req.body?.activoTag);
     const descripcion = asNonEmptyString(req.body?.descripcion);
     const sucursalInput = req.body?.sucursal;
@@ -362,7 +360,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // Registro de tickets pasados (histórico). Solo admin.
 router.post('/historical', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.historical')) return;
 
     const formatLocal = (iso) => new Date(iso).toLocaleString('es-MX', { hour12: false });
     const parseDate = (value) => {
@@ -515,7 +513,7 @@ router.post('/historical', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.update')) return;
     const id = toInt(req.params.id);
     const estado = req.body?.estado ? normalizeEstadoTicket(req.body?.estado) : null;
     const asignadoA = req.body?.asignadoA !== undefined ? asNonEmptyString(req.body?.asignadoA) : undefined;
@@ -701,7 +699,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.resolve')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
     const comentario = asNonEmptyString(req.body?.comentario) || 'Ticket resuelto';
@@ -800,11 +798,8 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo eliminar el ticket.' });
     }
 
-    for (const path of removed.attachmentPaths) {
-      const absPath = toAbsoluteAttachmentPath(path);
-      if (absPath) {
-        await fs.unlink(absPath).catch(() => undefined);
-      }
+    for (const storagePath of removed.attachmentPaths) {
+      await attachmentStore.remove({ storagePath }).catch(() => undefined);
     }
 
     res.json({ ok: true, removedId: removed.ticket.id });
@@ -815,7 +810,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
 
 router.post('/:id/comments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.comment')) return;
     const id = toInt(req.params.id);
     const comentario = asNonEmptyString(req.body?.comentario);
     const { usuario } = getRequestActor(req);
@@ -866,7 +861,7 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
 
 router.post('/:id/attachments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanCreateTickets(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.attach')) return;
     const id = toInt(req.params.id);
     const fileName = sanitizeUploadFileName(req.body?.fileName);
     const mimeType = asNonEmptyString(req.body?.mimeType || req.body?.contentType) || 'application/octet-stream';
@@ -891,18 +886,23 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       return res.status(413).json({ error: `Adjunto excede limite de ${Math.round(TICKET_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB.` });
     }
 
-    await ensureUploadDir();
     const storedName = `tk_${id}_${Date.now()}_${randomUUID()}_${fileName}`;
     const storagePath = path.join('uploads', storedName).replace(/\\/g, '/');
-    const absPath = toAbsoluteAttachmentPath(storagePath);
-    if (!absPath) {
+    if (!toAbsoluteAttachmentPath(storagePath)) {
       return res.status(500).json({ error: 'No se pudo preparar almacenamiento del adjunto.' });
     }
 
     let fileSaved = false;
     let persisted = false;
     try {
-      await fs.writeFile(absPath, contentBuffer);
+      // Con Neon configurado los bytes van a la tabla de adjuntos, no al disco del contenedor.
+      await attachmentStore.save({
+        ticketId: id,
+        fileName,
+        mimeType,
+        content: contentBuffer,
+        storagePath,
+      });
       fileSaved = true;
 
       const result = await updateDb((db) => {
@@ -951,19 +951,19 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       });
 
       if (!result?.ok && result?.code === 'NOT_FOUND') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(404).json({ error: 'Ticket no encontrado.' });
       }
       if (!result?.ok && result?.code === 'FORBIDDEN') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(403).json({ error: 'No autorizado para acceder a este ticket.' });
       }
       if (!result?.ok && result?.code === 'MAX_ATTACHMENTS') {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(409).json({ error: `Limite de ${TICKET_ATTACHMENT_MAX_COUNT} adjuntos por ticket alcanzado.` });
       }
       if (!result?.ok) {
-        if (fileSaved) await fs.unlink(absPath).catch(() => undefined);
+        if (fileSaved) await attachmentStore.remove({ storagePath }).catch(() => undefined);
         return res.status(500).json({ error: 'No se pudo guardar el adjunto.' });
       }
 
@@ -974,7 +974,7 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
       });
     } catch (error) {
       if (fileSaved && !persisted) {
-        await fs.unlink(absPath).catch(() => undefined);
+        await attachmentStore.remove({ storagePath }).catch(() => undefined);
       }
       throw error;
     }
@@ -989,7 +989,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
     const attachmentId = toInt(req.params.attachmentId);
     if (id === null || attachmentId === null) return res.status(400).json({ error: 'ID inválido.' });
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const ticket = db.tickets.find((item) => Number(item.id) === Number(id));
     if (!ticket) return res.status(404).json({ error: 'Ticket no encontrado.' });
     if (!canAccessTicketByAuthUser(req, ticket)) {
@@ -1000,14 +1000,9 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
       : null;
     if (!attachment) return res.status(404).json({ error: 'Adjunto no encontrado.' });
 
-    const absPath = toAbsoluteAttachmentPath(attachment.storagePath);
-    if (!absPath) return res.status(404).json({ error: 'Ruta de adjunto inválida.' });
-    let content;
-    try {
-      content = await fs.readFile(absPath);
-    } catch {
-      return res.status(404).json({ error: 'Archivo adjunto no disponible.' });
-    }
+    // Busca primero en la base; cae a disco para los adjuntos anteriores a la migración.
+    const content = await attachmentStore.read({ storagePath: attachment.storagePath });
+    if (!content) return res.status(404).json({ error: 'Archivo adjunto no disponible.' });
 
     const fileName = sanitizeUploadFileName(attachment.fileName || `adjunto_${attachmentId}`);
     const rawMime = asNonEmptyString(attachment.mimeType).toLowerCase();
@@ -1024,7 +1019,7 @@ router.get('/:id/attachments/:attachmentId/download', requireAuth, async (req, r
 
 router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'tickets.attachments.delete')) return;
     const id = toInt(req.params.id);
     const attachmentId = toInt(req.params.attachmentId);
     const { usuario } = getRequestActor(req);
@@ -1070,10 +1065,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
     if (!result?.ok) {
       return res.status(500).json({ error: 'No se pudo eliminar el adjunto.' });
     }
-    const absPath = toAbsoluteAttachmentPath(result.removedStoragePath);
-    if (absPath) {
-      await fs.unlink(absPath).catch(() => undefined);
-    }
+    await attachmentStore.remove({ storagePath: result.removedStoragePath }).catch(() => undefined);
     res.json(serializeTicket(result.ticket));
   } catch (error) {
     next(error);
@@ -1082,7 +1074,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const estado = req.query.estado ? normalizeEstadoTicket(req.query.estado) : null;
     const prioridad = req.query.prioridad ? normalizePrioridad(req.query.prioridad) : null;
     const atencionTipo = req.query.atencion !== undefined ? normalizeTicketAttentionType(req.query.atencion) : '';

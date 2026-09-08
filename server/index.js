@@ -1,7 +1,8 @@
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -20,6 +21,7 @@ import {
 import {
   createUserPasswordHash,
   getDataDirPath,
+  getSharedPostgresPool,
   getStorageBackend,
   nextId,
   readDb,
@@ -93,11 +95,14 @@ import {
   paginateList,
   getBootstrapAuditRows,
   // Authorization guards
-  ensureCanEdit,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
+  getRequestDb,
 } from './utils/helpers.js';
 import { createAuthRuntime } from './middleware/authRuntime.js';
+import { resolveAttachmentStorage, resolveAttachmentPath } from './modules/attachment-storage.js';
+import { touchStorageMarker, STORAGE_MARKER_FILE } from './modules/storage-marker.js';
+import { createAttachmentStore } from './modules/attachment-store.js';
+import { auditIntegrity } from './modules/integrity.js';
 
 const PORT = Number(process.env.PORT || 4000);
 const __filename = fileURLToPath(import.meta.url);
@@ -141,7 +146,18 @@ const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VP
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 
 const DATA_DIR_PATH = getDataDirPath ? getDataDirPath() : path.join(__dirname, 'data');
-const UPLOAD_DIR = path.join(DATA_DIR_PATH, 'uploads');
+const ATTACHMENT_STORAGE = resolveAttachmentStorage({
+  attachmentsDir: process.env.ATTACHMENTS_DIR,
+  dataDir: DATA_DIR_PATH,
+  storageBackend: getStorageBackend(),
+});
+const UPLOAD_DIR = ATTACHMENT_STORAGE.dir;
+// Con Neon los binarios adjuntos van a su propia tabla, no al disco efimero del contenedor.
+const attachmentStore = createAttachmentStore({
+  getPool: getSharedPostgresPool,
+  uploadDir: UPLOAD_DIR,
+  backend: getStorageBackend(),
+});
 const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
 const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const HAS_CLIENT_DIST = existsSync(CLIENT_INDEX_FILE);
@@ -166,6 +182,10 @@ function configureTrustProxy(app) {
 }
 
 function configureCommonMiddleware(app) {
+  // Express no comprime por defecto. El estado completo viaja en /api/bootstrap como JSON
+  // muy repetitivo: medido con 5.000 tickets, 7.7 MB se reducen a 0.25 MB (31x). El umbral
+  // evita gastar CPU en respuestas pequeñas, donde comprimir cuesta más de lo que ahorra.
+  app.use(compression({ threshold: 1024 }));
   app.use(helmet({
     contentSecurityPolicy: {
       useDefaults: true,
@@ -214,18 +234,8 @@ function configureCommonMiddleware(app) {
 
 // --- File / upload helpers ---
 
-async function ensureUploadDir() {
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-}
-
 function toAbsoluteAttachmentPath(storagePath) {
-  const normalized = asNonEmptyString(storagePath).replace(/\\/g, '/');
-  if (!normalized) return '';
-  const absolute = path.resolve(DATA_DIR_PATH, normalized);
-  const root = path.resolve(UPLOAD_DIR);
-  const relative = path.relative(root, absolute);
-  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return '';
-  return absolute;
+  return resolveAttachmentPath(storagePath, UPLOAD_DIR);
 }
 
 // --- Asset helpers ---
@@ -701,9 +711,52 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.get('/api/catalogos', requireAuth, async (_req, res, next) => {
+// Responde, desde la propia aplicacion, si los adjuntos sobreviven a un redespliegue.
+// La configuracion de volumenes vive en el panel del hosting y no en el repositorio, asi
+// que sin este endpoint la unica forma de saberlo es entrar al dashboard. Admin only: expone
+// rutas del sistema de archivos.
+app.get('/api/diagnostics/storage', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    if (!ensurePermission(req, res, 'diagnostics.read')) return;
+
+    const marker = await touchStorageMarker(UPLOAD_DIR);
+    // Una sola consulta en lugar de una por adjunto.
+    const enBase = new Set(await attachmentStore.listStoredPaths());
+    const db = await getRequestDb(req);
+    const integridad = auditIntegrity(db, {
+      attachmentExists: (storagePath) => {
+        if (enBase.has(storagePath)) return true;
+        // Adjunto anterior a la migración: puede seguir en disco.
+        const absolute = resolveAttachmentPath(storagePath, UPLOAD_DIR);
+        return Boolean(absolute) && existsSync(absolute);
+      },
+      listStoredFiles: () => (existsSync(UPLOAD_DIR)
+        ? readdirSync(UPLOAD_DIR).filter((name) => name !== STORAGE_MARKER_FILE)
+        : []),
+    });
+
+    res.json({
+      storageBackend: getStorageBackend(),
+      attachments: {
+        // Con Neon los binarios viven en la base; el directorio solo conserva los heredados.
+        backend: attachmentStore.backend,
+        storedInDatabase: await attachmentStore.countStored(),
+        dir: ATTACHMENT_STORAGE.dir,
+        source: ATTACHMENT_STORAGE.source,
+        durabilityRisk: attachmentStore.backend === 'postgres' ? false : ATTACHMENT_STORAGE.durabilityRisk,
+        warning: attachmentStore.backend === 'postgres' ? null : (ATTACHMENT_STORAGE.warning || null),
+        marker,
+      },
+      integrity: integridad.counts,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/catalogos', requireAuth, async (req, res, next) => {
+  try {
+    const db = await getRequestDb(req);
     res.json({
       ...getCatalogsFromDb(db),
       updatedAt: new Date().toISOString(),
@@ -715,7 +768,7 @@ app.get('/api/catalogos', requireAuth, async (_req, res, next) => {
 
 app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'catalogos.manage')) return;
     const { usuario } = getRequestActor(req);
 
     const hasBranchUpdate = req.body?.sucursales !== undefined;
@@ -940,7 +993,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
       return res.status(304).end();
     }
 
-    const db = req.appDb || await readDb();
+    const db = await getRequestDb(req);
     const rol = req.authUser?.rol || '';
     const requesterOnly = rol === 'solicitante';
     const users = buildBootstrapUsers(db.users, rol);
@@ -972,7 +1025,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
 
 app.put('/api/travel-adjustments', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureCanEdit(req, res)) return;
+    if (!ensurePermission(req, res, 'travel.manage')) return;
 
     const month = normalizeTravelAdjustmentMonth(req.body?.month);
     const technicianScopeKey = normalizeTravelScopeKey(req.body?.technicianScopeKey);
@@ -1058,7 +1111,7 @@ app.put('/api/travel-adjustments', requireAuth, async (req, res, next) => {
 
 app.get('/api/summary', requireAuth, async (req, res, next) => {
   try {
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const requesterOnly = req.authUser?.rol === 'solicitante';
     const ticketsSource = requesterOnly ? filterTicketsForUser(db.tickets, req.authUser) : db.tickets;
     const activosOperativos = db.activos.filter((a) => a.estado === 'Operativo').length;
@@ -1118,7 +1171,7 @@ app.get('/api/qr/resolve/:token', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'QR inválido o manipulado.' });
     }
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const asset = db.activos.find((item) => Number(item.id) === Number(verified.payload.aid));
     if (!asset) return res.status(404).json({ error: 'Activo no encontrado para este QR.' });
 
@@ -1145,7 +1198,7 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: 'No autorizado para consultar auditoría.' });
     }
 
-    const db = await readDb();
+    const db = await getRequestDb(req);
     const moduleFilter = normalizeAuditModuleFilter(req.query.module);
     const resultFilter = normalizeAuditResultFilter(req.query.result);
     const userFilter = normalizeTextKey(req.query.user || '');
@@ -1244,8 +1297,7 @@ app.get('/api/auditoria', requireAuth, async (req, res, next) => {
 
 const ticketRouteDeps = {
   requireAuth,
-  ensureCanCreateTickets,
-  ensureAdmin,
+  ensurePermission,
   asNonEmptyString,
   normalizePrioridad,
   normalizeTicketAttentionType,
@@ -1258,7 +1310,6 @@ const ticketRouteDeps = {
   calcDueDate,
   pushAuditWithContext,
   serializeTicket,
-  ensureCanEdit,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -1269,7 +1320,7 @@ const ticketRouteDeps = {
   canAccessTicketByAuthUser,
   sanitizeUploadFileName,
   TICKET_ATTACHMENT_MAX_BYTES,
-  ensureUploadDir,
+  attachmentStore,
   TICKET_ATTACHMENT_MAX_COUNT,
   buildTicketAttachmentResponse,
   filterTicketsForUser,
@@ -1290,7 +1341,7 @@ const activosRouteDeps = {
   parsePagination,
   paginateList,
   toInt,
-  ensureCanEdit,
+  ensurePermission,
   getRequestActor,
   normalizeAssetPayload,
   finalizeAsset,
@@ -1299,13 +1350,12 @@ const activosRouteDeps = {
   pushAuditWithContext,
   IMPORT_MAX_ROWS,
   importAssets,
-  ensureAdmin,
   buildSignedAssetQrToken,
 };
 
 const insumosRouteDeps = {
   requireAuth,
-  ensureCanEdit,
+  ensurePermission,
   asNonEmptyString,
   toInt,
   getRequestActor,
@@ -1316,7 +1366,7 @@ const insumosRouteDeps = {
 
 const usersRouteDeps = {
   requireAuth,
-  ensureAdmin,
+  ensurePermission,
   createUserPasswordHash,
   roleIsEnabledByCatalog,
   getRequestActor,
@@ -1393,6 +1443,32 @@ export { app };
 export function startServer(port = PORT, appInstance = app) {
   return appInstance.listen(port, () => {
     console.log(`Mesa IT API corriendo en http://localhost:${port}`);
+    if (attachmentStore.backend === 'postgres') {
+      // Los binarios ya no dependen del disco del contenedor: viven en la misma base que
+      // el estado, con sus respaldos. El directorio solo conserva los adjuntos heredados.
+      console.log('Adjuntos de tickets en PostgreSQL (tabla mesa_it_attachments).');
+      void attachmentStore.ensureSchema().catch((error) => {
+        console.error('No se pudo preparar la tabla de adjuntos:', error?.message || error);
+      });
+    } else {
+      console.log(`Adjuntos de tickets en "${ATTACHMENT_STORAGE.dir}" (origen: ${ATTACHMENT_STORAGE.source}).`);
+      if (ATTACHMENT_STORAGE.durabilityRisk) {
+        console.warn(`ADVERTENCIA: ${ATTACHMENT_STORAGE.warning}`);
+      }
+    }
+    // Deja constancia en cada arranque. Si tras un redespliegue la fecha de creacion se
+    // conserva, el almacenamiento es persistente; si se reinicia a hoy, es efimero y los
+    // adjuntos se estan perdiendo. Best-effort: nunca debe impedir que la API arranque.
+    void touchStorageMarker(UPLOAD_DIR).then((marker) => {
+      if (marker.error) {
+        console.warn(`No se pudo escribir el marcador de almacenamiento: ${marker.error}`);
+        return;
+      }
+      const veredicto = marker.survivedRestart
+        ? 'sobrevivio a reinicios anteriores'
+        : 'primer arranque registrado';
+      console.log(`Almacenamiento de adjuntos en uso desde ${marker.firstSeenAt} (arranque #${marker.bootCount}, ${veredicto}).`);
+    });
     // Keep-alive solo si se define PUBLIC_URL (p. ej. plataformas con sleep).
     // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
     const publicUrl = process.env.PUBLIC_URL;

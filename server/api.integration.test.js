@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import { createUserPasswordHash } from './store.js';
 const ADMIN_PASSWORD = 'Admin.Integration.123';
 const REQUESTER_PASSWORD = 'Solicitante.Integration.123';
 const TECH_PASSWORD = 'Tecnico.Integration.123';
+const READONLY_PASSWORD = 'Consulta.Integration.123';
 
 const ROLE_CATALOG = [
   { value: 'admin', label: 'Administrador', permissions: 'Acceso total', activo: true },
@@ -54,6 +55,16 @@ const REQUESTER_USER = {
   passwordHash: createUserPasswordHash(REQUESTER_PASSWORD),
   rol: 'solicitante',
   departamento: 'VENTAS',
+  activo: true,
+};
+
+const READONLY_USER = {
+  id: 701,
+  nombre: 'Consulta Integracion',
+  username: 'consulta.integration',
+  passwordHash: createUserPasswordHash(READONLY_PASSWORD),
+  rol: 'consulta',
+  departamento: 'IT',
   activo: true,
 };
 
@@ -113,7 +124,7 @@ function buildFixtureDb() {
       cargos: CARGO_CATALOG,
       roles: ROLE_CATALOG,
     },
-    users: [ADMIN_USER, TECH_USER, REQUESTER_USER],
+    users: [ADMIN_USER, TECH_USER, REQUESTER_USER, READONLY_USER],
     activos: [
       {
         id: 1,
@@ -229,7 +240,7 @@ async function waitForServer(baseUrl, child, getLogs) {
   throw new Error(`El servidor de integracion no estuvo listo a tiempo.\n${getLogs()}`);
 }
 
-async function startTestServer(dbFile) {
+async function startTestServer(dbFile, attachmentsDir) {
   const port = await reservePort();
   let logs = '';
   const child = spawn(process.execPath, ['server/main.js'], {
@@ -239,6 +250,9 @@ async function startTestServer(dbFile) {
       NODE_ENV: 'test',
       PORT: String(port),
       DB_FILE: dbFile,
+      // Deliberadamente FUERA del árbol de DB_FILE: es la configuración de producción
+      // recomendada (volumen persistente) y la que rompía la resolución de rutas.
+      ATTACHMENTS_DIR: attachmentsDir,
       DB_BACKUP_ENABLE: 'false',
       AUTH_RATE_LIMIT_MAX: '10000',
       AUTH_DISALLOW_DEMO_PASSWORDS: 'false',
@@ -283,13 +297,15 @@ async function stopTestServer(child) {
 
 let tempDir = '';
 let dbFilePath = '';
+let attachmentsDirPath = '';
 let serverRuntime = null;
 
 before(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'mesa-it-integration-'));
   dbFilePath = path.join(tempDir, 'db.json');
+  attachmentsDirPath = path.join(tempDir, 'volumen-adjuntos');
   await writeFile(dbFilePath, JSON.stringify(buildFixtureDb(), null, 2), 'utf8');
-  serverRuntime = await startTestServer(dbFilePath);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
 });
 
 after(async () => {
@@ -871,8 +887,12 @@ test('POST /api/tickets/historical registra un ticket pasado cerrado con fechas 
   assert.equal(created.data.fechaCierre, fechaCierre);
   assert.equal(created.data.atencionTipo, 'REMOTO');
   assert.equal(created.data.asignadoA, TECH_USER.nombre);
-  // SLA calculado desde la fecha histórica (ALTA = 8h), no desde ahora.
-  assert.equal(created.data.fechaLimite, '2026-01-10T17:00:00.000Z');
+  // SLA calculado desde la fecha histórica (ALTA = 8h), no desde ahora, y solo con horas
+  // hábiles: el ticket nace el sábado 10/01 a las 03:00 (cerrado), así que arranca a las
+  // 09:00, consume las 3 h del sábado corto, salta el domingo y termina el lunes 12/01 a
+  // las 13:00 local. El cálculo anterior devolvía sábado 11:00 porque cobraba como SLA las
+  // seis horas de madrugada en que nadie podía atenderlo.
+  assert.equal(created.data.fechaLimite, '2026-01-12T19:00:00.000Z');
   assert.equal(Array.isArray(created.data.historial), true);
   assert.equal(created.data.historial.length, 2);
   assert.equal(created.data.historial[0].estado, 'Cerrado');
@@ -1386,11 +1406,203 @@ test('Fase 2: una sesión sigue válida después de reiniciar el servidor', { co
   const previousRuntime = serverRuntime;
 
   await stopTestServer(previousRuntime.child);
-  serverRuntime = await startTestServer(dbFilePath);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
 
   const bootstrap = await requestJson('/api/bootstrap', {
     token: session.token,
   });
   assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.data));
   assert.equal(Array.isArray(bootstrap.data?.tickets), true);
+});
+
+// El ciclo subir -> descargar no tenía cobertura, y por eso pasó inadvertida una regresión
+// que bloqueaba TODOS los adjuntos cuando ATTACHMENTS_DIR apunta fuera del árbol de datos
+// (la configuración recomendada en producción: un volumen persistente).
+test('adjuntos: ciclo completo subir/descargar con ATTACHMENTS_DIR fuera del árbol de datos', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const contenido = Buffer.from('evidencia de la falla del POS', 'utf8');
+
+  const subida = await requestJson('/api/tickets/701/attachments', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      fileName: 'evidencia.txt',
+      mimeType: 'text/plain',
+      contentBase64: contenido.toString('base64'),
+    },
+  });
+
+  assert.equal(subida.response.status, 201, JSON.stringify(subida.data));
+  const attachmentId = subida.data.attachment.id;
+  assert.ok(attachmentId, 'la subida debe devolver el id del adjunto');
+  assert.equal(subida.data.ticket.attachments.length, 1);
+  assert.equal(subida.data.attachment.size, contenido.length);
+
+  // El archivo debe existir físicamente en el volumen configurado, no junto al db.json.
+  // El marcador de persistencia vive en el mismo directorio pero no es un adjunto.
+  const enVolumen = (await readdir(attachmentsDirPath)).filter((n) => n !== '.storage-marker.json');
+  assert.equal(enVolumen.length, 1, `se esperaba 1 archivo en ${attachmentsDirPath}`);
+  assert.equal(enVolumen[0].endsWith('evidencia.txt'), true);
+
+  const descarga = await fetch(
+    `${serverRuntime.baseUrl}/api/tickets/701/attachments/${attachmentId}/download`,
+    { headers: { Authorization: `Bearer ${session.token}` } },
+  );
+  assert.equal(descarga.status, 200);
+  assert.equal(await descarga.text(), contenido.toString('utf8'));
+});
+
+test('adjuntos: un ticket ajeno no puede descargar el adjunto de otro', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const inexistente = await fetch(
+    `${serverRuntime.baseUrl}/api/tickets/702/attachments/999999/download`,
+    { headers: { Authorization: `Bearer ${session.token}` } },
+  );
+  assert.equal(inexistente.status, 404);
+});
+
+// Express no comprime por defecto. El bootstrap envía el dominio completo y es JSON muy
+// repetitivo: sin compresión cada usuario descarga megabytes en cada arranque de sesión.
+test('las respuestas grandes viajan comprimidas', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const response = await fetch(`${serverRuntime.baseUrl}/api/bootstrap`, {
+    headers: { Authorization: `Bearer ${session.token}`, 'Accept-Encoding': 'gzip' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-encoding'), 'gzip');
+  const payload = await response.json();
+  assert.equal(Array.isArray(payload.tickets), true, 'el cuerpo debe seguir siendo JSON válido');
+});
+
+test('las respuestas pequeñas no pagan el costo de comprimir', { concurrency: false }, async () => {
+  const response = await fetch(`${serverRuntime.baseUrl}/api/health`, {
+    headers: { 'Accept-Encoding': 'gzip' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-encoding'), null);
+});
+
+// Matriz de autorización a nivel HTTP. Antes de esto el rol `consulta` no tenía NINGUNA
+// prueba: ni siquiera existía en el fixture. Estas pruebas fijan quién puede hacer qué,
+// para que un cambio en la matriz de permisos no abra un acceso en silencio.
+const ESCRITURAS = [
+  ['POST', '/api/activos', { tag: 'NUEVO-001', tipo: 'POS' }],
+  ['PATCH', '/api/activos/1', { ubicacion: 'Caja 9' }],
+  ['DELETE', '/api/activos/1', undefined],
+  ['POST', '/api/insumos', { nombre: 'Cable X', unidad: 'Piezas', stock: 1, min: 1 }],
+  ['PATCH', '/api/insumos/11/stock', { delta: -1 }],
+  ['PATCH', '/api/tickets/701', { estado: 'En Proceso' }],
+  ['PATCH', '/api/tickets/701/resolve', { comentarioResolucion: 'listo' }],
+  ['PATCH', '/api/catalogos', { sucursales: [] }],
+  ['POST', '/api/users', { nombre: 'X', username: 'x', password: 'Aa1.aaaaaaaa', rol: 'consulta' }],
+];
+
+test('autorización: el rol consulta es rechazado en toda operación de escritura', { concurrency: false }, async () => {
+  const session = await login(READONLY_USER.username, READONLY_PASSWORD);
+
+  for (const [method, url, body] of ESCRITURAS) {
+    const { response } = await requestJson(url, { method, token: session.token, body });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para consulta`);
+  }
+});
+
+test('autorización: el solicitante no puede operar inventario ni administrar', { concurrency: false }, async () => {
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+
+  for (const [method, url, body] of ESCRITURAS) {
+    const { response } = await requestJson(url, { method, token: session.token, body });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para solicitante`);
+  }
+});
+
+test('autorización: el técnico opera inventario pero no administra usuarios ni catálogos', { concurrency: false }, async () => {
+  // Una prueba anterior de la suite deja el rol `tecnico` deshabilitado en el catálogo y no
+  // lo restaura. Se reactiva aquí para que esta prueba no dependa del orden de ejecución.
+  const admin = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  await requestJson('/api/catalogos', {
+    method: 'PATCH',
+    token: admin.token,
+    body: { roles: ROLE_CATALOG },
+  });
+
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+
+  const permitido = await requestJson('/api/insumos/11/stock', {
+    method: 'PATCH', token: session.token, body: { delta: -1 },
+  });
+  assert.notEqual(permitido.response.status, 403, 'el técnico sí opera insumos');
+
+  for (const url of ['/api/catalogos', '/api/users']) {
+    const method = url === '/api/catalogos' ? 'PATCH' : 'POST';
+    const { response } = await requestJson(url, {
+      method, token: session.token, body: { sucursales: [], nombre: 'X', username: 'x2', password: 'Aa1.aaaaaaaa', rol: 'consulta' },
+    });
+    assert.equal(response.status, 403, `${method} ${url} debería ser 403 para técnico`);
+  }
+});
+
+test('autorización: el solicitante sí puede crear y comentar sus tickets', { concurrency: false }, async () => {
+  const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+
+  const creado = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: { activoTag: 'POS-001', descripcion: 'Falla reportada por el solicitante', sucursal: 'TJ01', prioridad: 'MEDIA', atencionTipo: 'REMOTO' },
+  });
+  assert.equal(creado.response.status, 201, JSON.stringify(creado.data));
+
+  const comentario = await requestJson(`/api/tickets/${creado.data.id}/comments`, {
+    method: 'POST', token: session.token, body: { comentario: 'Sigue fallando.' },
+  });
+  assert.notEqual(comentario.response.status, 403, 'el solicitante puede comentar su propio ticket');
+});
+
+// Diagnostico de almacenamiento: responde "¿los adjuntos sobreviven a un redespliegue?"
+// desde la propia aplicacion, sin necesitar acceso al dashboard de Railway.
+test('diagnostico: solo un admin puede consultar el estado del almacenamiento', { concurrency: false }, async () => {
+  for (const [usuario, password] of [[TECH_USER.username, TECH_PASSWORD], [READONLY_USER.username, READONLY_PASSWORD]]) {
+    const session = await login(usuario, password);
+    const { response } = await requestJson('/api/diagnostics/storage', { token: session.token });
+    assert.equal(response.status, 403, `${usuario} no debe ver el diagnostico`);
+  }
+});
+
+test('diagnostico: reporta el destino de los adjuntos y el marcador de persistencia', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const { response, data } = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  assert.equal(response.status, 200, JSON.stringify(data));
+  assert.equal(data.storageBackend, 'file');
+
+  assert.equal(data.attachments.source, 'ATTACHMENTS_DIR');
+  assert.equal(data.attachments.dir, attachmentsDirPath);
+  // Con backend de archivo, estado y adjuntos comparten destino: no hay divergencia.
+  assert.equal(data.attachments.durabilityRisk, false);
+
+  assert.equal(typeof data.attachments.marker.firstSeenAt, 'string');
+  assert.equal(data.attachments.marker.bootCount >= 1, true);
+  assert.equal(data.attachments.marker.error, null);
+
+  assert.equal(typeof data.integrity.total, 'number');
+});
+
+test('diagnostico: el marcador conserva su fecha original tras reiniciar el servidor', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const antes = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  await stopTestServer(serverRuntime.child);
+  serverRuntime = await startTestServer(dbFilePath, attachmentsDirPath);
+
+  const despues = await requestJson('/api/diagnostics/storage', { token: session.token });
+
+  assert.equal(
+    despues.data.attachments.marker.firstSeenAt,
+    antes.data.attachments.marker.firstSeenAt,
+    'la fecha original debe sobrevivir al reinicio',
+  );
+  assert.equal(despues.data.attachments.marker.bootCount > antes.data.attachments.marker.bootCount, true);
+  assert.equal(despues.data.attachments.marker.survivedRestart, true);
 });

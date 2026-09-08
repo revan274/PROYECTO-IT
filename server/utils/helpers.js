@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { pushAudit } from '../store.js';
+import { pushAudit, readDb } from '../store.js';
 import {
   DEFAULT_ROLE_CATALOG,
   USER_ROLES,
@@ -12,6 +12,12 @@ import {
   SLA_POLICY_HOURS,
   TICKET_STATES,
 } from '../../shared/ticket-rules.js';
+import { calcSlaDueDate } from '../modules/sla-calendar.js';
+import {
+  ADMIN_ONLY_PERMISSIONS,
+  TICKET_AUTHOR_PERMISSIONS,
+  roleHasPermission,
+} from '../../shared/permissions.js';
 
 export { DEFAULT_ROLE_CATALOG, USER_ROLES };
 export { TICKET_STATES };
@@ -218,10 +224,10 @@ export function isLowStock(item) {
 
 // --- SLA helpers ---
 
+// Delega en el calendario laboral: las horas de SLA solo se consumen dentro de la jornada.
+// Un ALTA (8 h) creado el viernes a las 15:00 ya no vence de madrugada el sábado.
 export function calcDueDate(prioridad, baseMs = Date.now()) {
-  const hours = SLA_HOURS[prioridad] || SLA_HOURS.MEDIA;
-  const base = Number.isFinite(baseMs) ? baseMs : Date.now();
-  return new Date(base + hours * 60 * 60 * 1000).toISOString();
+  return calcSlaDueDate(prioridad, baseMs);
 }
 
 export function isSlaBreached(ticket) {
@@ -671,6 +677,20 @@ export function getBootstrapAuditRows(rows) {
   return rows.slice(0, BOOTSTRAP_AUDIT_LIMIT);
 }
 
+/**
+ * Documento de estado para un handler de solo lectura.
+ *
+ * `requireAuth` ya leyó y normalizó el documento completo para validar la sesión y lo dejó
+ * en `req.appDb`. Como todo el estado vive en un único documento, esa lectura es el costo
+ * dominante de cada petición: releerlo en el handler lo duplica sin ganar nada. Reutilizarlo
+ * además mejora la consistencia, porque autorización y datos salen del mismo snapshot.
+ *
+ * Solo para lecturas: las mutaciones deben pasar por `updateDb`, que toma su propio lock.
+ */
+export async function getRequestDb(req, loadDb = readDb) {
+  return req?.appDb || loadDb();
+}
+
 // --- Authorization guards (send HTTP error and return false if not allowed) ---
 
 export function ensureCanEdit(req, res) {
@@ -684,6 +704,32 @@ export function ensureCanEdit(req, res) {
 export function ensureCanCreateTickets(req, res) {
   if (!canCreateTicketsByRole(req.authUser?.rol)) {
     res.status(403).json({ error: 'No autorizado para crear tickets.' });
+    return false;
+  }
+  return true;
+}
+
+// Mensajes conservados tal cual los emitían ensureAdmin / ensureCanEdit /
+// ensureCanCreateTickets, para que el cambio a permisos no altere ninguna respuesta.
+const ADMIN_ONLY_SET = new Set(ADMIN_ONLY_PERMISSIONS);
+const TICKET_AUTHOR_SET = new Set(TICKET_AUTHOR_PERMISSIONS);
+
+function permissionDeniedMessage(permission) {
+  if (ADMIN_ONLY_SET.has(permission)) return 'Solo administradores pueden ejecutar esta operación.';
+  if (TICKET_AUTHOR_SET.has(permission)) return 'No autorizado para crear tickets.';
+  return 'No autorizado para ejecutar esta operación.';
+}
+
+/**
+ * Guardia de autorización por permiso concreto en lugar de por rol.
+ *
+ * El call site declara QUÉ operación necesita (`activos.delete`), no QUIÉN puede hacerla.
+ * Quién la puede hacer vive en la matriz de `shared/permissions.js`, así que introducir un
+ * rol nuevo ya no obliga a revisar cada ruta.
+ */
+export function ensurePermission(req, res, permission) {
+  if (!roleHasPermission(req.authUser?.rol, permission)) {
+    res.status(403).json({ error: permissionDeniedMessage(permission) });
     return false;
   }
   return true;

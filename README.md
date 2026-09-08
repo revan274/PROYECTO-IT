@@ -25,6 +25,19 @@ npm run dev
 npm run dev:server
 ```
 
+## Cobertura y versión de Node
+
+CI ejecuta con **Node 20.19.0** y aplica umbrales de cobertura. El proveedor `v8` cuenta
+funciones de forma distinta entre versiones de Node: con Node 24 la cobertura de funciones da
+por encima del umbral y con Node 20 daba por debajo, así que una comprobación verde en local
+podía fallar en CI sin que ningún test fallara.
+
+Para comprobar cobertura igual que CI, usa la misma versión:
+
+```bash
+npx -y -p node@20.19.0 node ./node_modules/vitest/vitest.mjs run --coverage
+```
+
 ## Scripts
 - `npm run dev`
 - `npm run dev:server`
@@ -151,10 +164,83 @@ forma parte de la configuración actual.
    - `AUTH_DISALLOW_DEMO_PASSWORDS=true`.
 4. Verifica `https://<servicio-railway>/api/health` antes de publicar el frontend.
 
-Los adjuntos y respaldos son archivos locales y no se almacenan en PostgreSQL. Si
-se necesitan conservar entre despliegues, Railway debe tener un volumen persistente
-montado y `DB_FILE` debe apuntar a ese volumen, o los binarios deben migrarse a
-almacenamiento de objetos.
+### Dónde viven los adjuntos
+
+**Con `DATABASE_URL` definido (Neon), los binarios adjuntos se guardan en PostgreSQL**, en
+la tabla `mesa_it_attachments`, junto al estado y cubiertos por los mismos respaldos. Ya no
+dependen del disco del contenedor, que en Railway es efímero salvo que haya un volumen
+montado: antes cada despliegue los borraba mientras la base conservaba los metadatos,
+dejando tickets que listaban evidencia imposible de descargar.
+
+Los bytes van a una **tabla propia, nunca al documento JSONB**: ese documento se reescribe
+entero bajo un lock global en cada mutación, así que meterle megabytes serializaría toda la
+aplicación.
+
+La lectura cae a disco cuando no hay fila, así que los adjuntos anteriores a la migración que
+aún sobrevivan se siguen descargando con normalidad. No hay que migrar nada a mano.
+
+Sin `DATABASE_URL` (desarrollo local) se sigue usando el sistema de archivos, y ahí sí
+aplican `ATTACHMENTS_DIR` y la advertencia de arranque descritas abajo.
+
+Si `ATTACHMENTS_DIR` no se define, el destino se deriva del directorio de `DB_FILE`.
+Esa derivación es una trampa cuando se usa PostgreSQL: `DB_FILE` deja de tener efecto
+sobre el estado, nadie lo configura, y los adjuntos caen en el disco efímero del
+contenedor. En ese caso el servidor emite una advertencia explícita en el arranque:
+
+```
+ADVERTENCIA: Los adjuntos de tickets se guardan en "...", derivado del directorio de datos.
+```
+
+Si ves esa línea en los logs de Railway, los adjuntos no están a salvo.
+
+#### Comprobar si el volumen es realmente persistente
+
+La configuración de volúmenes vive en el panel de Railway, no en el repositorio, así que el
+código no puede saberla. El servidor la comprueba de forma empírica: en cada arranque
+escribe `.storage-marker.json` en el directorio de adjuntos y registra desde cuándo está en
+uso. En los logs aparece como:
+
+```
+Almacenamiento de adjuntos en uso desde 2026-09-07T16:47:38.065Z (arranque #2, sobrevivio a reinicios anteriores).
+```
+
+**Procedimiento:** despliega, anota esa fecha, fuerza un redespliegue y vuelve a mirar.
+
+- La fecha **se conserva** y el contador sube → el volumen es persistente. Los adjuntos están a salvo.
+- La fecha **se reinicia** a hoy y el contador vuelve a `#1` → el disco es efímero. Cada
+  despliegue borra los adjuntos.
+
+El mismo dato está en `npm run integrity:check` y en `GET /api/diagnostics/storage`
+(solo administradores), que además reporta el resumen de integridad:
+
+```json
+{
+  "storageBackend": "postgres",
+  "attachments": {
+    "dir": "/mnt/volumen/adjuntos",
+    "source": "ATTACHMENTS_DIR",
+    "durabilityRisk": false,
+    "marker": { "firstSeenAt": "...", "bootCount": 4, "survivedRestart": true }
+  },
+  "integrity": { "total": 0, "byType": {} }
+}
+```
+
+### Auditoría de integridad
+
+El estado vive en un único documento JSONB sin foreign keys: la base de datos no puede
+rechazar un ticket que apunta a un activo borrado ni dos registros con el mismo id. El
+comando `npm run integrity:check` verifica esas garantías (solo lectura) y sale con código
+1 si encuentra hallazgos, para poder engancharlo a un monitoreo:
+
+```bash
+npm run integrity:check              # local
+# Contra la base real: basta la cadena de conexión de Neon, no hace falta ninguna CLI.
+DATABASE_URL="postgresql://...neon.tech/...?sslmode=require" npm run integrity:check
+```
+
+Detecta: adjuntos cuyo archivo ya no está en disco, archivos huérfanos que nadie
+referencia, tickets apuntando a activos o usuarios inexistentes, e ids duplicados.
 
 ### Frontend en Cloudflare
 

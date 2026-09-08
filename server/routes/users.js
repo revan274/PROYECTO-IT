@@ -1,9 +1,10 @@
 import express from 'express';
-import { readDb, updateDb, sanitizeUser } from '../store.js';
+import { updateDb, sanitizeUser } from '../store.js';
+import { getRequestDb } from '../utils/helpers.js';
 
 export function createUsersRouter({
   requireAuth,
-  ensureAdmin,
+  ensurePermission,
   createUserPasswordHash,
   roleIsEnabledByCatalog,
   getRequestActor,
@@ -22,8 +23,8 @@ export function createUsersRouter({
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
-    const db = await readDb();
+    if (!ensurePermission(req, res, 'users.manage')) return;
+    const db = await getRequestDb(req);
     res.json(db.users.map(sanitizeUser));
   } catch (error) {
     next(error);
@@ -32,7 +33,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'users.manage')) return;
 
     const nombre = asNonEmptyString(req.body?.nombre).replace(/\s+/g, ' ');
     const username = asNonEmptyString(req.body?.username).toLowerCase();
@@ -109,7 +110,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'users.manage')) return;
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
@@ -254,7 +255,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
-    if (!ensureAdmin(req, res)) return;
+    if (!ensurePermission(req, res, 'users.manage')) return;
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     const { usuario } = getRequestActor(req);

@@ -8,6 +8,8 @@ import {
   normalizeStoredUserRole,
 } from './domain/roles.js';
 import { mutatePostgresStateWithLock } from './modules/postgres-state.js';
+import { calcSlaDueDate } from './modules/sla-calendar.js';
+import { buildPoolOptions, attachPoolErrorHandler, withPgRetry } from './modules/postgres-pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +31,6 @@ const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
 const USE_POSTGRES = DATABASE_URL.length > 0;
 const PG_STATE_TABLE = 'mesa_it_state';
 const PG_POOL_MAX = Math.max(1, Math.trunc(Number(process.env.PG_POOL_MAX || 4)));
-const PG_SSL_REQUIRED = /sslmode=require/i.test(DATABASE_URL);
 
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
 const PASSWORD_KEYLEN = 64;
@@ -283,7 +284,9 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
     copy.fechaCreacion = new Date().toISOString();
   }
   if (!copy.fechaLimite) {
-    copy.fechaLimite = new Date(Date.now() + (copy.prioridad === 'CRITICA' ? 2 : copy.prioridad === 'ALTA' ? 8 : 24) * 60 * 60 * 1000).toISOString();
+    // Antes duplicaba la política SLA con números mágicos (2/8/24) y saltaba el calendario
+    // laboral: cualquier cambio en SLA_POLICY_HOURS no llegaba hasta aquí.
+    copy.fechaLimite = calcSlaDueDate(copy.prioridad);
   }
   if (!Array.isArray(copy.historial)) {
     copy.historial = [
@@ -888,12 +891,12 @@ function normalizeDbShape(db) {
 function getPgPool() {
   if (!USE_POSTGRES) return null;
   if (!pgPool) {
-    pgPool = new Pool({
+    // Neon suspende el cómputo por inactividad y corta las conexiones ociosas. Sin el
+    // manejador de error, ese corte llega como uncaughtException y mata el proceso.
+    pgPool = attachPoolErrorHandler(new Pool(buildPoolOptions({
       connectionString: DATABASE_URL,
       max: PG_POOL_MAX,
-      ssl: PG_SSL_REQUIRED ? { rejectUnauthorized: false } : undefined,
-      application_name: 'mesa-it',
-    });
+    })));
   }
   return pgPool;
 }
@@ -1096,9 +1099,12 @@ export async function readDbSnapshot() {
   if (USE_POSTGRES) {
     await ensurePgState();
     const pool = getPgPool();
-    const result = await pool.query(
+    // Lectura idempotente: si Neon estaba despertando del autosuspend, el reintento entra.
+    // Las MUTACIONES no se reintentan a proposito: si el COMMIT llegó a aplicarse y solo se
+    // perdió la respuesta, repetir la transacción aplicaría el cambio dos veces.
+    const result = await withPgRetry(() => pool.query(
       `SELECT data, version FROM ${PG_STATE_TABLE} WHERE id = 1`,
-    );
+    ));
     const version = Math.max(1, Math.trunc(Number(result.rows[0]?.version) || 1));
     const db = normalizeDbShape(result.rows[0]?.data || {});
     db.meta.revision = version;
