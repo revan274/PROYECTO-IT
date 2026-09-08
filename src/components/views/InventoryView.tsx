@@ -281,13 +281,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-4">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
             <Select
               value={inventoryDepartmentFilter}
               onChange={(e) => setInventoryDepartmentFilter(e.target.value)}
               variant="filter"
             >
-              <option value="TODOS">Todos los departamentos</option>
+              <option value="TODOS">Departamento: todos</option>
               {departamentoOptions.map((departamento) => (
                 <option key={departamento} value={departamento}>{departamento}</option>
               ))}
@@ -297,7 +297,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               onChange={(e) => setInventoryEquipmentFilter(e.target.value)}
               variant="filter"
             >
-              <option value="TODOS">Todos los equipos</option>
+              <option value="TODOS">Equipo: todos</option>
               {equipoOptions.map((equipo) => (
                 <option key={equipo} value={equipo}>{equipo}</option>
               ))}
@@ -307,7 +307,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               onChange={(e) => setInventoryStatusFilter(e.target.value as 'TODOS' | EstadoActivo)}
               variant="filter"
             >
-              <option value="TODOS">Todos los estados</option>
+              <option value="TODOS">Estado: todos</option>
               <option value="Operativo">Operativo</option>
               <option value="Falla">Falla</option>
             </Select>
@@ -316,7 +316,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               onChange={(e) => setInventoryRiskFilter(e.target.value as InventoryRiskFilter)}
               variant="filter"
             >
-              <option value="TODOS">Todos los riesgos</option>
+              <option value="TODOS">Riesgo: todos</option>
               <option value="SIN_IP">Sin IP</option>
               <option value="SIN_MAC">Sin MAC</option>
               <option value="SIN_RESP">Sin responsable</option>

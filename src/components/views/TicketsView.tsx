@@ -201,7 +201,7 @@ export function TicketsView({
       </div>
 
       <div className="rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-7">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
           <Select
             value={ticketLifecycleFilter}
             onChange={(event) => onTicketLifecycleFilterChange(event.target.value as TicketLifecycleFilter)}
