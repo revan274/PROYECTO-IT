@@ -25,6 +25,19 @@ npm run dev
 npm run dev:server
 ```
 
+## Cobertura y versión de Node
+
+CI ejecuta con **Node 20.19.0** y aplica umbrales de cobertura. El proveedor `v8` cuenta
+funciones de forma distinta entre versiones de Node: con Node 24 la cobertura de funciones da
+por encima del umbral y con Node 20 daba por debajo, así que una comprobación verde en local
+podía fallar en CI sin que ningún test fallara.
+
+Para comprobar cobertura igual que CI, usa la misma versión:
+
+```bash
+npx -y -p node@20.19.0 node ./node_modules/vitest/vitest.mjs run --coverage
+```
+
 ## Scripts
 - `npm run dev`
 - `npm run dev:server`
