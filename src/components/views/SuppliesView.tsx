@@ -120,10 +120,13 @@ export const SuppliesView: React.FC<SuppliesViewProps> = ({
             >
               <Download size={18} /> Exportar
             </Button>
-            <Button variant="plain" size="bare"
+            {/* Crear un registro es la acción principal en todas las vistas: mismo color en
+                todas, para que el usuario aprenda un solo lenguaje. */}
+            <Button
+              variant="primary"
+              size="lg"
               disabled={!canEdit}
               onClick={() => openModal('insumo')}
-              className="bg-brand-green text-white px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-2 disabled:opacity-50"
             >
               <PlusCircle size={18} /> Registrar Insumo
             </Button>
