@@ -945,7 +945,6 @@ export default function App() {
     applyImportDraft,
   } = useInventoryImport({
     isReadOnly,
-    sessionUser,
     importDraft,
     isApplyingImport,
     ensureBackendConnected,

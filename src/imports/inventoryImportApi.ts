@@ -13,8 +13,6 @@ export interface InventoryImportRequestOptions {
   items: ImportDraftState['payloadItems'];
   fileName: string;
   dryRun: boolean;
-  usuario: string;
-  rol: string;
 }
 
 /**
@@ -30,8 +28,9 @@ export function requestInventoryImport(options: InventoryImportRequestOptions): 
       dryRun: options.dryRun,
       upsert: true,
       fileName: options.fileName,
-      usuario: options.usuario,
-      rol: options.rol,
+      // El actor NO se envía: el servidor lo deriva de la sesión autenticada
+      // (`getRequestActor`). Mandarlo desde el cliente era carga muerta que además
+      // aparentaba conceder privilegios con un `|| 'admin'` de respaldo.
     }),
   });
 }

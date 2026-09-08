@@ -82,8 +82,6 @@ export function useAssetActions({
         method,
         body: JSON.stringify({
           ...activoPayload,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
       await refreshData();
@@ -114,8 +112,6 @@ export function useAssetActions({
       await apiRequest(`/activos/${id}`, {
         method: 'DELETE',
         body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
       await refreshData();
@@ -151,8 +147,6 @@ export function useAssetActions({
       const response = await apiRequest<{ removedCount?: number }>('/activos', {
         method: 'DELETE',
         body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
       await refreshData();

@@ -99,8 +99,6 @@ export function useSupplyActions({
           stock,
           min,
           categoria,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
 
@@ -132,8 +130,6 @@ export function useSupplyActions({
       await apiRequest(`/insumos/${id}`, {
         method: 'DELETE',
         body: JSON.stringify({
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
 
@@ -170,8 +166,6 @@ export function useSupplyActions({
         body: JSON.stringify({
           delta: cantidad,
           motivo: motivo || undefined,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
       await refreshData();
@@ -199,8 +193,6 @@ export function useSupplyActions({
           method: 'PATCH',
           body: JSON.stringify({
             delta: cantidad,
-            usuario: sessionUser?.nombre || 'Admin IT',
-            rol: sessionUser?.rol || 'admin',
           }),
         }),
       ),
@@ -243,8 +235,6 @@ export function useSupplyActions({
         body: JSON.stringify({
           stock: value,
           motivo: motivo || undefined,
-          usuario: sessionUser?.nombre || 'Admin IT',
-          rol: sessionUser?.rol || 'admin',
         }),
       });
       await refreshData();
