@@ -1060,6 +1060,17 @@ test('un rol deshabilitado pierde acceso aunque ya tuviera una sesión activa', 
 
   assert.equal(forbidden.response.status, 403, JSON.stringify(forbidden.data));
   assert.equal(forbidden.data.error, 'Tu rol está deshabilitado en catálogo.');
+
+  // Este test muta estado compartido: sin restaurar el catálogo, el rol `tecnico` queda
+  // deshabilitado para todo lo que corra después y esos tests fallan por una causa que no
+  // tiene nada que ver con lo que prueban. Limpiar lo que ensucias es responsabilidad del
+  // test que ensucia, no de los siguientes.
+  const restaurado = await requestJson('/api/catalogos', {
+    method: 'PATCH',
+    token: adminSession.token,
+    body: { roles: ROLE_CATALOG },
+  });
+  assert.equal(restaurado.response.status, 200, 'el catálogo de roles debe quedar como estaba');
 });
 
 test('GET /api/auditoria soporta all=1 y entityId para consultas bajo demanda', { concurrency: false }, async () => {
@@ -1519,15 +1530,6 @@ test('autorización: el solicitante no puede operar inventario ni administrar', 
 });
 
 test('autorización: el técnico opera inventario pero no administra usuarios ni catálogos', { concurrency: false }, async () => {
-  // Una prueba anterior de la suite deja el rol `tecnico` deshabilitado en el catálogo y no
-  // lo restaura. Se reactiva aquí para que esta prueba no dependa del orden de ejecución.
-  const admin = await login(ADMIN_USER.username, ADMIN_PASSWORD);
-  await requestJson('/api/catalogos', {
-    method: 'PATCH',
-    token: admin.token,
-    body: { roles: ROLE_CATALOG },
-  });
-
   const session = await login(TECH_USER.username, TECH_PASSWORD);
 
   const permitido = await requestJson('/api/insumos/11/stock', {
