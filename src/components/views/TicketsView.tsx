@@ -1,5 +1,5 @@
 import React from 'react';
-import { Ticket, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Ticket, Trash2 } from 'lucide-react';
 import { TicketFormModal } from '../modals/TicketFormModal';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -151,6 +151,22 @@ export function TicketsView({
   onSaveComment,
   ticketFormModal,
 }: TicketsViewProps) {
+  // Los paneles de adjuntos y comentarios nacen plegados: con varios cientos de tickets
+  // abiertos a la vez la lista se vuelve imposible de recorrer y monta un campo de texto
+  // y uno de archivo por ticket aunque estén vacíos. La fila de acciones no se pliega,
+  // porque cambiar estado y asignación desde la lista es el flujo diario del técnico.
+  const [expandedTickets, setExpandedTickets] = React.useState<ReadonlySet<string>>(() => new Set());
+
+  const toggleTicketDetails = (ticketId: number) => {
+    const key = String(ticketId);
+    setExpandedTickets((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -260,9 +276,11 @@ export function TicketsView({
       {filteredTickets.map((ticket) => {
         const latestHistory = Array.isArray(ticket.historial) && ticket.historial.length > 0 ? ticket.historial[0] : null;
         const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
-        const historyWithComment = (ticket.historial || [])
-          .filter((entry): entry is TicketHistoryEntry => String(entry.comentario || '').trim().length > 0)
-          .slice(0, 4);
+        const commentEntries = (ticket.historial || [])
+          .filter((entry): entry is TicketHistoryEntry => String(entry.comentario || '').trim().length > 0);
+        const historyWithComment = commentEntries.slice(0, 4);
+        const isExpanded = expandedTickets.has(String(ticket.id));
+        const detailsId = `ticket-detalle-${ticket.id}`;
 
         return (
           <div
@@ -391,7 +409,26 @@ export function TicketsView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Button
+              variant="plain"
+              size="bare"
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls={detailsId}
+              onClick={() => toggleTicketDetails(ticket.id)}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/40 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100"
+            >
+              <span>
+                Adjuntos ({attachments.length}) | Comentarios ({commentEntries.length})
+              </span>
+              <span className="flex items-center gap-2">
+                {isExpanded ? 'Ocultar' : 'Ver detalle'}
+                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </Button>
+
+            {isExpanded && (
+            <div id={detailsId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -492,6 +529,7 @@ export function TicketsView({
                 </div>
               </div>
             </div>
+            )}
           </div>
         );
       })}
