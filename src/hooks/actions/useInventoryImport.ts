@@ -5,14 +5,8 @@ import { parseInventoryWorkbook } from '../../imports/inventoryWorkbook';
 import type { ImportDraftState, ToastType } from '../../types/app';
 import { getApiErrorMessage } from '../../utils/format';
 
-interface ImportSessionUser {
-  nombre?: string;
-  rol?: string;
-}
-
 export interface UseInventoryImportParams {
   isReadOnly: boolean;
-  sessionUser: ImportSessionUser | null;
   importDraft: ImportDraftState | null;
   isApplyingImport: boolean;
   ensureBackendConnected: (actionLabel: string) => boolean;
@@ -31,7 +25,6 @@ export interface UseInventoryImportParams {
  */
 export function useInventoryImport({
   isReadOnly,
-  sessionUser,
   importDraft,
   isApplyingImport,
   ensureBackendConnected,
@@ -80,8 +73,6 @@ export function useInventoryImport({
         items: payloadItems,
         fileName: file.name,
         dryRun: true,
-        usuario: sessionUser?.nombre || 'Admin IT',
-        rol: sessionUser?.rol || 'admin',
       });
       setImportDraft({
         fileName: file.name,
@@ -103,7 +94,7 @@ export function useInventoryImport({
     } finally {
       setIsImportingInventory(false);
     }
-  }, [ensureBackendConnected, isReadOnly, sessionUser, setImportDraft, setIsImportingInventory, showToast]);
+  }, [ensureBackendConnected, isReadOnly, setImportDraft, setIsImportingInventory, showToast]);
 
   const exportImportIssuesCsv = useCallback(() => {
     if (!importDraft) return;
@@ -131,8 +122,6 @@ export function useInventoryImport({
         items: draft.payloadItems,
         fileName: draft.fileName,
         dryRun: false,
-        usuario: sessionUser?.nombre || 'Admin IT',
-        rol: sessionUser?.rol || 'admin',
       });
       await refreshData(true);
       const invalidTotal = result.invalid + draft.localInvalidDetails.length;
@@ -150,7 +139,7 @@ export function useInventoryImport({
     } finally {
       setIsApplyingImport(false);
     }
-  }, [importDraft, isApplyingImport, refreshData, sessionUser, setImportDraft, setIsApplyingImport, showToast]);
+  }, [importDraft, isApplyingImport, refreshData, setImportDraft, setIsApplyingImport, showToast]);
 
   return {
     handleImportInventory,
