@@ -125,6 +125,27 @@ function normalizeCalendar(calendar) {
 }
 
 /**
+ * ¿Este instante cae dentro de la jornada hábil?
+ *
+ * Lo usa el vigilante de SLA para no mandar avisos de madrugada: el vencimiento sí se
+ * calcula en horas hábiles, pero el momento de avisar depende de si hay alguien
+ * trabajando. Sin jornada configurada se responde `true`, coherente con que
+ * `addBusinessHours` degrade a cálculo continuo en ese mismo caso.
+ */
+export function isWithinBusinessHours(ms, calendar = DEFAULT_BUSINESS_CALENDAR) {
+  const instant = Number.isFinite(ms) ? ms : Date.now();
+  const { timeZone, schedule, holidaySet } = normalizeCalendar(calendar);
+  if (schedule.size === 0) return true;
+
+  const parts = getZonedParts(instant, timeZone);
+  if (holidaySet.has(toDateKey(parts))) return false;
+
+  const window = schedule.get(weekdayOf(parts));
+  if (!window) return false;
+  return parts.minuteOfDay >= window.start && parts.minuteOfDay < window.end;
+}
+
+/**
  * Suma `hours` horas hábiles a un instante, respetando la jornada de cada día y los feriados.
  * Devuelve una fecha ISO en UTC.
  */

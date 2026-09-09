@@ -12,6 +12,7 @@ export const MOTIVOS = Object.freeze({
   CRITICO: 'critico',
   SIN_ASIGNAR: 'sin-asignar',
   ASIGNADO: 'asignado',
+  POR_VENCER: 'por-vencer',
   NUEVO: 'nuevo',
 });
 
@@ -27,6 +28,10 @@ const ENCABEZADO_POR_MOTIVO = Object.freeze({
   [MOTIVOS.ASIGNADO]: {
     asunto: (t) => `[Mesa IT] Te asignaron el ticket #${t.id}`,
     entrada: 'Se te asigno un ticket en Mesa IT.',
+  },
+  [MOTIVOS.POR_VENCER]: {
+    asunto: (t) => `[Mesa IT] Por vencer · Ticket #${t.id}`,
+    entrada: 'Este ticket esta por agotar su tiempo de atencion (SLA).',
   },
   [MOTIVOS.NUEVO]: {
     asunto: (t) => `[Mesa IT] Nuevo ticket #${t.id} — ${t.prioridad}`,

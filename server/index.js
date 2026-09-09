@@ -12,6 +12,9 @@ import { createActivosRouter } from './routes/activos.js';
 import { createTicketsRouter } from './routes/tickets.js';
 import { createUsersRouter } from './routes/users.js';
 import { startKeepAlive } from './utils/keepAlive.js';
+import { isMailEnabled } from './modules/mailer.js';
+import { createNotificationLedger } from './modules/notification-ledger.js';
+import { iniciarVigilanteDeSla } from './modules/sla-watcher.js';
 import {
   buildAssetQrLookupResponse,
   buildSignedAssetQrToken,
@@ -156,6 +159,13 @@ const UPLOAD_DIR = ATTACHMENT_STORAGE.dir;
 const attachmentStore = createAttachmentStore({
   getPool: getSharedPostgresPool,
   uploadDir: UPLOAD_DIR,
+  backend: getStorageBackend(),
+});
+// Constancia de avisos ya enviados. Tabla propia y no campo del documento JSONB: ese
+// documento se reescribe entero bajo lock global y un temporizador de fondo no debe
+// competir por ese lock con las peticiones de los usuarios.
+const notificationLedger = createNotificationLedger({
+  getPool: getSharedPostgresPool,
   backend: getStorageBackend(),
 });
 const CLIENT_DIST_DIR = path.resolve(process.cwd(), 'dist');
@@ -1473,6 +1483,18 @@ export function startServer(port = PORT, appInstance = app) {
     // En Railway no hace falta; sin PUBLIC_URL no se hace ping a ningún lado.
     const publicUrl = process.env.PUBLIC_URL;
     if (publicUrl) startKeepAlive(`${publicUrl}/api/health`);
+
+    // Vigilante de SLA. Se puede apagar con SLA_WATCH_ENABLE=false; se apaga solo si no
+    // hay correo configurado, porque revisar para no poder avisar solo gasta consultas
+    // (y con Neon, cada vuelta despierta la base).
+    const vigilanciaPedida = String(process.env.SLA_WATCH_ENABLE ?? 'true').toLowerCase() !== 'false';
+    if (!vigilanciaPedida) {
+      console.log('[SLA] Vigilante desactivado por SLA_WATCH_ENABLE=false.');
+    } else if (!isMailEnabled()) {
+      console.log('[SLA] Vigilante inactivo: no hay SMTP configurado, no habria a donde avisar.');
+    } else {
+      iniciarVigilanteDeSla({ leerDb: readDb, ledger: notificationLedger });
+    }
   });
 }
 
