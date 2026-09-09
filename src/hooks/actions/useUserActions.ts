@@ -145,7 +145,10 @@ export function useUserActions({
       email: user.email || '',
     });
     setEditingUserId(user.id);
-    setIsCreatingUser(true);
+    // Ojo: NO se toca `isCreatingUser`. Esa bandera significa "hay un guardado en curso"
+    // y el boton la usa para deshabilitarse. Encenderla al abrir el formulario dejaba el
+    // boton en "Guardando..." desde el primer momento, sin forma de guardar nunca. Que el
+    // formulario este en modo edicion ya lo dice `editingUserId`.
   };
 
   const handleToggleUserActive = async (user: UserItem): Promise<boolean> => {
