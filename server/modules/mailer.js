@@ -45,6 +45,66 @@ export function getNotifyTicketEmail() {
   return NOTIFY_TICKET_EMAIL;
 }
 
+/**
+ * Enmascara un correo para poder mostrarlo en un diagnostico sin revelarlo entero.
+ * `jramospalomares274@gmail.com` -> `jr***74@gmail.com`
+ */
+export function maskEmail(value) {
+  const raw = String(value || '').trim();
+  const arroba = raw.lastIndexOf('@');
+  if (arroba < 1) return raw ? '***' : '';
+  const local = raw.slice(0, arroba);
+  const dominio = raw.slice(arroba);
+  if (local.length <= 4) return `${local.slice(0, 1)}***${dominio}`;
+  return `${local.slice(0, 2)}***${local.slice(-2)}${dominio}`;
+}
+
+/**
+ * Configuracion visible del correo. NUNCA incluye SMTP_PASS: este objeto viaja a un
+ * endpoint de diagnostico, y una contrasena de aplicacion de Gmail da acceso a la
+ * cuenta entera.
+ */
+export function getMailSettings() {
+  return {
+    habilitado: MAIL_ENABLED,
+    host: SMTP_HOST,
+    puerto: SMTP_PORT,
+    seguro: SMTP_SECURE,
+    usuario: maskEmail(SMTP_USER),
+    remitente: MAIL_FROM ? maskEmail(MAIL_FROM.replace(/^.*<|>.*$/g, '')) : '',
+    buzonGeneral: maskEmail(NOTIFY_TICKET_EMAIL),
+    // Que falta exactamente, para no adivinar cual de las tres variables quedo vacia.
+    faltantes: [
+      SMTP_USER ? null : 'SMTP_USER',
+      SMTP_PASS ? null : 'SMTP_PASS',
+      MAIL_FROM ? null : 'MAIL_FROM',
+    ].filter(Boolean),
+  };
+}
+
+/**
+ * Comprueba conexion y credenciales SIN enviar nada. Es lo primero que conviene mirar:
+ * distingue "la contrasena esta mal" de "el correo salio pero no llego".
+ * Nunca lanza.
+ */
+export async function verifyMailConnection() {
+  const transporter = getTransporter();
+  if (!transporter) return { ok: false, motivo: 'MAIL_DISABLED' };
+  try {
+    await transporter.verify();
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      motivo: 'CONNECTION_ERROR',
+      // El codigo de nodemailer/SMTP es lo que permite distinguir credenciales malas
+      // (EAUTH) de red bloqueada (ETIMEDOUT/ECONNREFUSED).
+      codigo: error?.code || error?.responseCode || null,
+      detalle: String(error?.message || error).slice(0, 300),
+    };
+  }
+}
+
 export function dedupeRecipients(addresses) {
   const seen = new Set();
   const result = [];

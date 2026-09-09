@@ -12,9 +12,17 @@ import { createActivosRouter } from './routes/activos.js';
 import { createTicketsRouter } from './routes/tickets.js';
 import { createUsersRouter } from './routes/users.js';
 import { startKeepAlive } from './utils/keepAlive.js';
-import { isMailEnabled } from './modules/mailer.js';
+import {
+  getMailSettings,
+  isMailEnabled,
+  maskEmail,
+  sendMail,
+  verifyMailConnection,
+} from './modules/mailer.js';
 import { createNotificationLedger } from './modules/notification-ledger.js';
-import { iniciarVigilanteDeSla } from './modules/sla-watcher.js';
+import { iniciarVigilanteDeSla, leerMinutosDeAviso } from './modules/sla-watcher.js';
+import { escapeHtml } from './modules/ticket-notifications.js';
+import { roleHasPermission } from '../shared/permissions.js';
 import {
   buildAssetQrLookupResponse,
   buildSignedAssetQrToken,
@@ -759,6 +767,94 @@ app.get('/api/diagnostics/storage', requireAuth, async (req, res, next) => {
       },
       integrity: integridad.counts,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Diagnostico de correo. Responde a la pregunta practica: "configure Gmail, ¿ya funciona?"
+// Separa los tres fallos posibles, que necesitan arreglos distintos: falta configuracion,
+// las credenciales no sirven, o el correo sale pero nadie lo recibe porque los usuarios
+// no tienen correo capturado.
+app.get('/api/diagnostics/mail', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensurePermission(req, res, 'diagnostics.read')) return;
+
+    const settings = getMailSettings();
+    // Solo se intenta conectar si hay configuracion: un verify() sin credenciales
+    // tarda hasta el timeout para decir lo que ya sabemos.
+    const conexion = settings.habilitado
+      ? await verifyMailConnection()
+      : { ok: false, motivo: 'MAIL_DISABLED' };
+
+    const db = await getRequestDb(req);
+    const usuarios = Array.isArray(db.users) ? db.users : [];
+    const puedenAtender = usuarios.filter((user) => user
+      && user.activo !== false
+      && roleHasPermission(user.rol, 'tickets.update'));
+    const sinCorreo = puedenAtender.filter((user) => !user.email);
+
+    res.json({
+      configuracion: settings,
+      conexion,
+      // De nada sirve que Gmail funcione si nadie tiene correo a donde recibirlo.
+      destinatarios: {
+        puedenAtenderTickets: puedenAtender.length,
+        conCorreo: puedenAtender.length - sinCorreo.length,
+        sinCorreo: sinCorreo.map((user) => user.nombre),
+      },
+      vigilanteSla: {
+        activo: settings.habilitado
+          && String(process.env.SLA_WATCH_ENABLE ?? 'true').toLowerCase() !== 'false',
+        minutosDeAviso: leerMinutosDeAviso(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Envia un correo de prueba UNICAMENTE al del administrador que lo pide. No acepta
+// destinatario por parametro a proposito: un endpoint autenticado que manda correo a
+// cualquier direccion es un rele de spam esperando a ser encontrado.
+app.post('/api/diagnostics/mail/test', requireAuth, async (req, res, next) => {
+  try {
+    if (!ensurePermission(req, res, 'diagnostics.read')) return;
+
+    const settings = getMailSettings();
+    if (!settings.habilitado) {
+      return res.status(409).json({
+        error: 'El correo no está configurado en el servidor.',
+        faltantes: settings.faltantes,
+      });
+    }
+
+    const destino = String(req.authUser?.email || '').trim();
+    if (!destino) {
+      return res.status(409).json({
+        error: 'Tu usuario no tiene correo capturado. Agrégalo en Usuarios y vuelve a intentar.',
+      });
+    }
+
+    const cuando = new Date().toISOString();
+    const resultado = await sendMail({
+      to: destino,
+      subject: '[Mesa IT] Prueba de configuración de correo',
+      text: `Si recibiste este mensaje, Mesa IT ya puede enviar avisos de tickets.\n\nEnviado: ${cuando}`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;">
+        <p>Si recibiste este mensaje, <strong>Mesa IT ya puede enviar avisos de tickets</strong>.</p>
+        <p style="color:#6b7280;font-size:12px;">Enviado: ${escapeHtml(cuando)}</p>
+      </div>`,
+    });
+
+    if (!resultado.sent) {
+      return res.status(502).json({
+        error: 'No se pudo enviar el correo de prueba.',
+        motivo: resultado.reason,
+        detalle: String(resultado.error?.message || '').slice(0, 300) || null,
+      });
+    }
+    res.json({ enviado: true, para: maskEmail(destino), cuando });
   } catch (error) {
     next(error);
   }
