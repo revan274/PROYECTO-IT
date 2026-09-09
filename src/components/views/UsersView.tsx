@@ -195,7 +195,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
                     <div className="space-y-1">
                       <label htmlFor="users-search-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Buscar
