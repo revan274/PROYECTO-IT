@@ -9,6 +9,24 @@ export function formatDateTime(value?: string): string {
   return parsed.toLocaleString();
 }
 
+// Variante corta para listas largas. `formatDateTime` alimenta auditoria, adjuntos,
+// exportaciones a Excel y reportes impresos, donde el segundo y el ano completo si
+// importan; en la lista de tickets solo estorban. Por eso es una funcion aparte y no
+// un cambio en la de siempre.
+export function formatDateTimeCompact(value?: string, nowMs = Date.now()): string {
+  if (!value) return 'N/D';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  const esOtroAno = parsed.getFullYear() !== new Date(nowMs).getFullYear();
+  return parsed.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(esOtroAno ? { year: 'numeric' as const } : {}),
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function normalizeLooseDateString(value?: string): string {
   return String(value || '')
     .trim()

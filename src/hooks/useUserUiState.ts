@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import type { UserRole } from '../types/app';
+import type { UserFormState, UserRole } from '../types/app';
 
 export function useUserUiState() {
-  const [newUserForm, setNewUserForm] = useState<{
-    nombre: string;
-    username: string;
-    password: string;
-    departamento: string;
-    rol: UserRole;
-  }>({
+  const [newUserForm, setNewUserForm] = useState<UserFormState>({
     nombre: '',
     username: '',
     password: '',
     departamento: '',
     rol: 'solicitante',
+    email: '',
   });
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);

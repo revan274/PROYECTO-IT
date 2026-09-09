@@ -912,6 +912,7 @@ export default function App() {
       username: '',
       password: '',
       departamento: '',
+      email: '',
       rol: fallbackRole,
     });
     setEditingUserId(null);

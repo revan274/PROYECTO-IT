@@ -293,7 +293,10 @@ export function ReportsView({
         </div>
 
         <div className="p-8 border-b border-slate-50 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 gap-3">
+          {/* Nueve columnas iguales dejaban ~105 px por filtro y truncaban toda etiqueta
+              a media palabra ("Sucursal: todas" -> "SUCURS"). Con auto-fit cada filtro
+              reclama el ancho que necesita y la fila se parte cuando toca. */}
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
             <Input
               type="date"
               value={reportDateFrom}
@@ -454,7 +457,7 @@ export function ReportsView({
           </div>
         </div>
         <div className="p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
             <Input
               type="month"
               value={travelReportMonth}

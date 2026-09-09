@@ -4,7 +4,7 @@ import express from 'express';
 import { updateDb, now, nextId } from '../store.js';
 import { getRequestDb } from '../utils/helpers.js';
 import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
-import { sendMail, getNotifyTicketEmail } from '../modules/mailer.js';
+import { avisar, planDeAvisoAlCrear, MOTIVOS } from '../modules/ticket-notifications.js';
 
 export function createTicketsRouter({
   requireAuth,
@@ -157,62 +157,15 @@ export function createTicketsRouter({
     activo.estado = hasRelatedOpenTickets ? 'Falla' : 'Operativo';
   }
 
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function buildNewTicketEmail(ticket) {
-    const subject = `[Mesa IT] Nuevo ticket #${ticket.id} — ${ticket.prioridad}`;
-    const rows = [
-      ['Ticket', `#${ticket.id}`],
-      ['Prioridad', ticket.prioridad],
-      ['Activo', ticket.activoTag],
-      ['Sucursal', ticket.sucursal],
-      ['Tipo de atención', ticket.atencionTipo || 'Sin definir'],
-      ['Descripción', ticket.descripcion],
-      ['Solicitado por', ticket.solicitadoPor],
-      ['Asignado a', ticket.asignadoA || 'Sin asignar'],
-      ['Fecha límite (SLA)', ticket.fechaLimite],
-    ];
-    const text = [
-      'Se registró un nuevo ticket en Mesa IT.',
-      '',
-      ...rows.map(([label, value]) => `${label}: ${value}`),
-    ].join('\n');
-    const html = `
-      <div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;">
-        <p>Se registró un nuevo ticket en <strong>Mesa IT</strong>.</p>
-        <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
-          ${rows.map(([label, value]) => `
-            <tr>
-              <td style="font-weight:bold;border-bottom:1px solid #e5e7eb;">${escapeHtml(label)}</td>
-              <td style="border-bottom:1px solid #e5e7eb;">${escapeHtml(value)}</td>
-            </tr>`).join('')}
-        </table>
-      </div>`;
-    return { subject, text, html };
-  }
-
-  // Nunca debe bloquear ni fallar la creación del ticket: se dispara sin esperar (fire-and-forget)
-  // y cualquier error de envío queda solo en el log del servidor.
-  function notifyNewTicketByEmail(ticket, assignedUser) {
-    const recipients = [getNotifyTicketEmail(), assignedUser?.email].filter(Boolean);
-    if (recipients.length === 0) return;
-
-    const { subject, text, html } = buildNewTicketEmail(ticket);
-    sendMail({ to: recipients, subject, text, html })
-      .then((result) => {
-        if (!result.sent && result.reason === 'SEND_ERROR') {
-          console.error(`No se pudo notificar el ticket #${ticket.id} por correo:`, result.error);
-        }
-      })
-      .catch((error) => {
-        console.error(`No se pudo notificar el ticket #${ticket.id} por correo:`, error);
-      });
+  // Solo lo que hace falta para decidir destinatarios. Se extrae dentro del lock y se
+  // usa fuera, para no retener una referencia al documento mientras se envia el correo.
+  function snapshotUsuariosParaAviso(db) {
+    return (Array.isArray(db?.users) ? db.users : []).map((user) => ({
+      nombre: user.nombre,
+      rol: user.rol,
+      activo: user.activo,
+      email: user.email,
+    }));
   }
 
 router.post('/', requireAuth, async (req, res, next) => {
@@ -333,7 +286,9 @@ router.post('/', requireAuth, async (req, res, next) => {
         entidadId: ticket.id,
         after: ticket,
       });
-      return { ok: true, ticket, assignedUser };
+      // Copia minima para decidir destinatarios fuera del lock. Se copia en vez de
+      // devolver `db.users` para no dejar viva una referencia al documento.
+      return { ok: true, ticket, assignedUser, usuariosParaAviso: snapshotUsuariosParaAviso(db) };
     });
 
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
@@ -350,7 +305,8 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
     }
 
-    notifyNewTicketByEmail(created.ticket, created.assignedUser);
+    const plan = planDeAvisoAlCrear(created.ticket, created.usuariosParaAviso);
+    avisar({ ticket: created.ticket, ...plan });
     res.status(201).json(serializeTicket(created.ticket));
   } catch (error) {
     next(error);
@@ -557,6 +513,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (!ticket) return { ok: false, code: 'NOT_FOUND' };
 
       let nextAssignee;
+      let correoDelNuevoResponsable = '';
+      const responsablePrevio = String(ticket.asignadoA || '').trim();
       if (asignadoA !== undefined) {
         if (!asignadoA) {
           nextAssignee = '';
@@ -564,6 +522,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           const assignedUser = findTicketAssignee(db.users, asignadoA);
           if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
           nextAssignee = assignedUser.nombre;
+          correoDelNuevoResponsable = assignedUser.email || '';
         }
       }
 
@@ -678,7 +637,17 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         }
       }
 
-      return { ok: true, ticket };
+      // Solo cuando la asignacion cambia de verdad y hay un responsable nuevo: reasignar
+      // al mismo tecnico, o dejar el ticket sin asignar, no genera aviso.
+      const cambioDeResponsable = nextAssignee !== undefined
+        && nextAssignee !== responsablePrevio
+        && Boolean(nextAssignee);
+
+      return {
+        ok: true,
+        ticket,
+        avisarAsignacionA: cambioDeResponsable ? correoDelNuevoResponsable : '',
+      };
     });
 
     if (!updated?.ok && updated?.code === 'NOT_FOUND') {
@@ -690,6 +659,14 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (!updated?.ok && sendSupplyUsageError(res, updated)) return;
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el ticket.' });
+    }
+
+    if (updated.avisarAsignacionA) {
+      avisar({
+        ticket: updated.ticket,
+        destinatarios: [updated.avisarAsignacionA],
+        motivo: MOTIVOS.ASIGNADO,
+      });
     }
     res.json(serializeTicket(updated.ticket));
   } catch (error) {

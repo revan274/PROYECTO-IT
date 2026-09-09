@@ -394,6 +394,22 @@ export interface UserItem {
   rol: UserRole;
   departamento?: string;
   activo: boolean;
+  /** Opcional: sin correo el usuario no recibe ningun aviso de tickets. */
+  email?: string;
+}
+
+/**
+ * Forma del formulario de alta/edicion de usuario. Vive aqui porque la comparten
+ * `useUserUiState`, `useUserActions` y `UsersView`; tenerla declarada por separado
+ * en cada uno era como se colaba un campo en un sitio y no en los otros.
+ */
+export interface UserFormState {
+  nombre: string;
+  username: string;
+  password: string;
+  departamento: string;
+  rol: UserRole;
+  email: string;
 }
 
 export interface UserSession {

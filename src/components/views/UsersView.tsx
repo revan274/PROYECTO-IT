@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import type { UserItem, UserRole, UserSession } from '../../types/app';
+import type { UserFormState, UserItem, UserRole, UserSession } from '../../types/app';
 import { USER_ROLE_LABEL, USER_ROLE_PERMISSIONS } from '../../constants/app';
 
 interface UsersViewProps {
@@ -12,20 +12,8 @@ interface UsersViewProps {
   ticketEligibleUsersCount: number;
   handleCreateUser: (e: React.FormEvent<HTMLFormElement>) => void;
   editingUserId: number | null;
-  newUserForm: {
-    nombre: string;
-    username: string;
-    password: string;
-    departamento: string;
-    rol: UserRole;
-  };
-  setNewUserForm: React.Dispatch<React.SetStateAction<{
-    nombre: string;
-    username: string;
-    password: string;
-    departamento: string;
-    rol: UserRole;
-  }>>;
+  newUserForm: UserFormState;
+  setNewUserForm: React.Dispatch<React.SetStateAction<UserFormState>>;
   userCargoOptions: Array<{ value: string; label: string }>;
   roleCatalogOptions: Array<{ value: string; label: string }>;
   roleFilterOptions: Array<{ value: string; label: string }>;
@@ -144,6 +132,15 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 variant="formMuted" className="w-full"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, password: e.target.value }))}
               />
+              {/* Opcional a proposito: obligarlo bloquearia dar de alta a quien no tiene
+                  correo de empresa. Sin el, ese usuario simplemente no recibe avisos. */}
+              <Input
+                type="email"
+                placeholder="CORREO (PARA AVISOS DE TICKETS)"
+                value={newUserForm.email}
+                variant="formMuted" className="w-full lowercase"
+                onChange={(e) => setNewUserForm((prev) => ({ ...prev, email: e.target.value }))}
+              />
               <Select
                 required
                 value={newUserForm.departamento}
@@ -195,7 +192,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
                     <div className="space-y-1">
                       <label htmlFor="users-search-filter" className="block text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Buscar
@@ -262,29 +259,37 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 <table className="w-full text-left min-w-[720px]">
                   <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <tr>
-                      <th className="px-8 py-4">Nombre</th>
-                      <th className="px-8 py-4">Usuario</th>
-                      <th className="px-8 py-4">Cargo</th>
-                      <th className="px-8 py-4">Rol</th>
-                      <th className="px-8 py-4">Permisos</th>
-                      <th className="px-8 py-4">Estado</th>
-                      <th className="px-8 py-4 text-right">Acciones</th>
+                      <th className="px-4 py-4">Nombre</th>
+                      <th className="px-4 py-4">Usuario</th>
+                      <th className="px-4 py-4">Correo</th>
+                      <th className="px-4 py-4">Cargo</th>
+                      <th className="px-4 py-4">Rol</th>
+                      <th className="px-4 py-4">Permisos</th>
+                      <th className="px-4 py-4">Estado</th>
+                      <th className="px-4 py-4 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {sortedUsers.map((user) => (
                       <tr key={`user-${user.id}`}>
-                        <td className="px-8 py-4 text-xs font-black text-slate-800 uppercase">{user.nombre}</td>
-                        <td className="px-8 py-4 text-xs font-black text-slate-500">{user.username}</td>
-                        <td className="px-8 py-4 text-xs font-black text-slate-500">{formatCargoFromCatalog(user.departamento)}</td>
-                        <td className="px-8 py-4 text-xs font-black text-slate-500 uppercase">{roleLabelByValue[user.rol] || USER_ROLE_LABEL[user.rol]}</td>
-                        <td className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-wider">{rolePermissionsByValue[user.rol] || USER_ROLE_PERMISSIONS[user.rol]}</td>
-                        <td className="px-8 py-4">
+                        <td className="px-4 py-4 text-xs font-black text-slate-800 uppercase">{user.nombre}</td>
+                        <td className="px-4 py-4 text-xs font-black text-slate-500">{user.username}</td>
+                        {/* Quien no tiene correo no recibe ningun aviso: conviene que se
+                            note en la lista, no solo al abrir la ficha. */}
+                        <td className="px-4 py-4 text-xs font-black lowercase text-slate-500">
+                          {user.email
+                            ? user.email
+                            : <span className="text-[10px] uppercase tracking-wider text-amber-600">Sin correo</span>}
+                        </td>
+                        <td className="px-4 py-4 text-xs font-black text-slate-500">{formatCargoFromCatalog(user.departamento)}</td>
+                        <td className="px-4 py-4 text-xs font-black text-slate-500 uppercase">{roleLabelByValue[user.rol] || USER_ROLE_LABEL[user.rol]}</td>
+                        <td className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-wider">{rolePermissionsByValue[user.rol] || USER_ROLE_PERMISSIONS[user.rol]}</td>
+                        <td className="px-4 py-4">
                           <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${user.activo !== false ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                             {user.activo !== false ? 'Activo' : 'Inactivo'}
                           </span>
                         </td>
-                        <td className="px-8 py-4 text-right">
+                        <td className="px-4 py-4 text-right">
                           <div className="flex justify-end gap-2">
                             <Button variant="plain" size="bare"
                               type="button"
@@ -316,7 +321,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
                     ))}
                     {sortedUsers.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-8 py-20 text-center">
+                        <td colSpan={8} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity">
                             <div className="w-20 h-20 mb-4 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner hover-lift">
                               <span className="text-3xl">👥</span>

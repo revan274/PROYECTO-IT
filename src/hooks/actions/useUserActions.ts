@@ -1,18 +1,10 @@
 import type React from 'react';
 import { useCallback } from 'react';
 import { apiRequest, getApiErrorMessage } from '../../utils/api';
-import type { UserItem, UserRole, UserSession } from '../../types/app';
+import type { UserFormState, UserItem, UserRole, UserSession } from '../../types/app';
 import type { RefreshAppData, ShowConfirm, ShowToast } from '../../types/actionDependencies';
 import { isUserRole } from '../../utils/assets';
 import { normalizeForCompare } from '../../utils/format';
-
-interface UserFormState {
-  username: string;
-  nombre: string;
-  rol: UserRole;
-  departamento: string;
-  password: string;
-}
 
 interface UseUserActionsProps {
   sessionUser: UserSession | null;
@@ -74,6 +66,7 @@ export function useUserActions({
     const password = newUserForm.password;
     const departamento = newUserForm.departamento.trim().toUpperCase();
     const rol = newUserForm.rol;
+    const email = newUserForm.email.trim().toLowerCase();
 
     if (!nombre || !username || !departamento) {
       showToast('Completa nombre, usuario y cargo', 'warning');
@@ -91,6 +84,12 @@ export function useUserActions({
       showToast('El password debe tener al menos 6 caracteres', 'warning');
       return false;
     }
+    // El correo es opcional, pero si viene tiene que ser valido: el backend lo rechaza
+    // igual, y avisar aqui evita un viaje de ida y vuelta con un error generico.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showToast('Correo inválido', 'warning');
+      return false;
+    }
     if (users.some((user) => normalizeForCompare(user.username) === normalizeForCompare(username) && (!isEditing || user.id !== editingUserId))) {
       showToast('El usuario ya existe', 'warning');
       return false;
@@ -100,7 +99,9 @@ export function useUserActions({
     setIsCreatingUser(true);
     try {
       if (isEditing && editingUserId !== null) {
-        const payload: Record<string, unknown> = { nombre, username, departamento, rol };
+        // `email` se envia siempre en la edicion, incluso vacio: es como se borra un
+        // correo. El backend distingue "no enviado" de "enviado vacio".
+        const payload: Record<string, unknown> = { nombre, username, departamento, rol, email };
         if (password) payload.password = password;
         await apiRequest(`/users/${editingUserId}`, {
           method: 'PATCH',
@@ -115,6 +116,7 @@ export function useUserActions({
             password,
             departamento,
             rol,
+            email,
           }),
         });
       }
@@ -140,6 +142,7 @@ export function useUserActions({
       rol: nextRole,
       departamento: user.departamento || '',
       password: '',
+      email: user.email || '',
     });
     setEditingUserId(user.id);
     setIsCreatingUser(true);
