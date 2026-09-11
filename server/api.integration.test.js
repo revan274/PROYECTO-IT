@@ -389,6 +389,7 @@ test('push: guarda la suscripción en el usuario autenticado y permite retirarla
   assert.equal(config.response.status, 200);
   assert.equal(typeof config.data.enabled, 'boolean');
   assert.equal(Object.hasOwn(config.data, 'privateKey'), false);
+  assert.match(config.response.headers.get('cache-control') || '', /no-store/i);
 
   const subscription = {
     endpoint: 'https://push.example.test/subscription/integration',

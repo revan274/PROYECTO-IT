@@ -753,6 +753,11 @@ app.get('/api/health', (_req, res) => {
 // Las claves VAPID públicas son necesarias en el navegador para crear la suscripción;
 // la clave privada nunca sale del proceso del servidor.
 app.get('/api/push/config', requireAuth, (_req, res) => {
+  // La disponibilidad VAPID puede cambiar al configurar el entorno. Esta respuesta
+  // nunca debe quedar en caché: un `enabled:false` antiguo impediría al navegador
+  // crear la suscripción aun después de habilitar el servicio.
+  res.set('Cache-Control', 'no-store, max-age=0');
+  res.set('Pragma', 'no-cache');
   res.json(pushNotifier.getPublicConfiguration());
 });
 

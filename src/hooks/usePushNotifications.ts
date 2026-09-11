@@ -78,7 +78,9 @@ export function usePushNotifications({ sessionUser, showToast }: UsePushNotifica
 
     setStatus('loading');
     try {
-      const configuration = await apiRequest<PushConfigurationResponse>('/push/config');
+      const configuration = await apiRequest<PushConfigurationResponse>('/push/config', {
+        cache: 'no-store',
+      });
       if (!configuration.enabled || !configuration.publicKey) {
         showToast('Las notificaciones push aún no están configuradas en el servidor.', 'warning');
         setStatus('idle');
