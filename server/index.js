@@ -742,6 +742,15 @@ function registerRoutes(app, authRuntime) {
     });
   }
 
+  function notifyTicketAssigned({ ticket, assigneeId, subscriptions }) {
+    return pushNotifier.notifyTicketAssigned({
+      ticket,
+      assigneeId,
+      subscriptions,
+      removeSubscription: removePushSubscription,
+    });
+  }
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -1508,6 +1517,7 @@ const ticketRouteDeps = {
   parsePagination,
   paginateList,
   notifyTicketCreated,
+  notifyTicketAssigned,
 };
 
 const activosRouteDeps = {

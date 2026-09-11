@@ -65,3 +65,22 @@ test('envía un payload mínimo y limpia suscripciones expiradas', async () => {
   assert.deepEqual(removed, ['https://push.example.test/subscription/expired']);
   assert.equal(buildTicketPushPayload({ id: 1, prioridad: 'ALTA' }).url, '/#/tickets');
 });
+
+test('una asignación llega solo al nuevo responsable', async () => {
+  const sent = [];
+  const notifier = createPushNotifier({
+    env: VAPID_ENV,
+    sendNotification: async (item, payload) => sent.push({ item, payload: JSON.parse(payload) }),
+  });
+
+  const result = await notifier.notifyTicketAssigned({
+    ticket: { id: 19, prioridad: 'ALTA', activoTag: 'PC-19' },
+    assigneeId: 2,
+    subscriptions: [subscription(1, 'admin', 'admin'), subscription(2, 'tecnico', 'tecnico')],
+  });
+
+  assert.equal(result.sent, 1);
+  assert.equal(sent[0].item.userId, 2);
+  assert.equal(sent[0].payload.title, 'Mesa IT: ticket asignado');
+  assert.match(sent[0].payload.body, /Asignado a ti/);
+});

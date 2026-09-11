@@ -93,11 +93,14 @@ export function planTicketPushRecipients(ticket, users) {
   return new Set(recipients.map((user) => validUserId(user.id)).filter(Boolean));
 }
 
-export function buildTicketPushPayload(ticket) {
+export function buildTicketPushPayload(ticket, event = 'created') {
   const priority = text(ticket?.prioridad).toUpperCase() || 'NORMAL';
+  const assigned = event === 'assigned';
   return {
-    title: priority === 'CRITICA' ? 'Mesa IT: ticket crítico' : 'Mesa IT: nuevo ticket',
-    body: `Ticket #${ticket.id} · ${priority}${ticket?.activoTag ? ` · ${text(ticket.activoTag).slice(0, 80)}` : ''}`,
+    title: assigned
+      ? 'Mesa IT: ticket asignado'
+      : priority === 'CRITICA' ? 'Mesa IT: ticket crítico' : 'Mesa IT: nuevo ticket',
+    body: `Ticket #${ticket.id} · ${assigned ? 'Asignado a ti · ' : ''}${priority}${ticket?.activoTag ? ` · ${text(ticket.activoTag).slice(0, 80)}` : ''}`,
     url: '/#/tickets',
     tag: `mesa-it-ticket-${ticket.id}`,
   };
@@ -110,15 +113,20 @@ export function createPushNotifier({
 } = {}) {
   const configuration = getPushConfiguration(env);
 
-  async function notifyTicketCreated({ ticket, users, subscriptions, removeSubscription = async () => {} }) {
+  async function sendTicketPush({
+    ticket,
+    recipientIds,
+    subscriptions,
+    event = 'created',
+    removeSubscription = async () => {},
+  }) {
     if (!configuration.enabled) return { sent: 0, skipped: 'NOT_CONFIGURED' };
 
-    const recipientIds = planTicketPushRecipients(ticket, users);
     const destinations = normalizePushSubscriptionList(subscriptions)
       .filter((subscription) => recipientIds.has(subscription.userId));
     if (destinations.length === 0) return { sent: 0, skipped: 'NO_SUBSCRIPTIONS' };
 
-    const payload = JSON.stringify(buildTicketPushPayload(ticket));
+    const payload = JSON.stringify(buildTicketPushPayload(ticket, event));
     const options = {
       vapidDetails: {
         subject: configuration.subject,
@@ -148,11 +156,33 @@ export function createPushNotifier({
     return { sent: results.filter((result) => result.status === 'fulfilled' && result.value).length };
   }
 
+  function notifyTicketCreated({ ticket, users, subscriptions, removeSubscription = async () => {} }) {
+    return sendTicketPush({
+      ticket,
+      recipientIds: planTicketPushRecipients(ticket, users),
+      subscriptions,
+      removeSubscription,
+    });
+  }
+
+  function notifyTicketAssigned({ ticket, assigneeId, subscriptions, removeSubscription = async () => {} }) {
+    const recipientId = validUserId(assigneeId);
+    if (!recipientId) return Promise.resolve({ sent: 0, skipped: 'NO_RECIPIENT' });
+    return sendTicketPush({
+      ticket,
+      recipientIds: new Set([recipientId]),
+      subscriptions,
+      event: 'assigned',
+      removeSubscription,
+    });
+  }
+
   return {
     getPublicConfiguration: () => ({
       enabled: configuration.enabled,
       ...(configuration.enabled ? { publicKey: configuration.publicKey } : { reason: configuration.reason }),
     }),
     notifyTicketCreated,
+    notifyTicketAssigned,
   };
 }

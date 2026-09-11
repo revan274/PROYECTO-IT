@@ -39,6 +39,7 @@ export function createTicketsRouter({
   parsePagination,
   paginateList,
   notifyTicketCreated = () => Promise.resolve(),
+  notifyTicketAssigned = () => Promise.resolve(),
 }) {
   const router = express.Router();
   const SAFE_DOWNLOAD_MIME_TYPES = new Set([
@@ -162,6 +163,7 @@ export function createTicketsRouter({
   // usa fuera, para no retener una referencia al documento mientras se envia el correo.
   function snapshotUsuariosParaAviso(db) {
     return (Array.isArray(db?.users) ? db.users : []).map((user) => ({
+      id: user.id,
       nombre: user.nombre,
       rol: user.rol,
       activo: user.activo,
@@ -536,6 +538,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
       let nextAssignee;
       let correoDelNuevoResponsable = '';
+      let assignedUserId = null;
       const responsablePrevio = String(ticket.asignadoA || '').trim();
       if (asignadoA !== undefined) {
         if (!asignadoA) {
@@ -545,6 +548,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
           nextAssignee = assignedUser.nombre;
           correoDelNuevoResponsable = assignedUser.email || '';
+          assignedUserId = assignedUser.id;
         }
       }
 
@@ -669,6 +673,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         ok: true,
         ticket,
         avisarAsignacionA: cambioDeResponsable ? correoDelNuevoResponsable : '',
+        pushAssigneeId: cambioDeResponsable ? assignedUserId : null,
+        pushSubscriptions: cambioDeResponsable ? snapshotPushSubscriptions(db) : [],
       };
     });
 
@@ -689,6 +695,15 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         destinatarios: [updated.avisarAsignacionA],
         motivo: MOTIVOS.ASIGNADO,
       });
+    }
+    // Una asignación ocurre después de crear el ticket y, a diferencia del correo,
+    // necesita el id interno para ubicar solo los dispositivos del nuevo responsable.
+    if (updated.pushAssigneeId) {
+      void notifyTicketAssigned({
+        ticket: updated.ticket,
+        assigneeId: updated.pushAssigneeId,
+        subscriptions: updated.pushSubscriptions,
+      }).catch((error) => console.error(`No se pudo preparar el push de asignación del ticket #${updated.ticket.id}:`, error));
     }
     res.json(serializeTicket(updated.ticket));
   } catch (error) {
