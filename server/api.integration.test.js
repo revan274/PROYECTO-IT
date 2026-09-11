@@ -383,6 +383,38 @@ test('GET /api/health expone backend de almacenamiento activo', async () => {
   assert.equal(data.storageBackend, 'file');
 });
 
+test('push: guarda la suscripción en el usuario autenticado y permite retirarla', async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const config = await requestJson('/api/push/config', { token: session.token });
+  assert.equal(config.response.status, 200);
+  assert.equal(typeof config.data.enabled, 'boolean');
+  assert.equal(Object.hasOwn(config.data, 'privateKey'), false);
+
+  const subscription = {
+    endpoint: 'https://push.example.test/subscription/integration',
+    keys: { p256dh: 'a'.repeat(88), auth: 'b'.repeat(24) },
+  };
+  const created = await requestJson('/api/push/subscriptions', {
+    method: 'POST',
+    token: session.token,
+    body: subscription,
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+
+  const persisted = await readPersistedDb();
+  assert.equal(persisted.pushSubscriptions.length, 1);
+  assert.equal(persisted.pushSubscriptions[0].userId, ADMIN_USER.id);
+  assert.equal(persisted.pushSubscriptions[0].username, ADMIN_USER.username);
+
+  const removed = await requestJson('/api/push/subscriptions', {
+    method: 'DELETE',
+    token: session.token,
+    body: { endpoint: subscription.endpoint },
+  });
+  assert.equal(removed.response.status, 200);
+  assert.deepEqual((await readPersistedDb()).pushSubscriptions, []);
+});
+
 test('GET /api/bootstrap limita el payload para solicitantes', async () => {
   const session = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
   const { response, data } = await requestJson('/api/bootstrap', {

@@ -38,6 +38,7 @@ export function createTicketsRouter({
   isSlaBreached,
   parsePagination,
   paginateList,
+  notifyTicketCreated = () => Promise.resolve(),
 }) {
   const router = express.Router();
   const SAFE_DOWNLOAD_MIME_TYPES = new Set([
@@ -168,6 +169,15 @@ export function createTicketsRouter({
     }));
   }
 
+  function snapshotPushSubscriptions(db) {
+    return (Array.isArray(db?.pushSubscriptions) ? db.pushSubscriptions : []).map((subscription) => ({
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+      userId: subscription.userId,
+      username: subscription.username,
+    }));
+  }
+
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     if (!ensurePermission(req, res, 'tickets.create')) return;
@@ -288,7 +298,13 @@ router.post('/', requireAuth, async (req, res, next) => {
       });
       // Copia minima para decidir destinatarios fuera del lock. Se copia en vez de
       // devolver `db.users` para no dejar viva una referencia al documento.
-      return { ok: true, ticket, assignedUser, usuariosParaAviso: snapshotUsuariosParaAviso(db) };
+      return {
+        ok: true,
+        ticket,
+        assignedUser,
+        usuariosParaAviso: snapshotUsuariosParaAviso(db),
+        pushSubscriptions: snapshotPushSubscriptions(db),
+      };
     });
 
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
@@ -307,6 +323,12 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const plan = planDeAvisoAlCrear(created.ticket, created.usuariosParaAviso);
     avisar({ ticket: created.ticket, ...plan });
+    // Igual que el correo, el push nunca bloquea la creación del ticket.
+    void notifyTicketCreated({
+      ticket: created.ticket,
+      users: created.usuariosParaAviso,
+      subscriptions: created.pushSubscriptions,
+    }).catch((error) => console.error(`No se pudo preparar el push del ticket #${created.ticket.id}:`, error));
     res.status(201).json(serializeTicket(created.ticket));
   } catch (error) {
     next(error);

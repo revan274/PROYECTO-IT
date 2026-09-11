@@ -41,6 +41,7 @@ import { useSupplyDirectoryData } from './hooks/useSupplyDirectoryData';
 import { useTicketDirectoryData } from './hooks/useTicketDirectoryData';
 import { useTravelReportData } from './hooks/useTravelReportData';
 import { useUserDirectoryData } from './hooks/useUserDirectoryData';
+import { usePushNotifications } from './hooks/usePushNotifications';
 
 import { Toast } from './components/ui/Toast';
 import { ConfirmDialog } from './components/modals/ConfirmDialog';
@@ -612,6 +613,10 @@ export default function App() {
     setStoredSession,
     showToast,
   });
+  const {
+    pushStatus,
+    togglePushNotifications,
+  } = usePushNotifications({ sessionUser, showToast });
 
   useEffect(() => {
     if (!sessionUser) {
@@ -1884,6 +1889,8 @@ export default function App() {
           isSyncing={isSyncing}
           lastSync={lastSync}
           sessionUser={sessionUser}
+          pushStatus={pushStatus}
+          onTogglePushNotifications={togglePushNotifications}
         />
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10">

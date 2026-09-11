@@ -1,6 +1,7 @@
-import { Menu, Moon, Search, Sun } from 'lucide-react';
+import { Bell, BellOff, Menu, Moon, Search, Sun } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import type { PushNotificationStatus } from '../../hooks/usePushNotifications';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -20,6 +21,8 @@ interface AppHeaderProps {
   lastSync: string | null;
   sessionUser: SessionUserLike | null;
   authorBrand: string;
+  pushStatus: PushNotificationStatus;
+  onTogglePushNotifications: () => void;
 }
 
 export function AppHeader({
@@ -33,7 +36,16 @@ export function AppHeader({
   lastSync,
   sessionUser,
   authorBrand,
+  pushStatus,
+  onTogglePushNotifications,
 }: AppHeaderProps) {
+  const pushEnabled = pushStatus === 'enabled';
+  const pushBlocked = pushStatus === 'denied' || pushStatus === 'unsupported';
+  const pushTitle = pushEnabled
+    ? 'Desactivar notificaciones push'
+    : pushBlocked
+      ? 'Las notificaciones no están disponibles en este navegador'
+      : 'Activar notificaciones push';
   return (
     <header className="bg-white border-b border-slate-100 px-4 py-4 sm:px-6 lg:px-10 lg:py-6 z-20">
       <div className="flex flex-col gap-3">
@@ -63,6 +75,16 @@ export function AppHeader({
               title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </Button>
+            <Button
+              size="icon"
+              className={pushEnabled ? 'text-brand hover:text-brand-strong transition-colors' : 'hover:text-slate-700 transition-colors'}
+              onClick={onTogglePushNotifications}
+              disabled={pushStatus === 'loading' || pushBlocked}
+              title={pushTitle}
+              aria-label={pushTitle}
+            >
+              {pushEnabled ? <Bell size={16} /> : <BellOff size={16} />}
             </Button>
             <div className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider ${backendConnected ? 'text-lime-700 bg-lime-50 border-lime-200' : 'text-amber-600 bg-amber-50 border-amber-200'}`}>
               <span>{backendConnected ? 'Backend Online' : 'Backend Offline'}</span>

@@ -122,6 +122,7 @@ const DEFAULT_DB = {
     roles: DEFAULT_ROLE_CATALOG,
   },
   users: DEFAULT_USERS,
+  pushSubscriptions: [],
   activos: [
     {
       id: 1,
@@ -868,6 +869,25 @@ function normalizeDbShape(db) {
       return copy;
     })
     : DEFAULT_USERS;
+  // Las suscripciones son por dispositivo y no forman parte del perfil público de
+  // usuario. Se descarta cualquier registro incompleto al cargar datos antiguos.
+  const subscriptionsByEndpoint = new Map();
+  for (const raw of Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : []) {
+    const endpoint = String(raw?.endpoint || '').trim();
+    const p256dh = String(raw?.keys?.p256dh || '').trim();
+    const auth = String(raw?.keys?.auth || '').trim();
+    const userId = Math.trunc(Number(raw?.userId));
+    const username = String(raw?.username || '').trim().toLowerCase();
+    if (!endpoint || !p256dh || !auth || !Number.isSafeInteger(userId) || userId <= 0 || !username) continue;
+    subscriptionsByEndpoint.set(endpoint, {
+      endpoint,
+      keys: { p256dh, auth },
+      userId,
+      username,
+      updatedAt: String(raw?.updatedAt || ''),
+    });
+  }
+  normalized.pushSubscriptions = Array.from(subscriptionsByEndpoint.values());
   normalized.activos = Array.isArray(db.activos) ? db.activos.map(normalizeAsset) : [];
   normalized.insumos = Array.isArray(db.insumos) ? db.insumos.map(normalizeSupply) : [];
   normalized.travelAdjustments = Array.isArray(db.travelAdjustments)

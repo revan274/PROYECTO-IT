@@ -22,6 +22,10 @@ import {
 import { createNotificationLedger } from './modules/notification-ledger.js';
 import { iniciarVigilanteDeSla, leerMinutosDeAviso } from './modules/sla-watcher.js';
 import { escapeHtml } from './modules/ticket-notifications.js';
+import {
+  createPushNotifier,
+  normalizePushSubscription,
+} from './modules/push-notifications.js';
 import { roleHasPermission } from '../shared/permissions.js';
 import {
   buildAssetQrLookupResponse,
@@ -720,6 +724,23 @@ function registerRoutes(app, authRuntime) {
     revokeSessionsByUserId,
     writeSecurityAudit,
   } = authRuntime;
+  const pushNotifier = createPushNotifier();
+
+  async function removePushSubscription(endpoint) {
+    await updateDb((db) => {
+      db.pushSubscriptions = (Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [])
+        .filter((subscription) => subscription?.endpoint !== endpoint);
+    });
+  }
+
+  function notifyTicketCreated({ ticket, users, subscriptions }) {
+    return pushNotifier.notifyTicketCreated({
+      ticket,
+      users,
+      subscriptions,
+      removeSubscription: removePushSubscription,
+    });
+  }
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -727,6 +748,54 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     storageBackend: getStorageBackend(),
   });
+});
+
+// Las claves VAPID públicas son necesarias en el navegador para crear la suscripción;
+// la clave privada nunca sale del proceso del servidor.
+app.get('/api/push/config', requireAuth, (_req, res) => {
+  res.json(pushNotifier.getPublicConfiguration());
+});
+
+app.post('/api/push/subscriptions', requireAuth, async (req, res, next) => {
+  try {
+    const subscription = normalizePushSubscription(req.body, {
+      userId: req.authUser?.id,
+      username: req.authUser?.username,
+    });
+    if (!subscription) {
+      return res.status(400).json({ error: 'Suscripción push inválida.' });
+    }
+
+    await updateDb((db) => {
+      const current = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [];
+      // Un mismo navegador puede cambiar de usuario: el endpoint solo puede pertenecer
+      // a su dueño actual y se actualiza en vez de duplicarse.
+      db.pushSubscriptions = [
+        ...current.filter((item) => item?.endpoint !== subscription.endpoint),
+        subscription,
+      ];
+    });
+    return res.status(201).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/push/subscriptions', requireAuth, async (req, res, next) => {
+  try {
+    const endpoint = String(req.body?.endpoint || '').trim();
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint requerido.' });
+    await updateDb((db) => {
+      db.pushSubscriptions = (Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [])
+        .filter((subscription) => !(
+          subscription?.endpoint === endpoint
+          && Number(subscription?.userId) === Number(req.authUser?.id)
+        ));
+    });
+    return res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Responde, desde la propia aplicacion, si los adjuntos sobreviven a un redespliegue.
@@ -1433,6 +1502,7 @@ const ticketRouteDeps = {
   isSlaBreached,
   parsePagination,
   paginateList,
+  notifyTicketCreated,
 };
 
 const activosRouteDeps = {

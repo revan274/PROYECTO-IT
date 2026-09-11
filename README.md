@@ -86,6 +86,25 @@ El envío es asíncrono y best-effort: si SMTP falla o no está configurado, la 
 nunca se ve afectada; el error solo queda en el log del servidor. Los tickets históricos
 (`POST /api/tickets/historical`) no generan notificación.
 
+## Notificaciones push web
+
+Cada usuario puede activar voluntariamente las notificaciones push desde el icono de
+campana en la cabecera. La suscripción queda vinculada al usuario y al dispositivo, y
+solo se envía información mínima del ticket (número, prioridad y activo). Un ticket
+crítico o sin asignar avisa a administradores y técnicos suscritos; uno asignado avisa
+únicamente al técnico responsable.
+
+Para activarlas, configura en la API un par VAPID estable y el asunto de contacto:
+
+```bash
+npx web-push generate-vapid-keys --json
+```
+
+Guarda el resultado como `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`, y define
+`VAPID_SUBJECT=mailto:it@tu-dominio.com`. No cambies las claves después de publicar:
+las suscripciones existentes dependen de la clave pública. La clave privada nunca debe
+incluirse en variables `VITE_*`, Git ni el frontend.
+
 ## Datos locales
 - El repo conserva un seed sanitizado en `server/data/db.seed.json`.
 - Si defines `DATABASE_URL`, el backend usa Postgres/Neon como almacenamiento principal del estado (`users`, `activos`, `insumos`, `tickets`, `auditoria`, `catalogos`).
