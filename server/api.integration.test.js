@@ -1641,3 +1641,84 @@ test('diagnostico: el marcador conserva su fecha original tras reiniciar el serv
   assert.equal(despues.data.attachments.marker.bootCount > antes.data.attachments.marker.bootCount, true);
   assert.equal(despues.data.attachments.marker.survivedRestart, true);
 });
+
+test('usuarios: conserva la trazabilidad de tickets y sus asignaciones al administrar cuentas', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+
+  const weakPassword = await requestJson('/api/users', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre: 'Password Corto',
+      username: 'password.corto',
+      password: 'Corto.123',
+      cargo: 'Coordinador de Sistemas',
+      rol: 'tecnico',
+    },
+  });
+  assert.equal(weakPassword.response.status, 400, JSON.stringify(weakPassword.data));
+  assert.match(weakPassword.data.error, /12 caracteres/);
+
+  const createdUser = await requestJson('/api/users', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      nombre: 'Tecnico Trazabilidad',
+      username: 'tecnico.trazabilidad',
+      password: 'Tecnico.Trazabilidad.2026',
+      cargo: 'Coordinador de Sistemas',
+      rol: 'tecnico',
+    },
+  });
+  assert.equal(createdUser.response.status, 201, JSON.stringify(createdUser.data));
+
+  const createdTicket = await requestJson('/api/tickets', {
+    method: 'POST',
+    token: session.token,
+    body: {
+      activoTag: 'POS-001',
+      descripcion: 'Ticket para validar la trazabilidad del responsable',
+      sucursal: 'TJ01',
+      prioridad: 'MEDIA',
+      atencionTipo: 'REMOTO',
+      asignadoA: createdUser.data.username,
+    },
+  });
+  assert.equal(createdTicket.response.status, 201, JSON.stringify(createdTicket.data));
+  assert.equal(createdTicket.data.asignadoA, 'Tecnico Trazabilidad');
+
+  const renamedUser = await requestJson(`/api/users/${createdUser.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: { nombre: 'Tecnico Renombrado' },
+  });
+  assert.equal(renamedUser.response.status, 200, JSON.stringify(renamedUser.data));
+
+  const persisted = await readPersistedDb();
+  const persistedTicket = persisted.tickets.find((ticket) => ticket.id === createdTicket.data.id);
+  assert.ok(persistedTicket);
+  assert.equal(persistedTicket.asignadoA, 'Tecnico Renombrado');
+
+  const deactivate = await requestJson(`/api/users/${createdUser.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: { activo: false },
+  });
+  assert.equal(deactivate.response.status, 409, JSON.stringify(deactivate.data));
+  assert.match(deactivate.data.error, /tickets abiertos asignados/i);
+
+  const demote = await requestJson(`/api/users/${createdUser.data.id}`, {
+    method: 'PATCH',
+    token: session.token,
+    body: { rol: 'solicitante' },
+  });
+  assert.equal(demote.response.status, 409, JSON.stringify(demote.data));
+  assert.match(demote.data.error, /tickets abiertos asignados/i);
+
+  const removed = await requestJson(`/api/users/${createdUser.data.id}`, {
+    method: 'DELETE',
+    token: session.token,
+  });
+  assert.equal(removed.response.status, 409, JSON.stringify(removed.data));
+  assert.match(removed.data.error, /tickets asociados/i);
+});

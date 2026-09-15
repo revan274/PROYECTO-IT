@@ -1571,6 +1571,9 @@ const usersRouteDeps = {
   countActiveAdmins,
   revokeSessionsByUserId,
   isValidEmail,
+  normalizeTextKey,
+  CLOSED_STATES,
+  canEditByRole,
 };
 
 app.use('/api/tickets/:id/attachments', uploadLimiter);

@@ -127,7 +127,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
               <Input
                 required={editingUserId === null}
                 type="password"
-                placeholder={editingUserId !== null ? 'PASSWORD (OPCIONAL)' : 'PASSWORD (MIN 6)'}
+                placeholder={editingUserId !== null ? 'PASSWORD (OPCIONAL, MIN 12)' : 'PASSWORD (MIN 12)'}
                 value={newUserForm.password}
                 variant="formMuted" className="w-full"
                 onChange={(e) => setNewUserForm((prev) => ({ ...prev, password: e.target.value }))}

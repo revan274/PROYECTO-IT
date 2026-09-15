@@ -80,8 +80,8 @@ export function useUserActions({
       showToast('Usuario inválido: usa a-z, 0-9, ., _, - (3 a 32)', 'warning');
       return false;
     }
-    if (password && password.length < 6) {
-      showToast('El password debe tener al menos 6 caracteres', 'warning');
+    if (password && password.length < 12) {
+      showToast('El password debe tener al menos 12 caracteres', 'warning');
       return false;
     }
     // El correo es opcional, pero si viene tiene que ser valido: el backend lo rechaza

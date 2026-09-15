@@ -2,6 +2,8 @@ import express from 'express';
 import { updateDb, sanitizeUser } from '../store.js';
 import { getRequestDb } from '../utils/helpers.js';
 
+const MIN_PASSWORD_LENGTH = 12;
+
 export function createUsersRouter({
   requireAuth,
   ensurePermission,
@@ -18,8 +20,54 @@ export function createUsersRouter({
   countActiveAdmins,
   revokeSessionsByUserId,
   isValidEmail,
+  normalizeTextKey,
+  CLOSED_STATES,
+  canEditByRole,
 }) {
   const router = express.Router();
+
+  function hasTicketHistory(db, user) {
+    const userId = Number(user?.id);
+    const username = asNonEmptyString(user?.username).toLowerCase();
+    const nameKey = normalizeTextKey(user?.nombre);
+
+    return (Array.isArray(db.tickets) ? db.tickets : []).some((ticket) => {
+      const requesterId = Number(ticket?.solicitadoPorId);
+      const requesterUsername = asNonEmptyString(ticket?.solicitadoPorUsername).toLowerCase();
+      const hasRequesterId = Number.isInteger(requesterId) && requesterId > 0;
+      const isLegacyRequester = !hasRequesterId && !requesterUsername;
+
+      return (
+        (nameKey && normalizeTextKey(ticket?.asignadoA) === nameKey)
+        || (Number.isFinite(userId) && hasRequesterId && requesterId === userId)
+        || (username && requesterUsername === username)
+        || (isLegacyRequester && nameKey && normalizeTextKey(ticket?.solicitadoPor) === nameKey)
+      );
+    });
+  }
+
+  function hasOpenAssignedTickets(db, user) {
+    const nameKey = normalizeTextKey(user?.nombre);
+    if (!nameKey) return false;
+
+    return (Array.isArray(db.tickets) ? db.tickets : []).some((ticket) => (
+      normalizeTextKey(ticket?.asignadoA) === nameKey
+      && !CLOSED_STATES.has(ticket?.estado)
+    ));
+  }
+
+  function renameTicketAssignments(db, previousName, nextName) {
+    const previousNameKey = normalizeTextKey(previousName);
+    if (!previousNameKey || previousNameKey === normalizeTextKey(nextName)) return 0;
+
+    let updatedCount = 0;
+    for (const ticket of Array.isArray(db.tickets) ? db.tickets : []) {
+      if (normalizeTextKey(ticket?.asignadoA) !== previousNameKey) continue;
+      ticket.asignadoA = nextName;
+      updatedCount += 1;
+    }
+    return updatedCount;
+  }
 
 router.get('/', requireAuth, async (req, res, next) => {
   try {
@@ -49,8 +97,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
       return res.status(400).json({ error: 'El usuario debe tener 3 a 32 caracteres (a-z, 0-9, ., _, -).' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'El password debe tener al menos 6 caracteres.' });
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `El password debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` });
     }
     if (emailInput && !isValidEmail(emailInput)) {
       return res.status(400).json({ error: 'El correo no tiene un formato válido.' });
@@ -144,8 +192,8 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         return res.status(400).json({ error: 'El usuario debe tener 3 a 32 caracteres (a-z, 0-9, ., _, -).' });
       }
     }
-    if (hasPassword && password && password.length < 6) {
-      return res.status(400).json({ error: 'El password debe tener al menos 6 caracteres.' });
+    if (hasPassword && password && password.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `El password debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` });
     }
     if (hasCargo && !asNonEmptyString(cargoInput)) {
       return res.status(400).json({ error: 'Cargo inválido.' });
@@ -181,6 +229,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         return { ok: false, code: 'LAST_ADMIN' };
       }
 
+      if (hasOpenAssignedTickets(db, user) && (nextActivo === false || !canEditByRole(nextRol))) {
+        return { ok: false, code: 'OPEN_TICKETS_ASSIGNED' };
+      }
+
       if (username) {
         const duplicated = db.users.some(
           (item) => Number(item.id) !== Number(user.id) && String(item.username).toLowerCase() === username,
@@ -188,6 +240,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         if (duplicated) return { ok: false, code: 'DUPLICATE' };
       }
 
+      const previousName = user.nombre;
       const previousUsername = user.username;
       const previousRole = user.rol;
       if (nombre) user.nombre = nombre;
@@ -199,6 +252,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (password) {
         user.passwordHash = createUserPasswordHash(password);
       }
+      const ticketAssignmentsRenamed = nombre
+        ? renameTicketAssignments(db, previousName, user.nombre)
+        : 0;
       const shouldRevokeSessions = Boolean(
         password
         || (username && username !== previousUsername)
@@ -218,6 +274,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         entidad: 'usuario',
         entidadId: user.id,
         after: sanitizeUser(user),
+        meta: ticketAssignmentsRenamed > 0 ? { ticketAssignmentsRenamed } : undefined,
       });
       return { ok: true, user, shouldRevokeSessions };
     });
@@ -239,6 +296,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
     if (!updated?.ok && updated?.code === 'SELF_ADMIN_GUARD') {
       return res.status(409).json({ error: 'No puedes desactivarte ni quitarte el rol administrador.' });
+    }
+    if (!updated?.ok && updated?.code === 'OPEN_TICKETS_ASSIGNED') {
+      return res.status(409).json({ error: 'No puedes desactivar ni quitar la capacidad de atención a este usuario mientras tenga tickets abiertos asignados. Reasígnalos o resuélvelos primero.' });
     }
     if (!updated?.ok) {
       return res.status(500).json({ error: 'No se pudo actualizar el usuario.' });
@@ -273,7 +333,14 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
         return { ok: false, code: 'LAST_ADMIN' };
       }
 
+      if (hasTicketHistory(db, target)) {
+        return { ok: false, code: 'TICKET_HISTORY' };
+      }
+
       db.users.splice(index, 1);
+      const subscriptions = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [];
+      const pushSubscriptionsRemoved = subscriptions.filter((subscription) => Number(subscription?.userId) === Number(target.id)).length;
+      db.pushSubscriptions = subscriptions.filter((subscription) => Number(subscription?.userId) !== Number(target.id));
       pushAuditWithContext(db, req, {
         accion: 'Baja Usuario',
         item: `${target.username} | ${target.departamento || 'SIN CARGO'}`,
@@ -283,6 +350,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
         entidad: 'usuario',
         entidadId: target.id,
         before: sanitizeUser(target),
+        meta: pushSubscriptionsRemoved > 0 ? { pushSubscriptionsRemoved } : undefined,
       });
       return { ok: true, userId: target.id };
     });
@@ -295,6 +363,9 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     }
     if (!removed?.ok && removed?.code === 'SELF_DELETE') {
       return res.status(409).json({ error: 'No puedes eliminar tu propio usuario.' });
+    }
+    if (!removed?.ok && removed?.code === 'TICKET_HISTORY') {
+      return res.status(409).json({ error: 'No puedes eliminar a este usuario porque tiene tickets asociados. Desactiva su cuenta para conservar la trazabilidad.' });
     }
     if (!removed?.ok) {
       return res.status(500).json({ error: 'No se pudo eliminar el usuario.' });
