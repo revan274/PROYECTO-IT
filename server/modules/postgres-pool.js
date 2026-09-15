@@ -65,9 +65,15 @@ export function attachPoolErrorHandler(pool, log = console.warn) {
  * de modo que el pool nunca guarda conexiones ya muertas.
  */
 export function buildPoolOptions({ connectionString, max }, env = process.env) {
-  const requiereSsl = /sslmode=require/i.test(String(connectionString || ''));
+  let str = String(connectionString || '');
+  const requiereSsl = /sslmode=(require|no-verify|verify-ca|verify-full|prefer)/i.test(str);
+  
+  if (requiereSsl && !str.includes('uselibpqcompat=')) {
+    str += (str.includes('?') ? '&' : '?') + 'uselibpqcompat=true';
+  }
+
   return {
-    connectionString,
+    connectionString: str || undefined,
     max: Math.max(1, Math.trunc(Number(max || env.PG_POOL_MAX || 4))),
     ssl: requiereSsl ? { rejectUnauthorized: false } : undefined,
     application_name: 'mesa-it',

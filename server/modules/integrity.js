@@ -53,6 +53,7 @@ export function auditIntegrity(db, options = {}) {
   const sucursales = Array.isArray(db?.catalogos?.sucursales) ? db.catalogos.sucursales : [];
 
   const assetTags = new Set(activos.map((asset) => text(asset?.tag).toUpperCase()).filter(Boolean));
+  const userIds = new Set(users.map((user) => Number(user?.id)).filter((id) => Number.isSafeInteger(id) && id > 0));
   const userNames = new Set(users.map((user) => nameKey(user?.nombre)).filter(Boolean));
   const branchCodes = new Set(sucursales.map((branch) => text(branch?.code).toUpperCase()).filter(Boolean));
 
@@ -67,7 +68,12 @@ export function auditIntegrity(db, options = {}) {
 
     // Un ticket sin asignar es un estado válido de la operación, no un defecto de integridad.
     const asignadoA = text(ticket?.asignadoA);
-    if (asignadoA && !userNames.has(nameKey(asignadoA))) {
+    const asignadoAId = Math.trunc(Number(ticket?.asignadoAId));
+    const hasAssigneeId = Number.isSafeInteger(asignadoAId) && asignadoAId > 0;
+    if (hasAssigneeId && !userIds.has(asignadoAId)) {
+      add('TICKET_ASIGNADO_INEXISTENTE', SEVERITY.ALTA, ticketId,
+        `El ticket está asignado al usuario #${asignadoAId}, que ya no existe.`);
+    } else if (!hasAssigneeId && asignadoA && !userNames.has(nameKey(asignadoA))) {
       add('TICKET_ASIGNADO_INEXISTENTE', SEVERITY.ALTA, ticketId,
         `El ticket está asignado a "${asignadoA}", que no corresponde a ningún usuario actual.`);
     }

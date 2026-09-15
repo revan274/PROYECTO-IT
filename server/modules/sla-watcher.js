@@ -83,8 +83,13 @@ export async function revisarSlaUnaVez({
       }
       if (!meToca) continue;
 
+      const assigneeId = Math.trunc(Number(ticket?.asignadoAId));
       const responsable = (Array.isArray(db?.users) ? db.users : [])
-        .find((user) => user && user.nombre === ticket.asignadoA && user.email);
+        .find((user) => user
+          && user.email
+          && (Number.isSafeInteger(assigneeId) && assigneeId > 0
+            ? Number(user.id) === assigneeId
+            : user.nombre === ticket.asignadoA));
       // Si tiene responsable, es asunto suyo. Si no lo tiene, que lo vea quien pueda tomarlo.
       const destinatarios = responsable ? [responsable.email] : difusion;
 

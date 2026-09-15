@@ -199,6 +199,7 @@ export interface TicketItem {
   trasladoRequerido?: boolean;
   fecha: string;
   asignadoA?: string;
+  asignadoAId?: number | null;
   fechaCreacion?: string;
   fechaLimite?: string;
   fechaCierre?: string;

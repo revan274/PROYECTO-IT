@@ -305,6 +305,8 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
   if (!copy.estado) copy.estado = 'Abierto';
   if (!copy.prioridad) copy.prioridad = 'MEDIA';
   if (!copy.asignadoA) copy.asignadoA = '';
+  const assigneeId = Math.trunc(Number(copy.asignadoAId));
+  copy.asignadoAId = Number.isSafeInteger(assigneeId) && assigneeId > 0 ? assigneeId : null;
   copy.atencionTipo = normalizeTicketAttentionType(copy.atencionTipo);
   const normalizedTravelRequired = normalizeTicketTravelRequired(copy.trasladoRequerido);
   if (normalizedTravelRequired === undefined) {
@@ -896,6 +898,18 @@ function normalizeDbShape(db) {
   normalized.tickets = Array.isArray(db.tickets)
     ? db.tickets.map((ticket) => normalizeTicket(ticket, validBranchCodes))
     : [];
+  // `asignadoA` permanece como etiqueta visible, pero `asignadoAId` es la identidad
+  // estable. Los tickets anteriores se migran al normalizar el documento.
+  const usersById = new Map(normalized.users.map((user) => [Number(user.id), user]));
+  const usersByName = new Map(normalized.users.map((user) => [text(user.nombre).toLocaleLowerCase(), user]));
+  for (const ticket of normalized.tickets) {
+    const assignee = usersById.get(ticket.asignadoAId)
+      || usersByName.get(text(ticket.asignadoA).toLocaleLowerCase());
+    if (assignee) {
+      ticket.asignadoAId = Number(assignee.id);
+      ticket.asignadoA = assignee.nombre;
+    }
+  }
   normalized.auditoria = Array.isArray(db.auditoria) ? normalizeAuditEntries(db.auditoria) : [];
 
   if (!normalized.meta || typeof normalized.meta !== 'object') {

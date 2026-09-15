@@ -86,10 +86,11 @@ function isTicketResponder(user) {
 export function planTicketPushRecipients(ticket, users) {
   const activeUsers = (Array.isArray(users) ? users : []).filter(isTicketResponder);
   const isCritical = text(ticket?.prioridad).toUpperCase() === 'CRITICA';
+  const assigneeId = validUserId(ticket?.asignadoAId);
   const assignee = text(ticket?.asignadoA);
   const recipients = isCritical || !assignee
     ? activeUsers
-    : activeUsers.filter((user) => user.nombre === assignee);
+    : activeUsers.filter((user) => assigneeId ? Number(user.id) === assigneeId : user.nombre === assignee);
   return new Set(recipients.map((user) => validUserId(user.id)).filter(Boolean));
 }
 

@@ -32,6 +32,8 @@ function getTransporter() {
       port: SMTP_PORT,
       secure: SMTP_SECURE,
       auth: { user: SMTP_USER, pass: SMTP_PASS },
+      // Fuerza el uso de IPv4 ya que algunos contenedores no tienen salida IPv6 (ENETUNREACH)
+      family: 4,
     });
   }
   return transporterInstance;

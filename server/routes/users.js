@@ -33,12 +33,15 @@ export function createUsersRouter({
 
     return (Array.isArray(db.tickets) ? db.tickets : []).some((ticket) => {
       const requesterId = Number(ticket?.solicitadoPorId);
+      const assigneeId = Number(ticket?.asignadoAId);
       const requesterUsername = asNonEmptyString(ticket?.solicitadoPorUsername).toLowerCase();
       const hasRequesterId = Number.isInteger(requesterId) && requesterId > 0;
+      const hasAssigneeId = Number.isInteger(assigneeId) && assigneeId > 0;
       const isLegacyRequester = !hasRequesterId && !requesterUsername;
 
       return (
-        (nameKey && normalizeTextKey(ticket?.asignadoA) === nameKey)
+        (Number.isFinite(userId) && hasAssigneeId && assigneeId === userId)
+        || (!hasAssigneeId && nameKey && normalizeTextKey(ticket?.asignadoA) === nameKey)
         || (Number.isFinite(userId) && hasRequesterId && requesterId === userId)
         || (username && requesterUsername === username)
         || (isLegacyRequester && nameKey && normalizeTextKey(ticket?.solicitadoPor) === nameKey)
@@ -47,23 +50,28 @@ export function createUsersRouter({
   }
 
   function hasOpenAssignedTickets(db, user) {
+    const userId = Number(user?.id);
     const nameKey = normalizeTextKey(user?.nombre);
-    if (!nameKey) return false;
+    if (!Number.isFinite(userId) && !nameKey) return false;
 
     return (Array.isArray(db.tickets) ? db.tickets : []).some((ticket) => (
-      normalizeTextKey(ticket?.asignadoA) === nameKey
+      (Number(ticket?.asignadoAId) === userId
+        || (!ticket?.asignadoAId && normalizeTextKey(ticket?.asignadoA) === nameKey))
       && !CLOSED_STATES.has(ticket?.estado)
     ));
   }
 
-  function renameTicketAssignments(db, previousName, nextName) {
+  function renameTicketAssignments(db, previousName, nextName, userId) {
     const previousNameKey = normalizeTextKey(previousName);
     if (!previousNameKey || previousNameKey === normalizeTextKey(nextName)) return 0;
 
     let updatedCount = 0;
     for (const ticket of Array.isArray(db.tickets) ? db.tickets : []) {
-      if (normalizeTextKey(ticket?.asignadoA) !== previousNameKey) continue;
+      const belongsToUser = Number(ticket?.asignadoAId) === Number(userId)
+        || (!ticket?.asignadoAId && normalizeTextKey(ticket?.asignadoA) === previousNameKey);
+      if (!belongsToUser) continue;
       ticket.asignadoA = nextName;
+      ticket.asignadoAId = Number(userId);
       updatedCount += 1;
     }
     return updatedCount;
@@ -253,7 +261,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         user.passwordHash = createUserPasswordHash(password);
       }
       const ticketAssignmentsRenamed = nombre
-        ? renameTicketAssignments(db, previousName, user.nombre)
+        ? renameTicketAssignments(db, previousName, user.nombre, user.id)
         : 0;
       const shouldRevokeSessions = Boolean(
         password

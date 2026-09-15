@@ -245,6 +245,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         fechaCreacion: createdAtIso,
         fechaLimite: calcDueDate(prioridad),
         asignadoA: assignedUser ? assignedUser.nombre : '',
+        asignadoAId: assignedUser ? Number(assignedUser.id) : null,
         solicitadoPor: usuario,
         solicitadoPorId: Number(req.authUser?.id) || null,
         solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
@@ -442,6 +443,7 @@ router.post('/historical', requireAuth, async (req, res, next) => {
         fechaLimite: calcDueDate(prioridad, fechaCreacion.getTime()),
         ...(closedAtIso ? { fechaCierre: closedAtIso } : {}),
         asignadoA: assignedUser ? assignedUser.nombre : '',
+        asignadoAId: assignedUser ? Number(assignedUser.id) : null,
         solicitadoPor: usuario,
         solicitadoPorId: Number(req.authUser?.id) || null,
         solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
@@ -537,16 +539,20 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       if (!ticket) return { ok: false, code: 'NOT_FOUND' };
 
       let nextAssignee;
+      let nextAssigneeId;
       let correoDelNuevoResponsable = '';
       let assignedUserId = null;
       const responsablePrevio = String(ticket.asignadoA || '').trim();
+      const responsablePrevioId = Number(ticket.asignadoAId) || null;
       if (asignadoA !== undefined) {
         if (!asignadoA) {
           nextAssignee = '';
+          nextAssigneeId = null;
         } else {
           const assignedUser = findTicketAssignee(db.users, asignadoA);
           if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
           nextAssignee = assignedUser.nombre;
+          nextAssigneeId = Number(assignedUser.id);
           correoDelNuevoResponsable = assignedUser.email || '';
           assignedUserId = assignedUser.id;
         }
@@ -562,6 +568,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       const previousTravelRequired = ticket.trasladoRequerido === true;
       if (estado) ticket.estado = estado;
       if (nextAssignee !== undefined) ticket.asignadoA = nextAssignee;
+      if (nextAssigneeId !== undefined) ticket.asignadoAId = nextAssigneeId;
       if (hasAtencionTipoUpdate) ticket.atencionTipo = atencionTipo;
       if (hasTrasladoUpdate) ticket.trasladoRequerido = trasladoRequerido;
       const attentionChanged = hasAtencionTipoUpdate && atencionTipo !== previousAttentionType;
@@ -666,7 +673,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       // Solo cuando la asignacion cambia de verdad y hay un responsable nuevo: reasignar
       // al mismo tecnico, o dejar el ticket sin asignar, no genera aviso.
       const cambioDeResponsable = nextAssignee !== undefined
-        && nextAssignee !== responsablePrevio
+        && (nextAssigneeId !== responsablePrevioId || nextAssignee !== responsablePrevio)
         && Boolean(nextAssignee);
 
       return {

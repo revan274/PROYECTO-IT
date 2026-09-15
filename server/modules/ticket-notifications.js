@@ -53,11 +53,13 @@ export function escapeHtml(value) {
  * puede trabajar tickets.
  */
 export function destinatariosDeDifusion(users) {
+  const ROLES_AVISO = new Set(['tecnico', 'administrador', 'desarrollador', 'admin']);
   return (Array.isArray(users) ? users : [])
-    .filter((user) => user
-      && user.activo !== false
-      && roleHasPermission(user.rol, 'tickets.update')
-      && user.email)
+    .filter((user) => {
+      if (!user || user.activo === false || !user.email) return false;
+      const rol = String(user.rol || '').trim().toLowerCase();
+      return ROLES_AVISO.has(rol) || roleHasPermission(user.rol, 'tickets.update');
+    })
     .map((user) => user.email);
 }
 
@@ -98,8 +100,13 @@ export function construirCorreoDeTicket(ticket, motivo = MOTIVOS.NUEVO) {
 export function planDeAvisoAlCrear(ticket, users, buzonGeneral = getNotifyTicketEmail()) {
   const esCritico = String(ticket?.prioridad || '').trim().toUpperCase() === 'CRITICA';
   const sinAsignar = !String(ticket?.asignadoA || '').trim();
+  const assigneeId = Math.trunc(Number(ticket?.asignadoAId));
   const asignado = (Array.isArray(users) ? users : [])
-    .find((user) => user && user.nombre === ticket?.asignadoA && user.email);
+    .find((user) => user
+      && user.email
+      && (Number.isSafeInteger(assigneeId) && assigneeId > 0
+        ? Number(user.id) === assigneeId
+        : user.nombre === ticket?.asignadoA));
 
   let motivo = MOTIVOS.NUEVO;
   if (esCritico) motivo = MOTIVOS.CRITICO;

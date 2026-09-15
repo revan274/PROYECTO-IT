@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --head refactor/app-tsx-extraction --title 'refactor\\(app\\): extraer builders de HTML y hooks de dominio desde App.tsx' --body ' *)",
+      "PowerShell($gh = Get-Command gh -ErrorAction SilentlyContinue; if \\($gh\\) { \"FOUND: $\\($gh.Source\\)\" } else { \"NOT FOUND\" })",
+      "PowerShell(if \\($env:GH_TOKEN\\) { \"GH_TOKEN set\" } elseif \\($env:GITHUB_TOKEN\\) { \"GITHUB_TOKEN set\" } else { \"no token env\" }; $p=\"$env:LOCALAPPDATA\\\\GitHubCLI\\\\gh.exe\",\"$env:ProgramFiles\\\\GitHub CLI\\\\gh.exe\"; $p | Where-Object { Test-Path $_ })",
+      "Bash(grep -iE \"dockerfile|\\\\.ya?ml$|\\\\.github\")",
+      "Bash(git stash *)",
+      "Bash(npm run *)",
+      "Bash(npx vite *)",
+      "Bash(node -e ' *)",
+      "Bash(npm install *)"
+    ]
+  }
+}
