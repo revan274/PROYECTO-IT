@@ -2,7 +2,8 @@ import type { ComponentType } from 'react';
 
 export type EstadoActivo = 'Operativo' | 'Falla';
 export type PrioridadTicket = 'MEDIA' | 'ALTA' | 'CRITICA';
-export type TicketEstado = 'Abierto' | 'En Proceso' | 'En Espera' | 'Resuelto' | 'Cerrado';
+export type TicketRequestType = 'INCIDENTE_ACTIVO' | 'SOLICITUD_SERVICIO';
+export type TicketEstado = 'Abierto' | 'En Proceso' | 'En Espera' | 'Resuelto' | 'Cerrado' | 'Cancelado';
 export type TicketAttentionType =
   | 'PRESENCIAL'
   | 'PRESENCIAL_FUERA_DE_HORARIO'
@@ -188,7 +189,99 @@ export interface TicketAttachment {
   localUrl?: string;
 }
 
+export interface TicketSlaCalendarSnapshot {
+  zonaHoraria: string;
+  jornada: Record<string, [number, number]>;
+  feriados: string[];
+}
+
+export interface TicketSlaAssignment {
+  versionPolitica: string | null;
+  prioridad: PrioridadTicket;
+  horasAsignadas: number | null;
+  asignadoEn: string | null;
+  inicioCiclo: string | null;
+  fechaLimite: string | null;
+  calendario: TicketSlaCalendarSnapshot | null;
+  reconstruccionLegacy?: boolean;
+  cicloId?: string;
+  cicloNumero?: number;
+}
+
+export interface TicketSlaResult {
+  estado: 'CUMPLIDO' | 'INCUMPLIDO';
+  evaluadoEn: string;
+  fechaResolucion: string;
+  fechaLimite: string;
+  versionPolitica: string | null;
+  reconstruccionLegacy?: boolean;
+}
+
+export interface TicketSlaRevision {
+  fecha: string;
+  motivo: string;
+  actorId?: number;
+  prioridadAnterior?: PrioridadTicket;
+  prioridadNueva?: PrioridadTicket;
+  motivoEspera?: string;
+  minutosPausados?: number;
+  anterior: TicketSlaAssignment;
+  nuevo: TicketSlaAssignment;
+}
+
+export interface TicketWaitRecord {
+  id: string;
+  motivo: 'USUARIO' | 'PROVEEDOR' | 'REFACCION' | 'AUTORIZACION';
+  etiqueta: string;
+  pausaSla: boolean;
+  fechaInicio: string;
+  fechaFin: string | null;
+  actorId?: number | null;
+  minutosPausados?: number;
+  fechaLimiteAnterior?: string;
+  fechaLimiteNueva?: string;
+}
+
+export interface TicketCycle {
+  id: string;
+  numero: number;
+  fechaInicio: string | null;
+  fechaPrimeraAtencion: string | null;
+  fechaResolucion?: string | null;
+  fechaCierre?: string | null;
+  fechaLimite?: string | null;
+  estado: TicketEstado;
+  prioridad: PrioridadTicket;
+  solucionAplicada?: string | null;
+  diagnostico?: string | null;
+  asignadoA?: string;
+  asignadoAId?: number | null;
+  slaAsignado?: TicketSlaAssignment;
+  slaResultado?: TicketSlaResult | null;
+  slaRevisiones?: TicketSlaRevision[];
+  esperas?: TicketWaitRecord[];
+  reconstruccionLegacy?: boolean;
+  reapertura?: { motivo: string; usuario: string; usuarioId: number; fecha: string; estadoAnterior: TicketEstado } | null;
+}
+
 export interface TicketItem {
+  tipoSolicitud?: TicketRequestType;
+  ciclos?: TicketCycle[];
+  cicloActualId?: string;
+  slaActual?: TicketSlaAssignment;
+  slaResultado?: TicketSlaResult | null;
+  esperaActual?: TicketWaitRecord | null;
+  solucionAplicada?: string | null;
+  diagnostico?: string | null;
+  areaId?: string;
+  areaNombre?: string;
+  categoriaId?: string;
+  categoriaNombre?: string;
+  clasificacionPendiente?: boolean;
+  cancelacion?: { motivo: string; usuarioId: number; usuario: string; fecha: string; estadoAnterior: TicketEstado };
+  archivo?: { motivo: string; usuarioId: number; usuario: string; fecha: string; estadoAnterior: TicketEstado };
+  activoId?: number | null;
+  activoReferenciaPendiente?: boolean;
   id: number;
   activoTag: string;
   descripcion: string;
@@ -197,31 +290,62 @@ export interface TicketItem {
   estado: TicketEstado;
   atencionTipo?: TicketAttentionType;
   trasladoRequerido?: boolean;
-  fecha: string;
+  fecha: string | null;
   asignadoA?: string;
   asignadoAId?: number | null;
-  fechaCreacion?: string;
-  fechaLimite?: string;
-  fechaCierre?: string;
+  fechasVersion?: number;
+  fechaPrimeraAtencion?: string | null;
+  fechaResolucion?: string | null;
+  fechaTerminalLegacy?: string;
+  fechaCreacion?: string | null;
+  fechaLimite?: string | null;
+  fechaCierre?: string | null;
   solicitadoPor?: string;
   solicitadoPorId?: number | null;
   solicitadoPorUsername?: string;
+  requesterUserId?: number | null;
+  createdByUserId?: number | null;
+  createdBy?: string;
+  createdByUsername?: string;
+  createdByLegacyPending?: boolean;
   departamento?: string;
   slaVencido?: boolean;
   slaRestanteMin?: number | null;
-  historial?: Array<{
-    fecha: string;
-    usuario: string;
-    accion: string;
-    estado: TicketEstado;
-    comentario?: string;
-  }>;
+  historial?: TicketHistoryEntry[];
+  historialCount?: number;
+  attachmentCount?: number;
+  ultimoComentario?: string;
   insumosUsados?: Array<{
     insumoId: number;
     cantidad: number;
     nombre: string;
   }>;
   attachments?: TicketAttachment[];
+}
+
+export interface TicketHistoryEntry {
+  fecha: string | null;
+  fechaLegacy?: string;
+  actorId?: number | null;
+  usuario: string;
+  nombreMostrado?: string;
+  tipo?: string;
+  accion: string;
+  estado: TicketEstado;
+  before?: unknown;
+  after?: unknown;
+  comentario?: string;
+  motivo?: string;
+  solucionAplicada?: string | null;
+  diagnostico?: string | null;
+  prioridadAnterior?: PrioridadTicket;
+  prioridadNueva?: PrioridadTicket;
+  fechaLimiteAnterior?: string | null;
+  fechaLimiteNueva?: string | null;
+  espera?: TicketWaitRecord;
+  anterior?: unknown;
+  nuevo?: unknown;
+  [key: string]: unknown;
 }
 
 export interface RegistroAuditoria {
@@ -370,9 +494,13 @@ export interface FormDataState {
   min?: string | number;
   categoria?: string;
   activoTag?: string;
+  tipoSolicitud?: TicketRequestType;
   descripcion?: string;
   sucursal?: string;
   areaAfectada?: string;
+  areaId?: string;
+  categoriaId?: string;
+  requesterUserId?: number | string;
   fallaComun?: string;
   prioridad?: PrioridadTicket;
   atencionTipo?: TicketAttentionType;
@@ -434,10 +562,25 @@ export interface CatalogRole {
   activo?: boolean;
 }
 
+export interface TicketAreaCatalogItem {
+  id: string;
+  nombre: string;
+  activo?: boolean;
+}
+
+export interface TicketCategoryCatalogItem {
+  id: string;
+  areaId: string;
+  nombre: string;
+  activo?: boolean;
+}
+
 export interface CatalogState {
   sucursales: CatalogBranch[];
   cargos: string[];
   roles: CatalogRole[];
+  areas: TicketAreaCatalogItem[];
+  categorias: TicketCategoryCatalogItem[];
 }
 
 export interface NavItem {
@@ -514,4 +657,3 @@ export interface AssetQrResolveResponse {
     departamento?: string;
   };
 }
-

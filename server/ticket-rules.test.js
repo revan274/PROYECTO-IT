@@ -4,6 +4,8 @@ import {
   ACTIVE_ASSET_TICKET_STATES,
   CLOSED_TICKET_STATES,
   SLA_POLICY_HOURS,
+  parseTicketPriority,
+  parseTicketRequestType,
   TICKET_STATES,
   isClosedTicketState,
   keepsAssetInFailureState,
@@ -16,8 +18,9 @@ test('las reglas compartidas clasifican el ciclo de vida de tickets sin divergen
     'En Espera',
     'Resuelto',
     'Cerrado',
+    'Cancelado',
   ]);
-  assert.deepEqual(CLOSED_TICKET_STATES, ['Resuelto', 'Cerrado']);
+  assert.deepEqual(CLOSED_TICKET_STATES, ['Resuelto', 'Cerrado', 'Cancelado']);
   assert.equal(isClosedTicketState('Abierto'), false);
   assert.equal(isClosedTicketState('En Espera'), false);
   assert.equal(isClosedTicketState('Resuelto'), true);
@@ -39,4 +42,16 @@ test('la política SLA compartida conserva los valores vigentes', () => {
     ALTA: 8,
     CRITICA: 2,
   });
+});
+
+test('la prioridad solo acepta valores exactos conocidos', () => {
+  assert.equal(parseTicketPriority(' alta '), 'ALTA');
+  assert.equal(parseTicketPriority('urgente'), null);
+  assert.equal(parseTicketPriority(undefined), null);
+});
+
+test('el tipo de solicitud distingue incidentes y servicios', () => {
+  assert.equal(parseTicketRequestType('incidente_activo'), 'INCIDENTE_ACTIVO');
+  assert.equal(parseTicketRequestType('SOLICITUD_SERVICIO'), 'SOLICITUD_SERVICIO');
+  assert.equal(parseTicketRequestType('otro'), null);
 });

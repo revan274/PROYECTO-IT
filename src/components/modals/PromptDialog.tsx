@@ -44,6 +44,7 @@ export function PromptDialog({
         <div className="p-8 flex flex-col gap-4">
           <p id={messageId} className="text-slate-600 text-sm leading-relaxed">{message}</p>
           <Input
+            aria-label={title}
             data-autofocus
             type="text"
             value={value}

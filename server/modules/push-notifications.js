@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { createPushAgent, isAllowedPushHost } from './push-destination.js';
 import { roleHasPermission } from '../../shared/permissions.js';
 
 const MAX_ENDPOINT_LENGTH = 2048;
@@ -23,7 +24,7 @@ function validSubscriptionEndpoint(value) {
     // Los navegadores entregan endpoints HTTPS de servicios push. Rechazar IPs y
     // puertos no estándar evita que esta ruta autenticada se convierta en SSRF.
     if (url.protocol !== 'https:' || (url.port && url.port !== '443')) return '';
-    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname) || url.hostname.includes(':')) return '';
+    if (url.username || url.password || url.hash || !isAllowedPushHost(url.hostname)) return '';
     return url.toString();
   } catch {
     return '';
@@ -111,8 +112,10 @@ export function createPushNotifier({
   env = process.env,
   sendNotification = webpush.sendNotification.bind(webpush),
   log = console.error,
+  lookup,
 } = {}) {
   const configuration = getPushConfiguration(env);
+  const agent = createPushAgent(lookup);
 
   async function sendTicketPush({
     ticket,
@@ -134,6 +137,8 @@ export function createPushNotifier({
         publicKey: configuration.publicKey,
         privateKey: configuration.privateKey,
       },
+      agent,
+      timeout: 15000,
       TTL: 60 * 60,
       urgency: text(ticket?.prioridad).toUpperCase() === 'CRITICA' ? 'high' : 'normal',
       topic: `ticket-${ticket.id}`.slice(0, 32),
@@ -148,7 +153,7 @@ export function createPushNotifier({
         if (statusCode === 404 || statusCode === 410) {
           await removeSubscription(subscription.endpoint);
         } else {
-          log(`No se pudo enviar la notificación push del ticket #${ticket?.id}:`, error);
+          log('No se pudo enviar push', { ticketId: ticket?.id, status: Number.isFinite(statusCode) ? statusCode : 'NETWORK_ERROR' });
         }
         return false;
       }

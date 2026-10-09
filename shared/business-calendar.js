@@ -150,13 +150,18 @@ export function isWithinBusinessHours(ms, calendar = DEFAULT_BUSINESS_CALENDAR) 
  * Devuelve una fecha ISO en UTC.
  */
 export function addBusinessHours(startMs, hours, calendar = DEFAULT_BUSINESS_CALENDAR) {
+  return addBusinessMinutes(startMs, Math.max(0, Math.round(hours * MINUTES_PER_HOUR)), calendar);
+}
+
+/** Suma minutos hábiles conservando precisión para pausas y reanudaciones de SLA. */
+export function addBusinessMinutes(startMs, minutes, calendar = DEFAULT_BUSINESS_CALENDAR) {
   const base = Number.isFinite(startMs) ? startMs : Date.now();
   const { timeZone, schedule, holidaySet } = normalizeCalendar(calendar);
 
   // Sin jornada configurada no hay forma de repartir las horas: se degrada al cálculo
   // continuo antes que devolver un vencimiento imposible o entrar en un bucle infinito.
   if (schedule.size === 0) {
-    return new Date(base + hours * MINUTES_PER_HOUR * MS_PER_MINUTE).toISOString();
+    return new Date(base + Math.max(0, Math.round(minutes)) * MS_PER_MINUTE).toISOString();
   }
 
   const windowFor = (parts) => (holidaySet.has(toDateKey(parts)) ? null : schedule.get(weekdayOf(parts)) || null);
@@ -183,7 +188,7 @@ export function addBusinessHours(startMs, hours, calendar = DEFAULT_BUSINESS_CAL
     cursorMinute = window.start;
   }
 
-  let remaining = Math.max(0, Math.round(hours * MINUTES_PER_HOUR));
+  let remaining = Math.max(0, Math.round(minutes));
 
   for (;;) {
     const availableToday = window.end - cursorMinute;
@@ -197,4 +202,30 @@ export function addBusinessHours(startMs, hours, calendar = DEFAULT_BUSINESS_CAL
     ({ parts, window } = advanceToNextWorkingDay(parts));
     cursorMinute = window.start;
   }
+}
+
+/** Cuenta solo los minutos de jornada contenidos en [inicio, fin). */
+export function businessMinutesBetween(startMs, endMs, calendar = DEFAULT_BUSINESS_CALENDAR) {
+  const start = Number(startMs);
+  const end = Number(endMs);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  const { timeZone, schedule, holidaySet } = normalizeCalendar(calendar);
+  if (schedule.size === 0) return Math.max(0, Math.round((end - start) / MS_PER_MINUTE));
+
+  let day = getZonedParts(start, timeZone);
+  let total = 0;
+  for (;;) {
+    const dayStart = Date.UTC(day.year, day.month - 1, day.day);
+    if (dayStart > Date.UTC(getZonedParts(end, timeZone).year, getZonedParts(end, timeZone).month - 1, getZonedParts(end, timeZone).day)) break;
+    const window = holidaySet.has(toDateKey(day)) ? null : schedule.get(weekdayOf(day));
+    if (window) {
+      const opensAt = zonedPartsToMs({ ...day, minuteOfDay: window.start }, timeZone);
+      const closesAt = zonedPartsToMs({ ...day, minuteOfDay: window.end }, timeZone);
+      const overlapStart = Math.max(start, opensAt);
+      const overlapEnd = Math.min(end, closesAt);
+      if (overlapEnd > overlapStart) total += Math.round((overlapEnd - overlapStart) / MS_PER_MINUTE);
+    }
+    day = nextDay(day);
+  }
+  return total;
 }

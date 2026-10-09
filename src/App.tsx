@@ -3,6 +3,7 @@ import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { downloadAuditCsv } from './exports/auditCsv';
 import { downloadInventoryCsv } from './exports/inventoryCsv';
 import { downloadReportExcelWorkbook } from './exports/reportExcel';
+import { downloadReportTicketsCsv } from './exports/reportTicketsCsv';
 import { buildExecutiveReportHtml } from './reports/executiveReport';
 import { openAutoPrintLabelWindow, openHtmlReportWindow } from './reports/openPrintWindow';
 import { buildAssetQrLabelHtml } from './reports/qrLabelReport';
@@ -29,6 +30,7 @@ import { useSessionActions } from './hooks/actions/useSessionActions';
 import { useSupplyActions } from './hooks/actions/useSupplyActions';
 import { useTicketActions } from './hooks/actions/useTicketActions';
 import { useUserActions } from './hooks/actions/useUserActions';
+import { useCatalogActions } from './hooks/actions/useCatalogActions';
 import { useDialogs } from './hooks/useDialogs';
 import { useAppCatalogs } from './hooks/useAppCatalogs';
 import { getViewPath, useAppNavigation, VIEW_PATHS } from './hooks/useAppNavigation';
@@ -42,6 +44,7 @@ import { useTicketDirectoryData } from './hooks/useTicketDirectoryData';
 import { useTravelReportData } from './hooks/useTravelReportData';
 import { useUserDirectoryData } from './hooks/useUserDirectoryData';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { fetchTicketDetail } from './api/tickets';
 
 import { Toast } from './components/ui/Toast';
 import { ConfirmDialog } from './components/modals/ConfirmDialog';
@@ -112,6 +115,7 @@ import {
 import {
   buildAssetQrCanvasId,
 } from './utils/qrTokens';
+import { buildAssetTicketHistory } from './utils/assetTickets';
 
 import {
   formatTravelNumber,
@@ -337,8 +341,26 @@ export default function App() {
     setTicketAssignmentFilter,
     ticketSlaFilter,
     setTicketSlaFilter,
+    ticketTechnicianFilter,
+    setTicketTechnicianFilter,
+    ticketBranchFilter,
+    setTicketBranchFilter,
+    ticketAreaFilter,
+    setTicketAreaFilter,
+    ticketCategoryFilter,
+    setTicketCategoryFilter,
+    ticketRequesterFilter,
+    setTicketRequesterFilter,
+    ticketAssetFilter,
+    setTicketAssetFilter,
+    ticketDateFrom,
+    setTicketDateFrom,
+    ticketDateTo,
+    setTicketDateTo,
     ticketCommentDrafts,
     setTicketCommentDrafts,
+    ticketCommentResponseRequests,
+    setTicketCommentResponseRequests,
     ticketAttachmentLoadingId,
     setTicketAttachmentLoadingId,
   } = useTicketUiState();
@@ -495,6 +517,16 @@ export default function App() {
     selectedTicketBranch: formData.sucursal,
     selectedTicketAssetTag: formData.activoTag,
   });
+  const activeTicketAreas = useMemo(
+    () => catalogos.areas.filter((area) => area.activo !== false),
+    [catalogos.areas],
+  );
+  const activeTicketCategories = useMemo(
+    () => catalogos.categorias.filter(
+      (category) => category.activo !== false && category.areaId === formData.areaId,
+    ),
+    [catalogos.categorias, formData.areaId],
+  );
   const applyReportFilterSnapshot = useCallback((snapshot: ReportFilterSnapshot) => {
     setReportDateFrom(snapshot.dateFrom);
     setReportDateTo(snapshot.dateTo);
@@ -722,6 +754,7 @@ export default function App() {
     descargarAdjuntoTicket,
     eliminarAdjuntoTicket,
   } = useTicketActions({
+    showPrompt,
     sessionUser,
     backendConnected,
     refreshAppData: refreshData,
@@ -737,6 +770,8 @@ export default function App() {
     ticketAssetOptionsIncludes: (tag) => ticketAssetOptions.some((option) => option.tag === tag),
     setTicketCommentDrafts,
     ticketCommentDrafts,
+    setTicketCommentResponseRequests,
+    ticketCommentResponseRequests,
     setTicketAttachmentLoadingId,
   });
 
@@ -943,6 +978,12 @@ export default function App() {
     setEditingUserId,
     setUserActionLoadingId,
     resetNewUserForm,
+  });
+  const { saveTicketClassificationCatalogs } = useCatalogActions({
+    backendConnected,
+    canManageCatalogs: canManageUsers,
+    refreshAppData: refreshData,
+    showToast,
   });
 
   const {
@@ -1205,6 +1246,8 @@ export default function App() {
     filteredTickets,
   } = useTicketDirectoryData({
     tickets,
+    activos,
+    users,
     sessionUser,
     isRequesterOnlyUser,
     canEdit,
@@ -1215,13 +1258,27 @@ export default function App() {
     priorityFilter: ticketPriorityFilter,
     assignmentFilter: ticketAssignmentFilter,
     slaFilter: ticketSlaFilter,
+    technicianFilter: ticketTechnicianFilter,
+    branchFilter: ticketBranchFilter,
+    areaFilter: ticketAreaFilter,
+    categoryFilter: ticketCategoryFilter,
+    requesterFilter: ticketRequesterFilter,
+    assetFilter: ticketAssetFilter,
+    dateFrom: ticketDateFrom,
+    dateTo: ticketDateTo,
     formatTicketBranch: formatTicketBranchFromCatalog,
   });
+  const selectedAssetTicketHistory = useMemo(
+    () => selectedAsset
+      ? buildAssetTicketHistory(selectedAsset, scopedTickets, liveNow)
+      : { tickets: [], incidentsLast90Days: 0 },
+    [liveNow, scopedTickets, selectedAsset],
+  );
 
   const {
     dashboardWindow,
-    dashboardOpenTicketsCurrent,
-    dashboardCriticalTicketsCurrent,
+    dashboardBacklogTickets,
+    dashboardBacklogCriticalTickets,
     dashboardUnassignedCount,
     dashboardInProcessCount,
     dashboardRecentTickets,
@@ -1230,12 +1287,16 @@ export default function App() {
     dashboardBranchBars,
     dashboardAgingBars,
     dashboardSlaTotalCount,
-    dashboardSlaExpiredCount,
+    dashboardBacklogSlaExpiredCount,
     dashboardSlaCompliantCount,
     dashboardSlaCompliancePct,
-    dashboardOpenTrend,
-    dashboardCriticalTrend,
-    dashboardSlaTrend,
+    dashboardCreatedCount,
+    dashboardResolvedCount,
+    dashboardClosedCount,
+    dashboardCreatedTrend,
+    dashboardResolvedTrend,
+    dashboardClosedTrend,
+    dashboardSlaComplianceTrend,
     dashboardStateMax,
     dashboardBranchMax,
     dashboardOwnerMax,
@@ -1325,11 +1386,18 @@ export default function App() {
     reportPreviousAvgResolutionHours,
     reportPreviousMedianResolutionHours,
     reportPreviousP90ResolutionHours,
+    reportAvgFirstResponseHours,
+    reportMedianFirstResponseHours,
+    reportP90FirstResponseHours,
+    reportPreviousAvgFirstResponseHours,
+    reportPreviousMedianFirstResponseHours,
+    reportPreviousP90FirstResponseHours,
     reportTicketsTrend,
     reportOpenTrend,
     reportSlaComplianceTrend,
     reportMttrMedianTrend,
     reportP90ResolutionTrend,
+    reportFirstResponseMedianTrend,
   } = useReportKpiData({
     reportTickets,
     reportPreviousTickets,
@@ -1479,22 +1547,38 @@ export default function App() {
     if (!exists) setTravelReportTechnician('TODOS');
   }, [setTravelReportTechnician, travelReportTechnician, travelTechnicianOptions]);
 
-  const applyTicketFocus = useCallback((focus: 'ABIERTOS' | 'SLA' | 'CRITICA' | 'SIN_ASIGNAR' | 'EN_PROCESO') => {
-    setView('tickets');
-    clearGlobalSearchTerm();
+  const clearTicketStructuredFilters = useCallback(() => {
     setTicketLifecycleFilter('TODOS');
     setTicketStateFilter('TODOS');
     setTicketPriorityFilter('TODAS');
     setTicketAssignmentFilter('TODOS');
     setTicketSlaFilter('TODOS');
+    setTicketTechnicianFilter('TODOS');
+    setTicketBranchFilter('TODAS');
+    setTicketAreaFilter('TODAS');
+    setTicketCategoryFilter('TODAS');
+    setTicketRequesterFilter('TODOS');
+    setTicketAssetFilter('TODOS');
+    setTicketDateFrom('');
+    setTicketDateTo('');
+  }, [
+    setTicketAreaFilter, setTicketAssetFilter, setTicketAssignmentFilter, setTicketBranchFilter,
+    setTicketCategoryFilter, setTicketDateFrom, setTicketDateTo, setTicketLifecycleFilter,
+    setTicketPriorityFilter, setTicketRequesterFilter, setTicketSlaFilter, setTicketStateFilter,
+    setTicketTechnicianFilter,
+  ]);
+  const applyTicketFocus = useCallback((focus: 'ABIERTOS' | 'SLA' | 'CRITICA' | 'SIN_ASIGNAR' | 'EN_PROCESO') => {
+    setView('tickets');
+    clearGlobalSearchTerm();
+    clearTicketStructuredFilters();
     if (focus === 'ABIERTOS') { setTicketLifecycleFilter('ABIERTOS'); return; }
     if (focus === 'SLA') { setTicketLifecycleFilter('ABIERTOS'); setTicketSlaFilter('VENCIDO'); return; }
-    if (focus === 'CRITICA') { setTicketPriorityFilter('CRITICA'); return; }
+    if (focus === 'CRITICA') { setTicketLifecycleFilter('ABIERTOS'); setTicketPriorityFilter('CRITICA'); return; }
     if (focus === 'SIN_ASIGNAR') { setTicketLifecycleFilter('ABIERTOS'); setTicketAssignmentFilter('SIN_ASIGNAR'); return; }
     setTicketLifecycleFilter('ABIERTOS');
     setTicketStateFilter('En Proceso');
   }, [
-    clearGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter,
+    clearGlobalSearchTerm, clearTicketStructuredFilters, setTicketAssignmentFilter, setTicketLifecycleFilter,
     setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter, setView,
   ]);
   const applyReportDrillDown = useCallback((filters: {
@@ -1505,34 +1589,35 @@ export default function App() {
     asignadoA?: string;
   }) => {
     setView('tickets');
-    setTicketLifecycleFilter('TODOS');
-    setTicketStateFilter('TODOS');
-    setTicketPriorityFilter('TODAS');
-    setTicketAssignmentFilter('TODOS');
-    setTicketSlaFilter('TODOS');
+    clearTicketStructuredFilters();
     clearGlobalSearchTerm();
     if (filters.estado) setTicketStateFilter(filters.estado);
     if (filters.prioridad) setTicketPriorityFilter(filters.prioridad);
-    if (filters.asignadoA) { setTicketAssignmentFilter('ASIGNADOS'); setGlobalSearchTerm(filters.asignadoA); }
-    if (filters.sucursalCode) setGlobalSearchTerm(formatTicketBranchFromCatalog(filters.sucursalCode));
-    if (filters.area) setGlobalSearchTerm(filters.area);
+    if (filters.asignadoA) {
+      const technician = users.find((user) => normalizeForCompare(user.nombre) === normalizeForCompare(filters.asignadoA || ''));
+      if (technician) setTicketTechnicianFilter(String(technician.id));
+      else setGlobalSearchTerm(filters.asignadoA);
+    }
+    if (filters.sucursalCode) setTicketBranchFilter(filters.sucursalCode);
+    if (filters.area) {
+      const area = catalogos.areas.find((item) => item.id === filters.area || normalizeForCompare(item.nombre) === normalizeForCompare(filters.area || ''));
+      if (area) setTicketAreaFilter(area.id);
+      else setGlobalSearchTerm(filters.area);
+    }
   }, [
-    clearGlobalSearchTerm, formatTicketBranchFromCatalog, setGlobalSearchTerm,
-    setTicketAssignmentFilter, setTicketLifecycleFilter, setTicketPriorityFilter,
-    setTicketSlaFilter, setTicketStateFilter, setView,
+    catalogos.areas, clearGlobalSearchTerm, clearTicketStructuredFilters, setGlobalSearchTerm,
+    setTicketAreaFilter, setTicketBranchFilter, setTicketPriorityFilter,
+    setTicketStateFilter, setTicketTechnicianFilter, setView, users,
   ]);
 
   const applyReportIncidentCauseDrillDown = useCallback((area: string, cause: string) => {
     setView('tickets');
-    setTicketLifecycleFilter('TODOS');
-    setTicketStateFilter('TODOS');
-    setTicketPriorityFilter('TODAS');
-    setTicketAssignmentFilter('TODOS');
-    setTicketSlaFilter('TODOS');
-    setGlobalSearchTerm(`${area} ${cause}`.trim() || area || cause);
+    clearTicketStructuredFilters();
+    const areaOption = catalogos.areas.find((item) => item.id === area || normalizeForCompare(item.nombre) === normalizeForCompare(area));
+    if (areaOption) setTicketAreaFilter(areaOption.id);
+    setGlobalSearchTerm(cause.trim() || (!areaOption ? area : ''));
   }, [
-    setGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter,
-    setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter, setView,
+    catalogos.areas, clearTicketStructuredFilters, setGlobalSearchTerm, setTicketAreaFilter, setView,
   ]);
   const reportCurrentFilterSnapshot = useMemo<ReportFilterSnapshot>(
     () => ({
@@ -1620,6 +1705,14 @@ export default function App() {
     reportSlaCompliantCount,
     reportSlaTotalCount,
     reportSlaExpiredCount,
+    reportAvgFirstResponseHours,
+    reportMedianFirstResponseHours,
+    reportP90FirstResponseHours,
+    reportFirstResponseMedianTrend,
+    reportAvgResolutionHours,
+    reportMedianResolutionHours,
+    reportP90ResolutionHours,
+    reportMttrMedianTrend,
     reportInventorySnapshot,
     reportSupplySnapshot,
     sessionUserName: sessionUser?.nombre || 'Sistema',
@@ -1639,11 +1732,12 @@ export default function App() {
     });
   };
   const exportReportExcel = async () => {
-    if (reportTickets.length === 0 && reportClosedInPeriodCount === 0) {
+    if (reportTickets.length === 0) {
       showToast('No hay datos de tickets para exportar en el periodo seleccionado', 'warning');
       return;
     }
     try {
+      showToast(`Exportando ${reportTickets.length} registros`);
       await downloadReportExcelWorkbook({
         reportDateFrom,
         reportDateTo,
@@ -1678,6 +1772,13 @@ export default function App() {
         reportP90ResolutionHours,
         reportPreviousP90ResolutionHours,
         reportP90ResolutionTrend,
+        reportAvgFirstResponseHours,
+        reportPreviousAvgFirstResponseHours,
+        reportMedianFirstResponseHours,
+        reportPreviousMedianFirstResponseHours,
+        reportP90FirstResponseHours,
+        reportPreviousP90FirstResponseHours,
+        reportFirstResponseMedianTrend,
         reportInventorySnapshot,
         reportSupplySnapshot,
         reportStateBars,
@@ -1694,6 +1795,20 @@ export default function App() {
     } catch {
       showToast('No se pudo exportar el reporte en Excel', 'error');
     }
+  };
+  const exportReportCsv = () => {
+    if (reportTickets.length === 0) {
+      showToast('No hay datos de tickets para exportar en el periodo seleccionado', 'warning');
+      return;
+    }
+    showToast(`Exportando ${reportTickets.length} registros`);
+    downloadReportTicketsCsv({
+      reportTickets,
+      reportDateFrom,
+      reportDateTo,
+      nowMs: liveNow,
+      formatTicketBranchFromCatalog,
+    });
   };
   const exportReportPdf = () => {
     openReportPresentationWindow(true);
@@ -1741,7 +1856,7 @@ export default function App() {
   const printTravelMovementSheet = () => {
     openTravelMovementSheetWindow(true);
   };
-  const selectedIssueArea = String(formData.areaAfectada || '').trim();
+  const selectedIssueArea = activeTicketAreas.find((area) => area.id === formData.areaId)?.nombre || '';
   const issueOptionsForSelectedArea = useMemo(() => {
     return buildSuggestedTicketIssues(selectedIssueArea, selectedTicketAsset, activeTicketBranchCodes);
   }, [activeTicketBranchCodes, selectedIssueArea, selectedTicketAsset]);
@@ -1782,16 +1897,23 @@ export default function App() {
     [setTicketPriorityFilter],
   );
   const resetTicketFilters = useCallback(() => {
-    setTicketLifecycleFilter('TODOS');
-    setTicketStateFilter('TODOS');
-    setTicketPriorityFilter('TODAS');
-    setTicketAssignmentFilter('TODOS');
-    setTicketSlaFilter('TODOS');
+    clearTicketStructuredFilters();
     clearGlobalSearchTerm();
-  }, [clearGlobalSearchTerm, setTicketAssignmentFilter, setTicketLifecycleFilter, setTicketPriorityFilter, setTicketSlaFilter, setTicketStateFilter]);
+  }, [clearGlobalSearchTerm, clearTicketStructuredFilters]);
+  const openTicketFromAsset = useCallback((ticketId: number) => {
+    setSelectedAsset(null);
+    clearTicketStructuredFilters();
+    setGlobalSearchTerm(String(ticketId));
+    setView('tickets');
+  }, [clearTicketStructuredFilters, setGlobalSearchTerm, setSelectedAsset, setView]);
 
   const handleStatusChange = useCallback(
-    (ticketId: number, estado: string) => { void actualizarTicket(ticketId, { estado: estado as TicketEstado }); },
+    (ticketId: number, estado: string, motivoEspera?: import('../shared/ticket-wait-policy.js').TicketWaitReasonValue) =>
+      actualizarTicket(ticketId, { estado: estado as TicketEstado, ...(motivoEspera ? { motivoEspera } : {}) }),
+    [actualizarTicket],
+  );
+  const handlePriorityChange = useCallback(
+    (ticketId: number, prioridad: PrioridadTicket) => { void actualizarTicket(ticketId, { prioridad }); },
     [actualizarTicket],
   );
   const handleAttentionChange = useCallback(
@@ -1815,7 +1937,7 @@ export default function App() {
     [setGlobalSearchTerm, setView],
   );
   const handleResolveTicket = useCallback(
-    (ticketId: number) => { void resolverTicket(ticketId); },
+    (ticketId: number, solution: string, diagnosis: string) => resolverTicket(ticketId, solution, diagnosis),
     [resolverTicket],
   );
   const handleDeleteTicket = useCallback(
@@ -1839,6 +1961,12 @@ export default function App() {
       setTicketCommentDrafts((prev) => ({ ...prev, [ticketId]: value }));
     },
     [setTicketCommentDrafts],
+  );
+  const handleCommentResponseRequestChange = useCallback(
+    (ticketId: number, value: boolean) => {
+      setTicketCommentResponseRequests((prev) => ({ ...prev, [ticketId]: value }));
+    },
+    [setTicketCommentResponseRequests],
   );
   const handleSaveComment = useCallback(
     (ticketId: number) => { void agregarComentarioTicket(ticketId); },
@@ -1912,18 +2040,15 @@ export default function App() {
                     'Cargando Dashboard...',
                     <LazyDashboardView
                       dashboardWindow={dashboardWindow}
-                      dashboardOpenTicketsCurrent={dashboardOpenTicketsCurrent}
-                      dashboardCriticalTicketsCurrent={dashboardCriticalTicketsCurrent}
+                      dashboardBacklogTickets={dashboardBacklogTickets}
+                      dashboardBacklogCriticalTickets={dashboardBacklogCriticalTickets}
                       dashboardUnassignedCount={dashboardUnassignedCount}
                       dashboardRange={dashboardRange}
                       setDashboardRange={setDashboardRange}
                       systemHealth={systemHealth}
                       insumos={insumos}
-                      dashboardOpenTrend={dashboardOpenTrend}
                       activos={activos}
-                      dashboardCriticalTrend={dashboardCriticalTrend}
-                      dashboardSlaExpiredCount={dashboardSlaExpiredCount}
-                      dashboardSlaTrend={dashboardSlaTrend}
+                      dashboardBacklogSlaExpiredCount={dashboardBacklogSlaExpiredCount}
                       setView={setView}
                       applyTicketFocus={applyTicketFocus}
                       dashboardRecentTickets={dashboardRecentTickets}
@@ -1942,6 +2067,13 @@ export default function App() {
                       dashboardSlaCompliancePct={dashboardSlaCompliancePct}
                       dashboardSlaCompliantCount={dashboardSlaCompliantCount}
                       dashboardSlaTotalCount={dashboardSlaTotalCount}
+                      dashboardCreatedCount={dashboardCreatedCount}
+                      dashboardResolvedCount={dashboardResolvedCount}
+                      dashboardClosedCount={dashboardClosedCount}
+                      dashboardCreatedTrend={dashboardCreatedTrend}
+                      dashboardResolvedTrend={dashboardResolvedTrend}
+                      dashboardClosedTrend={dashboardClosedTrend}
+                      dashboardSlaComplianceTrend={dashboardSlaComplianceTrend}
                       dashboardAgingBars={dashboardAgingBars}
                       dashboardAgingMax={dashboardAgingMax}
                     />,
@@ -1959,6 +2091,7 @@ export default function App() {
                       exportReportExcel={() => {
                         void exportReportExcel();
                       }}
+                      exportReportCsv={exportReportCsv}
                       exportReportPdf={exportReportPdf}
                       reportDateFrom={reportDateFrom}
                       setReportDateFrom={setReportDateFrom}
@@ -2029,6 +2162,14 @@ export default function App() {
                       reportSlaTotalCount={reportSlaTotalCount}
                       reportSlaComplianceTrend={reportSlaComplianceTrend}
                       reportSlaExpiredCount={reportSlaExpiredCount}
+                      reportAvgFirstResponseHours={reportAvgFirstResponseHours}
+                      reportMedianFirstResponseHours={reportMedianFirstResponseHours}
+                      reportP90FirstResponseHours={reportP90FirstResponseHours}
+                      reportFirstResponseMedianTrend={reportFirstResponseMedianTrend}
+                      reportAvgResolutionHours={reportAvgResolutionHours}
+                      reportMedianResolutionHours={reportMedianResolutionHours}
+                      reportP90ResolutionHours={reportP90ResolutionHours}
+                      reportMttrMedianTrend={reportMttrMedianTrend}
                       reportTrendMode={reportTrendMode}
                       reportCreatedInPeriodCount={reportCreatedInPeriodCount}
                       reportClosedInPeriodCount={reportClosedInPeriodCount}
@@ -2116,6 +2257,9 @@ export default function App() {
                       LazyQRCodeCanvas={LazyQRCodeCanvas}
                       buildAssetQrCanvasId={buildAssetQrCanvasId}
                       formatDateTime={formatDateTime}
+                      selectedAssetTickets={selectedAssetTicketHistory.tickets}
+                      selectedAssetIncidentsLast90Days={selectedAssetTicketHistory.incidentsLast90Days}
+                      openTicketFromAsset={openTicketFromAsset}
                       openAssetEditModal={openAssetEditModal}
                       descargarQrActivoSeleccionado={descargarQrActivoSeleccionado}
                       imprimirEtiquetaQrActivoSeleccionado={imprimirEtiquetaQrActivoSeleccionado}
@@ -2280,6 +2424,9 @@ export default function App() {
                       handleDeleteUser={async (user) => {
                         await handleDeleteUser(user);
                       }}
+                      ticketAreas={catalogos.areas}
+                      ticketCategories={catalogos.categorias}
+                      saveTicketClassificationCatalogs={saveTicketClassificationCatalogs}
                     />,
                   ),
                   { ...protectedViewOptions, requiresUserManagement: true },
@@ -2302,12 +2449,26 @@ export default function App() {
                     ticketPriorityFilter={ticketPriorityFilter}
                     ticketAssignmentFilter={ticketAssignmentFilter}
                     ticketSlaFilter={ticketSlaFilter}
+                    ticketTechnicianFilter={ticketTechnicianFilter}
+                    ticketBranchFilter={ticketBranchFilter}
+                    ticketAreaFilter={ticketAreaFilter}
+                    ticketCategoryFilter={ticketCategoryFilter}
+                    ticketRequesterFilter={ticketRequesterFilter}
+                    ticketAssetFilter={ticketAssetFilter}
+                    ticketDateFrom={ticketDateFrom}
+                    ticketDateTo={ticketDateTo}
                     filteredTickets={filteredTickets}
+                    scopedTicketsCount={scopedTickets.length}
                     technicians={users}
+                    ticketBranches={catalogos.sucursales}
+                    ticketAreas={catalogos.areas}
+                    ticketCategories={catalogos.categorias}
+                    ticketAssets={activos}
                     ticketStates={TICKET_STATES}
                     ticketAttentionTypes={TICKET_ATTENTION_TYPES}
                     ticketAttachmentLoadingId={ticketAttachmentLoadingId}
                     ticketCommentDrafts={ticketCommentDrafts}
+                    ticketCommentResponseRequests={ticketCommentResponseRequests}
                     formatTicketBranchFromCatalog={formatTicketBranchFromCatalog}
                     formatCargoFromCatalog={formatCargoFromCatalog}
                     formatDateTime={formatDateTime}
@@ -2323,8 +2484,23 @@ export default function App() {
                     onTicketPriorityFilterChange={handleTicketPriorityFilterChange}
                     onTicketAssignmentFilterChange={setTicketAssignmentFilter}
                     onTicketSlaFilterChange={setTicketSlaFilter}
+                    onTicketTechnicianFilterChange={setTicketTechnicianFilter}
+                    onTicketBranchFilterChange={setTicketBranchFilter}
+                    onTicketAreaFilterChange={(value) => {
+                      setTicketAreaFilter(value);
+                      if (value !== 'TODAS') {
+                        const selectedCategory = catalogos.categorias.find((category) => category.id === ticketCategoryFilter);
+                        if (selectedCategory && selectedCategory.areaId !== value) setTicketCategoryFilter('TODAS');
+                      }
+                    }}
+                    onTicketCategoryFilterChange={setTicketCategoryFilter}
+                    onTicketRequesterFilterChange={setTicketRequesterFilter}
+                    onTicketAssetFilterChange={setTicketAssetFilter}
+                    onTicketDateFromChange={setTicketDateFrom}
+                    onTicketDateToChange={setTicketDateTo}
                     onResetFilters={resetTicketFilters}
                     onStatusChange={handleStatusChange}
+                    onPriorityChange={handlePriorityChange}
                     onAttentionChange={handleAttentionChange}
                     onTravelChange={handleTravelChange}
                     onAssigneeChange={handleAssigneeChange}
@@ -2335,7 +2511,9 @@ export default function App() {
                     onDownloadAttachment={handleDownloadAttachment}
                     onDeleteAttachment={handleDeleteAttachment}
                     onCommentDraftChange={handleCommentDraftChange}
+                    onCommentResponseRequestChange={handleCommentResponseRequestChange}
                     onSaveComment={handleSaveComment}
+                    onLoadTicketDetail={fetchTicketDetail}
                     ticketFormModal={{
                       isOpen: isTicketModalOpen,
                       title: getModalTitle('ticket', editingAssetId, editingInsumoId),
@@ -2344,6 +2522,8 @@ export default function App() {
                       isSaving: isModalSaving,
                       canSubmit: canCreateTickets && !isModalSaving,
                       activeTicketBranches,
+                      ticketAreas: activeTicketAreas,
+                      ticketCategories: activeTicketCategories,
                       ticketAssetOptions,
                       selectedIssueArea,
                       issueOptionsForSelectedArea,

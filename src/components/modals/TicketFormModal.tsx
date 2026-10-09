@@ -4,14 +4,18 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { TextArea } from '../ui/TextArea';
-import { SLA_POLICY, TICKET_AREA_OPTIONS, TICKET_ATTENTION_TYPES, TICKET_STATES } from '../../constants/app';
+import { Field } from '../ui/Field';
+import { SLA_POLICY, TICKET_ATTENTION_TYPES, TICKET_STATES } from '../../constants/app';
 import { isClosedTicketState } from '../../../shared/ticket-rules.js';
 import type {
   CatalogBranch,
   FormDataState,
   PrioridadTicket,
+  TicketAreaCatalogItem,
   TicketAttentionType,
+  TicketCategoryCatalogItem,
   TicketEstado,
+  TicketRequestType,
   UserSession,
 } from '../../types/app';
 import { ModalLayout } from './ModalLayout';
@@ -32,6 +36,7 @@ interface AssignableUser {
   nombre: string;
   rol: string;
   activo?: boolean;
+  departamento?: string;
 }
 
 interface TicketAssetContext {
@@ -51,6 +56,8 @@ interface TicketFormModalProps {
   canSubmit: boolean;
   canEdit: boolean;
   activeTicketBranches: CatalogBranch[];
+  ticketAreas: TicketAreaCatalogItem[];
+  ticketCategories: TicketCategoryCatalogItem[];
   ticketAssetOptions: TicketAssetOption[];
   selectedIssueArea: string;
   issueOptionsForSelectedArea: string[];
@@ -75,6 +82,8 @@ export function TicketFormModal({
   canSubmit,
   canEdit,
   activeTicketBranches,
+  ticketAreas,
+  ticketCategories,
   ticketAssetOptions,
   selectedIssueArea,
   issueOptionsForSelectedArea,
@@ -93,21 +102,54 @@ export function TicketFormModal({
     () => users.filter((user) => (user.rol === 'tecnico' || user.rol === 'admin') && user.activo !== false),
     [users],
   );
+  const requesterUsers = useMemo(() => users.filter((user) => user.activo !== false), [users]);
+  const selectedRequester = requesterUsers.find((user) => user.id === Number(formData.requesterUserId || sessionUser?.id)) || sessionUser;
   const isAdmin = sessionUser?.rol === 'admin';
   const isHistorical = isAdmin && !!formData.esHistorico;
   const historicalEstado = formData.estadoHistorico || 'Cerrado';
   const historicalIsClosed = isClosedTicketState(historicalEstado);
   const dateTimeMax = useMemo(() => toDateTimeLocalMax(), []);
+  const areaSelectId = useId();
+  const categorySelectId = useId();
+  const requesterSelectId = useId();
+  const creatorNameId = useId();
+  const branchNameId = useId();
   const travelRequiredId = useId();
   const historicalToggleId = useId();
   const historicalCreatedAtId = useId();
   const historicalStateId = useId();
   const historicalClosedAtId = useId();
+  const requestTypeId = useId();
+  const branchSelectId = useId();
+  const assetSelectId = useId();
+  const attentionSelectId = useId();
+  const descriptionId = useId();
+  const suggestedIssueId = useId();
+  const priorityId = useId();
+  const assigneeId = useId();
+  const isAssetIncident = (formData.tipoSolicitud || 'INCIDENTE_ACTIVO') === 'INCIDENTE_ACTIVO';
 
   return (
     <ModalLayout isOpen={isOpen} title={title} onClose={onClose} isBusy={isSaving}>
       <form onSubmit={onSubmit} className="p-10 space-y-4 max-h-[72vh] overflow-y-auto">
+        <Field htmlFor={requestTypeId} label="Tipo de solicitud">
+          <Select
+            id={requestTypeId}
+            required
+            value={formData.tipoSolicitud || 'INCIDENTE_ACTIVO'}
+            onChange={(event) => onChange({
+              tipoSolicitud: event.target.value as TicketRequestType,
+              ...(event.target.value === 'SOLICITUD_SERVICIO' ? { activoTag: '' } : {}),
+            })}
+            className="w-full"
+          >
+            <option value="INCIDENTE_ACTIVO">Incidente de activo</option>
+            <option value="SOLICITUD_SERVICIO">Solicitud de servicio</option>
+          </Select>
+        </Field>
+        <Field htmlFor={branchSelectId} label="Sucursal del ticket">
         <Select variant="plain"
+          id={branchSelectId}
           required
           className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
           value={formData.sucursal || ''}
@@ -121,9 +163,12 @@ export function TicketFormModal({
             ))
           )}
         </Select>
+        </Field>
+        <Field htmlFor={assetSelectId} label={isAssetIncident ? 'Activo afectado' : 'Activo relacionado (opcional)'}>
         <Select variant="plain"
-          required
-          disabled={!formData.sucursal || ticketAssetOptions.length === 0}
+          id={assetSelectId}
+          required={isAssetIncident}
+          disabled={!formData.sucursal || (isAssetIncident && ticketAssetOptions.length === 0)}
           className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black uppercase outline-none disabled:opacity-50"
           value={formData.activoTag || ''}
           onChange={(e) => onChange({ activoTag: e.target.value.toUpperCase() })}
@@ -131,9 +176,11 @@ export function TicketFormModal({
           <option value="">
             {!formData.sucursal
               ? 'Primero selecciona sucursal...'
-              : ticketAssetOptions.length === 0
+              : ticketAssetOptions.length === 0 && isAssetIncident
                 ? 'Sin activos registrados en esta sucursal'
-                : 'Selecciona el equipo (ej. CAJA 1, IMPRESORA)...'}
+                : isAssetIncident
+                  ? 'Selecciona el equipo (ej. CAJA 1, IMPRESORA)...'
+                  : 'Equipo relacionado (opcional)...'}
           </option>
           {ticketAssetOptions.map((assetOption) => (
             <option key={assetOption.tag} value={assetOption.tag}>
@@ -141,8 +188,9 @@ export function TicketFormModal({
             </option>
           ))}
         </Select>
+        </Field>
         <p className="text-[10px] text-slate-400 font-black uppercase">
-          Activos en sucursal seleccionada: {ticketAssetOptions.length}
+          Activos en sucursal seleccionada: {ticketAssetOptions.length}{!isAssetIncident ? ' · opcional para servicios' : ''}
         </p>
         {selectedTicketAssetContext && (
           <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 space-y-2">
@@ -159,20 +207,42 @@ export function TicketFormModal({
             )}
           </div>
         )}
-        <Select variant="plain"
-          required
-          value={formData.areaAfectada || ''}
-          onChange={(e) => onChange({ areaAfectada: e.target.value, fallaComun: '' })}
-          className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
-        >
-          <option value="">Area afectada...</option>
-          {TICKET_AREA_OPTIONS.map((area) => (
-            <option key={`afe-${area}`} value={area}>{area}</option>
-          ))}
-        </Select>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Field htmlFor={areaSelectId} label="Área afectada">
+            <Select
+              id={areaSelectId}
+              required
+              value={formData.areaId || ''}
+              onChange={(e) => onChange({ areaId: e.target.value, categoriaId: '', fallaComun: '' })}
+              className="w-full"
+            >
+              <option value="">Selecciona área...</option>
+              {ticketAreas.map((area) => (
+                <option key={area.id} value={area.id}>{area.nombre}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field htmlFor={categorySelectId} label="Categoría">
+            <Select
+              id={categorySelectId}
+              required
+              disabled={!formData.areaId || ticketCategories.length === 0}
+              value={formData.categoriaId || ''}
+              onChange={(e) => onChange({ categoriaId: e.target.value })}
+              className="w-full"
+            >
+              <option value="">{formData.areaId ? 'Selecciona categoría...' : 'Selecciona área primero...'}</option>
+              {ticketCategories.map((category) => (
+                <option key={category.id} value={category.id}>{category.nombre}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
           {canEdit && (
+            <Field htmlFor={attentionSelectId} label="Tipo de atención">
             <Select variant="plain"
+              id={attentionSelectId}
               required
               value={formData.atencionTipo || ''}
               onChange={(e) => {
@@ -195,6 +265,7 @@ export function TicketFormModal({
                 <option key={`ticket-attention-${type}`} value={type}>{formatTicketAttentionType(type)}</option>
               ))}
             </Select>
+            </Field>
           )}
           {canEdit && (
             <label htmlFor={travelRequiredId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
@@ -220,18 +291,23 @@ export function TicketFormModal({
             </label>
           )}
         </div>
+        <Field htmlFor={descriptionId} label="Descripción de la falla">
         <TextArea variant="plain"
+          id={descriptionId}
           required
           placeholder="DESCRIPCION DE LA FALLA"
           value={formData.descripcion || ''}
           className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase h-24 outline-none focus:ring-4 focus:ring-blue-100"
           onChange={(e) => onChange({ descripcion: e.target.value })}
         />
+        </Field>
         <div className="rounded-2xl border border-slate-100 bg-slate-50/40 p-4 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Falla sugerida por sucursal y lugar
           </p>
+          <Field htmlFor={suggestedIssueId} label="Falla sugerida">
           <Select variant="plain"
+            id={suggestedIssueId}
             value={formData.fallaComun || ''}
             disabled={issueOptionsForSelectedArea.length === 0}
             onChange={(e) =>
@@ -255,9 +331,12 @@ export function TicketFormModal({
               <option key={`${selectedIssueArea}-${issue}`} value={issue}>{issue}</option>
             ))}
           </Select>
+          </Field>
         </div>
 
+        <Field htmlFor={priorityId} label="Prioridad">
         <Select variant="plain"
+          id={priorityId}
           className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
           value={formData.prioridad || 'MEDIA'}
           onChange={(e) => onChange({ prioridad: e.target.value as PrioridadTicket })}
@@ -266,8 +345,11 @@ export function TicketFormModal({
           <option value="ALTA">Alta</option>
           <option value="CRITICA">Critica</option>
         </Select>
+        </Field>
         {canEdit ? (
+          <Field htmlFor={assigneeId} label="Técnico responsable">
           <Select variant="plain"
+            id={assigneeId}
             className="w-full p-5 bg-slate-50 glass-input rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-100"
             value={formData.asignadoA || ''}
             onChange={(e) => onChange({ asignadoA: e.target.value })}
@@ -277,25 +359,39 @@ export function TicketFormModal({
               <option key={user.id} value={user.nombre}>{user.nombre}</option>
             ))}
           </Select>
+          </Field>
         ) : (
           <div className="w-full p-5 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-black uppercase text-amber-700">
             El ticket se registrará sin asignación inicial.
           </div>
         )}
+        <Field htmlFor={requesterSelectId} label="Solicitante">
+          {canEdit ? (
+            <Select
+              id={requesterSelectId}
+              required
+              value={String(formData.requesterUserId || sessionUser?.id || '')}
+              onChange={(event) => onChange({ requesterUserId: Number(event.target.value) })}
+              className="w-full"
+            >
+              {requesterUsers.map((user) => (
+                <option key={user.id} value={user.id}>{user.nombre}</option>
+              ))}
+            </Select>
+          ) : (
+            <Input id={requesterSelectId} disabled value={sessionUser?.nombre || ''} className="w-full" />
+          )}
+        </Field>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input variant="plain"
-            disabled
-            value={sessionUser?.nombre || ''}
-            className="w-full p-4 bg-slate-100 glass-input rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
-          />
-          <Input variant="plain"
-            disabled
-            value={formatTicketBranchFromCatalog(formData.sucursal)}
-            className="w-full p-4 bg-slate-100 glass-input rounded-2xl text-xs font-black uppercase text-slate-500 outline-none focus:ring-4 focus:ring-blue-100"
-          />
+          <Field htmlFor={creatorNameId} label="Registrado por">
+            <Input id={creatorNameId} disabled value={sessionUser?.nombre || ''} className="w-full" />
+          </Field>
+          <Field htmlFor={branchNameId} label="Sucursal">
+            <Input id={branchNameId} disabled value={formatTicketBranchFromCatalog(formData.sucursal)} className="w-full" />
+          </Field>
         </div>
         <p className="text-[10px] text-slate-400 font-black uppercase">
-          Cargo solicitante: {formatCargoFromCatalog(sessionUser?.departamento)}
+          Cargo solicitante: {formatCargoFromCatalog(selectedRequester?.departamento)}
         </p>
         <p className="text-[10px] text-slate-400 font-black uppercase">
           SLA estimado: {SLA_POLICY[formData.prioridad || 'MEDIA']} horas
@@ -366,7 +462,7 @@ export function TicketFormModal({
                 {historicalIsClosed && (
                   <div className="space-y-1">
                     <label htmlFor={historicalClosedAtId} className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Fecha de cierre
+                      {formData.estadoHistorico === 'Resuelto' ? 'Fecha de resolución' : 'Fecha de cierre'}
                     </label>
                     <Input variant="plain"
                       id={historicalClosedAtId}
@@ -380,12 +476,16 @@ export function TicketFormModal({
                     />
                   </div>
                 )}
-                <TextArea variant="plain"
-                  placeholder="RESOLUCIÓN / COMENTARIO (OPCIONAL)"
+                <Field htmlFor={`${historicalClosedAtId}-solution`} label={historicalIsClosed ? 'Solución aplicada (obligatoria)' : 'Comentario histórico (opcional)'}>
+                <TextArea
+                  id={`${historicalClosedAtId}-solution`}
+                  required={historicalIsClosed}
+                  maxLength={8000}
                   value={formData.resolucionHistorica || ''}
                   onChange={(e) => onChange({ resolucionHistorica: e.target.value })}
-                  className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-sm font-black uppercase h-20 outline-none focus:ring-4 focus:ring-indigo-100"
+                  className="w-full h-24"
                 />
+                </Field>
                 <p className="text-[10px] text-indigo-400 font-black uppercase">
                   El ticket se registrará con la fecha indicada y quedará marcado como histórico.
                 </p>

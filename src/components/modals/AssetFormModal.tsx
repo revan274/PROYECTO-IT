@@ -48,12 +48,14 @@ export function AssetFormModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
                 required
+                aria-label="Tag del activo"
                 placeholder="TAG *"
                 value={formData.tag || ''}
                 variant="form"
                 onChange={(e) => onChange({ tag: e.target.value })}
               />
               <Input
+                aria-label="ID interno"
                 placeholder="ID INTERNO"
                 value={formData.idInterno || ''}
                 variant="form"
@@ -61,6 +63,7 @@ export function AssetFormModal({
               />
               <Input
                 required
+                aria-label="Serial"
                 placeholder="SERIAL *"
                 value={formData.serial || ''}
                 variant="form"
@@ -70,6 +73,7 @@ export function AssetFormModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
                 required
+                aria-label="Tipo de activo"
                 placeholder="TIPO *"
                 value={formData.tipo || ''}
                 variant="form"
@@ -77,12 +81,14 @@ export function AssetFormModal({
               />
               <Input
                 required
+                aria-label="Marca"
                 placeholder="MARCA *"
                 value={formData.marca || ''}
                 variant="form"
                 onChange={(e) => onChange({ marca: e.target.value })}
               />
               <Input
+                aria-label="Modelo"
                 placeholder="MODELO"
                 value={formData.modelo || ''}
                 variant="form"
@@ -95,6 +101,7 @@ export function AssetFormModal({
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ubicación y Estado</p>
             <div className="space-y-1">
               <Input
+                aria-label="Nombre visible para solicitantes"
                 placeholder="NOMBRE VISIBLE PARA SOLICITANTES (EJ. CAJA 1, IMPRESORA MOSTRADOR)"
                 value={formData.nombreVisible || ''}
                 variant="form" className="w-full"
@@ -107,18 +114,21 @@ export function AssetFormModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
                 required
+                aria-label="Ubicación"
                 placeholder="UBICACION *"
                 value={formData.ubicacion || ''}
                 variant="form"
                 onChange={(e) => onChange({ ubicacion: e.target.value })}
               />
               <Input
+                aria-label="Departamento"
                 placeholder="DEPARTAMENTO"
                 value={formData.departamento || ''}
                 variant="form"
                 onChange={(e) => onChange({ departamento: e.target.value })}
               />
               <Input
+                aria-label="Responsable"
                 placeholder="RESPONSABLE"
                 value={formData.responsable || ''}
                 variant="form"
@@ -128,11 +138,13 @@ export function AssetFormModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 type="date"
+                aria-label="Fecha de compra"
                 value={formData.fechaCompra || ''}
                 variant="form"
                 onChange={(e) => onChange({ fechaCompra: e.target.value })}
               />
               <Select
+                aria-label="Estado del activo"
                 value={formData.estado || 'Operativo'}
                 variant="form"
                 onChange={(e) => onChange({ estado: e.target.value as EstadoActivo })}
@@ -147,18 +159,21 @@ export function AssetFormModal({
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Red y Acceso</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
+                aria-label="Dirección IP"
                 placeholder="IP ADDRESS"
                 value={formData.ipAddress || ''}
                 variant="form"
                 onChange={(e) => onChange({ ipAddress: e.target.value })}
               />
               <Input
+                aria-label="Dirección MAC"
                 placeholder="MAC ADDRESS"
                 value={formData.macAddress || ''}
                 variant="form"
                 onChange={(e) => onChange({ macAddress: e.target.value })}
               />
               <Input
+                aria-label="Identificador AnyDesk"
                 placeholder="ANYDESK"
                 value={formData.anydesk || ''}
                 variant="form"
@@ -171,24 +186,28 @@ export function AssetFormModal({
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hardware y Ciclo de Vida</p>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Input
+                aria-label="Procesador"
                 placeholder="CPU"
                 value={formData.cpu || ''}
                 variant="form"
                 onChange={(e) => onChange({ cpu: e.target.value })}
               />
               <Input
+                aria-label="Memoria RAM"
                 placeholder="RAM"
                 value={formData.ram || ''}
                 variant="form"
                 onChange={(e) => onChange({ ram: e.target.value })}
               />
               <Input
+                aria-label="Tipo de memoria RAM"
                 placeholder="TIPO RAM"
                 value={formData.ramTipo || ''}
                 variant="form"
                 onChange={(e) => onChange({ ramTipo: e.target.value })}
               />
               <Input
+                aria-label="Capacidad de disco"
                 placeholder="DISCO"
                 value={formData.disco || ''}
                 variant="form"
@@ -197,12 +216,14 @@ export function AssetFormModal({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
+                aria-label="Tipo de disco"
                 placeholder="TIPO DISCO"
                 value={formData.tipoDisco || ''}
                 variant="form"
                 onChange={(e) => onChange({ tipoDisco: e.target.value })}
               />
               <Input
+                aria-label="Años de vida"
                 placeholder="ANOS DE VIDA"
                 value={formData.aniosVida || ''}
                 variant="form"
@@ -214,6 +235,7 @@ export function AssetFormModal({
           <section className="rounded-2xl border border-slate-100 p-5 bg-slate-50/40 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comentarios</p>
             <TextArea
+              aria-label="Comentarios del activo"
               variant="form"
               className="w-full h-24"
               placeholder="COMENTARIOS"

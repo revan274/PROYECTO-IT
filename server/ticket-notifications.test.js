@@ -6,14 +6,16 @@ import {
   construirCorreoDeTicket,
   destinatariosDeDifusion,
   planDeAvisoAlCrear,
+  planDeAvisoAlResolver,
+  planDeAvisoDeComentario,
 } from './modules/ticket-notifications.js';
 
 const USUARIOS = [
-  { nombre: 'Ana Admin', rol: 'admin', activo: true, email: 'ana@losgigantes.mx' },
-  { nombre: 'Tono Tecnico', rol: 'tecnico', activo: true, email: 'tono@losgigantes.mx' },
+  { id: 1, nombre: 'Ana Admin', rol: 'admin', activo: true, email: 'ana@losgigantes.mx' },
+  { id: 2, nombre: 'Tono Tecnico', rol: 'tecnico', activo: true, email: 'tono@losgigantes.mx' },
   { nombre: 'Tecnico Sin Correo', rol: 'tecnico', activo: true, email: '' },
   { nombre: 'Tecnico Inactivo', rol: 'tecnico', activo: false, email: 'baja@losgigantes.mx' },
-  { nombre: 'Sara Solicitante', rol: 'solicitante', activo: true, email: 'sara@losgigantes.mx' },
+  { id: 5, nombre: 'Sara Solicitante', rol: 'solicitante', activo: true, email: 'sara@losgigantes.mx' },
 ];
 
 function ticket(extra = {}) {
@@ -112,4 +114,56 @@ test('el cuerpo HTML escapa lo que escribe el usuario', () => {
 
   assert.ok(!html.includes('<script>'), 'la descripcion no debe inyectar etiquetas');
   assert.ok(html.includes('&lt;script&gt;'));
+});
+
+test('la resolución se dirige solo al solicitante identificado por ID', () => {
+  const plan = planDeAvisoAlResolver(ticket({ requesterUserId: 5 }), USUARIOS);
+
+  assert.equal(plan.motivo, MOTIVOS.RESUELTO);
+  assert.deepEqual(plan.destinatarios, ['sara@losgigantes.mx']);
+  assert.deepEqual(planDeAvisoAlResolver(ticket({ requesterUserId: null }), USUARIOS).destinatarios, []);
+});
+
+test('el aviso de resolución contiene solo el resumen operativo solicitado', () => {
+  const message = construirCorreoDeTicket(ticket({
+    solucionAplicada: 'Se reemplazó el cable.',
+    asignadoA: 'Tono Tecnico',
+    fechaResolucion: '2026-09-10T12:00:00.000Z',
+  }), MOTIVOS.RESUELTO);
+
+  assert.match(message.subject, /Resuelto.*#900/i);
+  assert.match(message.text, /Resumen: La terminal no responde/);
+  assert.match(message.text, /Solución: Se reemplazó el cable/);
+  assert.match(message.text, /Técnico: Tono Tecnico/);
+  assert.match(message.text, /Fecha: 2026-09-10/);
+  assert.doesNotMatch(message.text, /Fecha límite|Sucursal|Solicitado por|Prioridad/);
+});
+
+test('un comentario marcado dirige la respuesta al otro participante sin difusión', () => {
+  const assigned = ticket({ requesterUserId: 5, asignadoAId: 2 });
+  assert.deepEqual(
+    planDeAvisoDeComentario(assigned, USUARIOS, { id: 5 }, 'mesa@losgigantes.mx').destinatarios,
+    ['tono@losgigantes.mx'],
+  );
+  assert.deepEqual(
+    planDeAvisoDeComentario(assigned, USUARIOS, { id: 2 }, 'mesa@losgigantes.mx').destinatarios,
+    ['sara@losgigantes.mx'],
+  );
+  assert.deepEqual(
+    planDeAvisoDeComentario(assigned, USUARIOS, { id: 1 }, 'mesa@losgigantes.mx').destinatarios,
+    ['sara@losgigantes.mx'],
+  );
+});
+
+test('un solicitante sin técnico usa solo el buzón general y el correo omite datos internos', () => {
+  const plan = planDeAvisoDeComentario(ticket({ requesterUserId: 5, asignadoAId: null }), USUARIOS, { id: 5 }, 'mesa@losgigantes.mx');
+  assert.deepEqual(plan.destinatarios, ['mesa@losgigantes.mx']);
+  const message = construirCorreoDeTicket(ticket({
+    comentarioRelevante: 'Confirma si ya puedes ingresar.',
+    comentarioAutor: 'Tono Tecnico',
+    comentarioFecha: '2026-09-10T13:00:00.000Z',
+  }), MOTIVOS.COMENTARIO_RESPUESTA);
+  assert.match(message.text, /Comentario: Confirma si ya puedes ingresar/);
+  assert.match(message.text, /Autor: Tono Tecnico/);
+  assert.doesNotMatch(message.text, /Activo|Sucursal|Fecha límite|Prioridad/);
 });

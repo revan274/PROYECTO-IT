@@ -12,12 +12,13 @@ import {
   SLA_POLICY_HOURS,
   TICKET_STATES,
 } from '../../shared/ticket-rules.js';
-import { calcSlaDueDate } from '../modules/sla-calendar.js';
+import { calcSlaDueDate, createSlaAssignment as createSlaAssignmentSnapshot } from '../modules/sla-calendar.js';
 import {
   ADMIN_ONLY_PERMISSIONS,
   TICKET_AUTHOR_PERMISSIONS,
   roleHasPermission,
 } from '../../shared/permissions.js';
+import { normalizeTicketClassificationCatalogs } from '../../shared/ticket-classification.js';
 
 export { DEFAULT_ROLE_CATALOG, USER_ROLES };
 export { TICKET_STATES };
@@ -230,6 +231,10 @@ export function calcDueDate(prioridad, baseMs = Date.now()) {
   return calcSlaDueDate(prioridad, baseMs);
 }
 
+export function createSlaAssignment(prioridad, baseMs = Date.now(), assignedAt = new Date().toISOString()) {
+  return createSlaAssignmentSnapshot(prioridad, baseMs, assignedAt);
+}
+
 export function isSlaBreached(ticket) {
   if (CLOSED_STATES.has(ticket.estado)) return false;
   if (!ticket.fechaLimite) return false;
@@ -268,6 +273,22 @@ export function serializeTicket(ticket) {
   };
 }
 
+export function serializeTicketSummary(ticket) {
+  const serialized = serializeTicket(ticket);
+  const history = Array.isArray(serialized.historial) ? serialized.historial : [];
+  const attachments = Array.isArray(serialized.attachments) ? serialized.attachments : [];
+  const latestComment = history.find((entry) => asNonEmptyString(entry?.comentario));
+  const summary = { ...serialized };
+  delete summary.historial;
+  delete summary.attachments;
+  return {
+    ...summary,
+    historialCount: history.length,
+    attachmentCount: attachments.length,
+    ultimoComentario: latestComment ? asNonEmptyString(latestComment.comentario) : '',
+  };
+}
+
 export function serializeTravelAdjustment(item) {
   if (!item || typeof item !== 'object') return null;
   return {
@@ -295,9 +316,10 @@ export function canCreateTicketsByRole(role) {
 export function ticketBelongsToUser(ticket, user) {
   if (!ticket || !user) return false;
 
-  // El id es la autoridad: si el ticket tiene solicitadoPorId, decide solo el id.
+  // El id del solicitante es la autoridad. `solicitadoPorId` queda como alias
+  // compatible mientras se migran expedientes anteriores.
   const userId = Number(user.id);
-  const ticketUserId = Number(ticket.solicitadoPorId);
+  const ticketUserId = Number(ticket.requesterUserId ?? ticket.solicitadoPorId);
   if (Number.isFinite(ticketUserId)) {
     return Number.isFinite(userId) && userId === ticketUserId;
   }
@@ -613,7 +635,7 @@ export function normalizeCatalogState(input) {
     .map((role) => roleMap.get(role.value))
     .filter(Boolean);
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, roles, ...normalizeTicketClassificationCatalogs(source) };
 }
 
 export function getCatalogsFromDb(db) {

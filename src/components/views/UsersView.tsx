@@ -2,7 +2,15 @@ import React from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import type { UserFormState, UserItem, UserRole, UserSession } from '../../types/app';
+import { TicketClassificationCatalogManager } from '../catalogs/TicketClassificationCatalogManager';
+import type {
+  TicketAreaCatalogItem,
+  TicketCategoryCatalogItem,
+  UserFormState,
+  UserItem,
+  UserRole,
+  UserSession,
+} from '../../types/app';
 import { USER_ROLE_LABEL, USER_ROLE_PERMISSIONS } from '../../constants/app';
 
 interface UsersViewProps {
@@ -36,6 +44,9 @@ interface UsersViewProps {
   handleEditUser: (user: UserItem) => void;
   handleToggleUserActive: (user: UserItem) => Promise<void>;
   handleDeleteUser: (user: UserItem) => Promise<void>;
+  ticketAreas: TicketAreaCatalogItem[];
+  ticketCategories: TicketCategoryCatalogItem[];
+  saveTicketClassificationCatalogs: (areas: TicketAreaCatalogItem[], categories: TicketCategoryCatalogItem[]) => Promise<boolean>;
 }
 
 export const UsersView: React.FC<UsersViewProps> = ({
@@ -69,6 +80,9 @@ export const UsersView: React.FC<UsersViewProps> = ({
   handleEditUser,
   handleToggleUserActive,
   handleDeleteUser,
+  ticketAreas,
+  ticketCategories,
+  saveTicketClassificationCatalogs,
 }) => {
   return (
     <div className="space-y-6">
@@ -78,6 +92,11 @@ export const UsersView: React.FC<UsersViewProps> = ({
         </div>
       ) : (
         <>
+          <TicketClassificationCatalogManager
+            areas={ticketAreas}
+            categorias={ticketCategories}
+            onSave={saveTicketClassificationCatalogs}
+          />
           <div className="glass-panel bg-white/90 rounded-[2.5rem] shadow-2xl border border-white/40 overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>

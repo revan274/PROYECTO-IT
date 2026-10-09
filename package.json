@@ -19,6 +19,7 @@
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "integrity:check": "node server/scripts/integrity-check.js",
+    "persistence:measure": "node server/scripts/persistence-measure.js",
     "mail:check": "node server/scripts/mail-check.js"
   },
   "engines": {

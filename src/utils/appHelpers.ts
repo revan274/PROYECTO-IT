@@ -21,7 +21,7 @@ import {
   normalizeForCompare,
   parseDateToTimestamp,
 } from './format';
-import { isTicketClosed, normalizeTicketAttentionType } from './tickets';
+import { normalizeTicketAttentionType } from './tickets';
 import {
   normalizeIpAddress,
   normalizeMacAddress,
@@ -291,6 +291,8 @@ export function resolveTicketTravelDestinationCode(ticket: TicketItem, validBran
 }
 
 export function getTicketAreaLabel(ticket: TicketItem): string {
+  const structuredArea = String(ticket.areaNombre || '').trim();
+  if (structuredArea) return structuredArea;
   const description = String(ticket.descripcion || '').trim();
   if (description) {
     const match = description.match(/^(?:[aá]rea afectada:)\s*([^|]+)\|/i);
@@ -355,12 +357,27 @@ export function matchesReportTechnician(ticket: TicketItem, filter: string): boo
 }
 
 export function collectResolutionHours(rows: TicketItem[]): number[] {
+  return rows.flatMap((ticket) => {
+    const cycles = Array.isArray(ticket.ciclos) && ticket.ciclos.length > 0
+      ? ticket.ciclos
+      : [{ fechaInicio: ticket.fechaCreacion || ticket.fecha, fechaResolucion: ticket.fechaResolucion }];
+    return cycles
+      .map((cycle) => {
+        const start = parseDateToTimestamp(cycle.fechaInicio || '');
+        const end = parseDateToTimestamp(cycle.fechaResolucion || '');
+        if (start === null || end === null || end < start) return null;
+        return (end - start) / (60 * 60 * 1000);
+      })
+      .filter((value): value is number => value !== null);
+  });
+}
+
+export function collectFirstResponseHours(rows: TicketItem[]): number[] {
   return rows
-    .filter(isTicketClosed)
     .map((ticket) => {
       const start = ticketCreatedTimestamp(ticket);
-      const end = parseDateToTimestamp(ticket.fechaCierre || '');
-      if (end === null || end <= start) return null;
+      const end = parseDateToTimestamp(ticket.fechaPrimeraAtencion || '');
+      if (end === null || end < start) return null;
       return (end - start) / (60 * 60 * 1000);
     })
     .filter((value): value is number => value !== null);
@@ -530,7 +547,7 @@ export function ticketBelongsToSessionUser(ticket: TicketItem, user: UserSession
   if (user.rol !== 'solicitante') return true;
 
   const userId = Number(user.id);
-  const ticketUserId = Number(ticket.solicitadoPorId);
+  const ticketUserId = Number(ticket.requesterUserId ?? ticket.solicitadoPorId);
   if (Number.isFinite(userId) && Number.isFinite(ticketUserId) && userId === ticketUserId) {
     return true;
   }
@@ -550,12 +567,14 @@ export function buildInitialFormDataForModal(
 ): FormDataState {
   if (modal === 'ticket') {
     return {
+      tipoSolicitud: 'INCIDENTE_ACTIVO',
       prioridad: 'MEDIA',
       atencionTipo: undefined,
       trasladoRequerido: undefined,
       asignadoA: '',
       sucursal: defaultBranchCode,
-      areaAfectada: '',
+      areaId: '',
+      categoriaId: '',
       fallaComun: '',
     };
   }

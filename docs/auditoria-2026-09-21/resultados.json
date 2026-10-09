@@ -1,0 +1,234 @@
+{
+  "executedAt": "2026-09-21T16:14:30.086Z",
+  "node": "v24.13.1",
+  "environment": "isolated local JSON fixture",
+  "results": [
+    {
+      "id": "F1",
+      "statuses": [
+        201,
+        200,
+        200,
+        200,
+        200
+      ],
+      "states": [
+        "Abierto",
+        "Abierto",
+        "En Proceso",
+        "Resuelto",
+        "Cerrado"
+      ],
+      "sameResolutionAndClosureDate": true,
+      "firstResponseDate": null,
+      "resolutionDate": null
+    },
+    {
+      "id": "F2",
+      "created": 201,
+      "deadline": "2026-09-21T18:14:00.000Z",
+      "resolved": 200,
+      "emptySolutionAccepted": "Ticket resuelto"
+    },
+    {
+      "id": "F3-F6",
+      "closedTicketReassignmentStatus": 200,
+      "assignee": "Audit admin",
+      "history": {
+        "fecha": "21/9/2026, 10:14:29",
+        "usuario": "Audit admin",
+        "accion": "Ticket Actualizado",
+        "estado": "Cerrado",
+        "comentario": ""
+      }
+    },
+    {
+      "id": "F7",
+      "status": 200,
+      "state": "Abierto",
+      "closureRemoved": true,
+      "oldDeadlineRetained": true
+    },
+    {
+      "id": "F4",
+      "linkedTickets": 2,
+      "assetTag": "TJ01-DSK-001"
+    },
+    {
+      "id": "F5",
+      "fixtureClock": "deadline set to now minus 60 seconds",
+      "status": 200,
+      "overdueCount": 1
+    },
+    {
+      "id": "F8",
+      "requesterUsers": 403,
+      "requesterUpdate": 403,
+      "readonlyCreate": 403,
+      "unauthenticated": 401
+    },
+    {
+      "id": "VALIDATION",
+      "noDescription": 400,
+      "noAsset": 400,
+      "missingAsset": 400,
+      "missingAssignee": 400,
+      "invalidPriorityNormalizedTo": "MEDIA",
+      "wrongBranchAccepted": "TJ02",
+      "deleteRequesterWithTickets": 409,
+      "patchPriorityOnly": 400
+    },
+    {
+      "id": "DUPLICATE",
+      "count": 2,
+      "distinctIds": 2
+    },
+    {
+      "id": "SEARCH_API",
+      "byId": 1,
+      "byRequester": 7
+    },
+    {
+      "id": "BRANCH_REMOVAL",
+      "status": 200,
+      "referencedBranch": "TJ01"
+    },
+    {
+      "id": "ASSET_RENAME",
+      "status": 200,
+      "assetTag": "TJ01-DSK-RENAMED",
+      "ticketRetainsOldTag": "TJ01-DSK-001"
+    },
+    {
+      "id": "ASSET_DELETE",
+      "status": 200,
+      "remainingTickets": 8
+    },
+    {
+      "id": "TICKET_DELETE",
+      "technicianDeletesResolved": 200,
+      "stillInTickets": false
+    },
+    {
+      "id": "FORMER_TECH_DELETE",
+      "status": 200,
+      "note": "El técnico intervino y fue reasignado; ya no es responsable actual."
+    },
+    {
+      "id": "PUSH_ENDPOINT",
+      "localhostAccepted": true,
+      "networkRequestMade": false
+    },
+    {
+      "id": "SLA_KPI",
+      "lateByHours": 2,
+      "reportedCompliancePct": 100,
+      "slaLabel": "SLA CERRADO"
+    },
+    {
+      "id": "SEARCH_UI",
+      "byId": 0,
+      "byRequester": 0,
+      "accentPartial": 1
+    },
+    {
+      "id": "DASHBOARD_OLD_BACKLOG",
+      "oldOpenTicketsInput": 1,
+      "displayedOpenTickets": 0
+    },
+    {
+      "id": "ROUTES_REQUESTER_SSR",
+      "routes": {
+        "/users": "tickets",
+        "/inventory": "tickets",
+        "/admin": "tickets",
+        "/tickets/123": "tickets",
+        "/tickets": "tickets"
+      },
+      "visualBrowserTest": false
+    },
+    {
+      "id": "FORM_LABELS_SSR",
+      "controlsWithoutAccessibleLabel": 10,
+      "tags": [
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "TEXTAREA",
+          "placeholder": "DESCRIPCION DE LA FALLA"
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "SELECT",
+          "placeholder": null
+        },
+        {
+          "tag": "INPUT",
+          "placeholder": null
+        },
+        {
+          "tag": "INPUT",
+          "placeholder": null
+        }
+      ]
+    },
+    {
+      "id": "HISTORY_DATE",
+      "raw": "9/10/2026, 14:00:00",
+      "intendedDayMonth": "9 de octubre",
+      "parsedMonthByJavascript": 9,
+      "dayOver12Parses": false
+    },
+    {
+      "id": "HTTP_CLIENT_ERRORS",
+      "injectedResponses": [
+        {
+          "input": 401,
+          "caughtStatus": 401
+        },
+        {
+          "input": 403,
+          "caughtStatus": 403
+        },
+        {
+          "input": 404,
+          "caughtStatus": 404
+        },
+        {
+          "input": 500,
+          "caughtStatus": 500
+        },
+        {
+          "input": "offline",
+          "message": "Failed to fetch"
+        },
+        {
+          "input": "timeout",
+          "message": "Tiempo de espera agotado al conectar con backend (/api)."
+        }
+      ],
+      "visualFeedbackTested": false
+    }
+  ]
+}

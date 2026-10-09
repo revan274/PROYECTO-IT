@@ -2,7 +2,7 @@ import type { KeyboardEvent } from 'react';
 import { NORMALIZED_API_BASE_URL } from '../constants/app';
 import { ApiError } from './app';
 
-export function formatDateTime(value?: string): string {
+export function formatDateTime(value?: string | null): string {
   if (!value) return 'N/D';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -13,7 +13,7 @@ export function formatDateTime(value?: string): string {
 // exportaciones a Excel y reportes impresos, donde el segundo y el ano completo si
 // importan; en la lista de tickets solo estorban. Por eso es una funcion aparte y no
 // un cambio en la de siempre.
-export function formatDateTimeCompact(value?: string, nowMs = Date.now()): string {
+export function formatDateTimeCompact(value?: string | null, nowMs = Date.now()): string {
   if (!value) return 'N/D';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -27,7 +27,7 @@ export function formatDateTimeCompact(value?: string, nowMs = Date.now()): strin
   });
 }
 
-export function normalizeLooseDateString(value?: string): string {
+export function normalizeLooseDateString(value?: string | null): string {
   return String(value || '')
     .trim()
     .replace(/\sa\.\s*m\./gi, ' AM')
@@ -35,7 +35,7 @@ export function normalizeLooseDateString(value?: string): string {
     .replace(/\./g, '');
 }
 
-export function parseDateToTimestamp(value?: string): number | null {
+export function parseDateToTimestamp(value?: string | null): number | null {
   const raw = String(value || '').trim();
   if (!raw) return null;
   const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);

@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
-import type { TicketItem, UserSession } from '../types/app';
+import type { Activo, TicketItem, UserItem, UserSession } from '../types/app';
 import {
   deriveTicketDirectoryData,
   useTicketDirectoryData,
@@ -15,6 +15,13 @@ const REQUESTER: UserSession = {
   username: 'ana',
   rol: 'solicitante',
 };
+
+const USERS: UserItem[] = [
+  { ...REQUESTER, activo: true },
+  { id: 20, nombre: 'Otra Solicitante', username: 'otra', rol: 'solicitante', activo: true },
+  { id: 201, nombre: 'Técnico Uno', username: 'tecnico.uno', rol: 'tecnico', activo: true },
+  { id: 202, nombre: 'Técnico Dos', username: 'tecnico.dos', rol: 'tecnico', activo: true },
+];
 
 const TICKETS: TicketItem[] = [
   {
@@ -31,6 +38,10 @@ const TICKETS: TicketItem[] = [
     solicitadoPorId: 10,
     solicitadoPor: 'Ana Solicitante',
     solicitadoPorUsername: 'ana',
+    areaId: 'AREA_CAJAS',
+    areaNombre: 'Línea de cajas',
+    categoriaId: 'CAT_CONECTIVIDAD',
+    categoriaNombre: 'Conectividad e impresión',
   },
   {
     id: 2,
@@ -41,9 +52,15 @@ const TICKETS: TicketItem[] = [
     estado: 'En Proceso',
     atencionTipo: 'PRESENCIAL',
     asignadoA: 'Técnico Uno',
+    asignadoAId: 201,
+    activoId: 102,
     fecha: '2026-01-10T10:00:00.000Z',
     fechaLimite: '2026-01-10T14:00:00.000Z',
     solicitadoPorId: 10,
+    areaId: 'AREA_TIENDA',
+    areaNombre: 'Tienda',
+    categoriaId: 'CAT_OPERACION_TIENDA',
+    categoriaNombre: 'Operación de tienda',
   },
   {
     id: 3,
@@ -71,8 +88,34 @@ const TICKETS: TicketItem[] = [
   },
 ];
 
+const ASSETS: Activo[] = [
+  {
+    id: 101,
+    tag: 'PC-001',
+    tipo: 'Terminal de venta',
+    marca: 'IBM',
+    modelo: 'SurePOS',
+    ubicacion: 'Caja principal',
+    estado: 'Operativo',
+    serial: 'SERIE-ÁGUILA-01',
+    fechaCompra: '2025-01-01',
+  },
+  {
+    id: 102,
+    tag: 'PC-002',
+    tipo: 'Laptop',
+    marca: 'Lenovo',
+    ubicacion: 'Piso de venta',
+    estado: 'Operativo',
+    serial: 'LEN-002',
+    fechaCompra: '2025-02-01',
+  },
+];
+
 const BASE_OPTIONS = {
   tickets: TICKETS,
+  activos: ASSETS,
+  users: USERS,
   sessionUser: REQUESTER,
   isRequesterOnlyUser: true,
   canEdit: false,
@@ -83,6 +126,14 @@ const BASE_OPTIONS = {
   priorityFilter: 'TODAS' as const,
   assignmentFilter: 'TODOS' as const,
   slaFilter: 'TODOS' as const,
+  technicianFilter: 'TODOS',
+  branchFilter: 'TODAS',
+  areaFilter: 'TODAS',
+  categoryFilter: 'TODAS',
+  requesterFilter: 'TODOS',
+  assetFilter: 'TODOS',
+  dateFrom: '',
+  dateTo: '',
   formatTicketBranch: (branchCode?: string) =>
     branchCode === 'TJ01' ? 'Sucursal Tijuana Norte' : String(branchCode || ''),
 };
@@ -123,6 +174,36 @@ describe('deriveTicketDirectoryData', () => {
     });
 
     expect(byBranchAndAttention.filteredTickets.map((ticket) => ticket.id)).toEqual([1]);
+  });
+
+  test('comparte búsqueda AND parcial y sin acentos por folio, solicitante, activo y categoría', () => {
+    const result = deriveTicketDirectoryData({
+      ...BASE_OPTIONS,
+      isRequesterOnlyUser: false,
+      searchTokens: ['#1', 'solici', 'aguila', 'impres', 'norte'],
+    });
+
+    expect(result.filteredTickets.map((ticket) => ticket.id)).toEqual([1]);
+  });
+
+  test('combina técnico, sucursal, área, categoría, solicitante, activo, fecha y SLA', () => {
+    const result = deriveTicketDirectoryData({
+      ...BASE_OPTIONS,
+      isRequesterOnlyUser: false,
+      stateFilter: 'En Proceso',
+      priorityFilter: 'MEDIA',
+      technicianFilter: '201',
+      branchFilter: 'ENS01',
+      areaFilter: 'AREA_TIENDA',
+      categoryFilter: 'CAT_OPERACION_TIENDA',
+      requesterFilter: '10',
+      assetFilter: '102',
+      dateFrom: '2026-01-10',
+      dateTo: '2026-01-10',
+      slaFilter: 'EN_TIEMPO',
+    });
+
+    expect(result.filteredTickets.map((ticket) => ticket.id)).toEqual([2]);
   });
 
   test('ordena primero los vencidos y después por fecha descendente', () => {

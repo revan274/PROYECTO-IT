@@ -15,6 +15,7 @@ import { isWithinBusinessHours } from '../../shared/business-calendar.js';
 import { CLOSED_STATES } from '../utils/helpers.js';
 import { getSlaCalendar } from './sla-calendar.js';
 import { avisar, MOTIVOS, destinatariosDeDifusion } from './ticket-notifications.js';
+import { entregarNotificacion } from './notification-ledger.js';
 
 export const TIPO_AVISO_SLA = 'sla-por-vencer';
 
@@ -72,17 +73,6 @@ export async function revisarSlaUnaVez({
     let avisados = 0;
 
     for (const ticket of candidatos) {
-      let meToca = false;
-      try {
-        meToca = await ledger.reclamar(ticket.id, TIPO_AVISO_SLA);
-      } catch (error) {
-        // Si no se puede dejar constancia, NO se envia: preferimos perder un aviso a
-        // mandar el mismo correo en cada vuelta del temporizador.
-        log(`No se pudo reservar el aviso de SLA del ticket #${ticket.id}:`, error);
-        continue;
-      }
-      if (!meToca) continue;
-
       const assigneeId = Math.trunc(Number(ticket?.asignadoAId));
       const responsable = (Array.isArray(db?.users) ? db.users : [])
         .find((user) => user
@@ -92,9 +82,15 @@ export async function revisarSlaUnaVez({
             : user.nombre === ticket.asignadoA));
       // Si tiene responsable, es asunto suyo. Si no lo tiene, que lo vea quien pueda tomarlo.
       const destinatarios = responsable ? [responsable.email] : difusion;
-
-      enviar({ ticket, destinatarios, motivo: MOTIVOS.POR_VENCER });
-      avisados += 1;
+      const cycleKey = ticket.cicloActualId || ticket.fechaLimite || 'legacy';
+      const delivery = await entregarNotificacion({
+        ledger,
+        ticketId: ticket.id,
+        tipo: `${TIPO_AVISO_SLA}:${cycleKey}`,
+        enviar: () => enviar({ ticket, destinatarios, motivo: MOTIVOS.POR_VENCER }),
+        log,
+      });
+      if (delivery.sent) avisados += 1;
     }
 
     return { revisados: candidatos.length, avisados };

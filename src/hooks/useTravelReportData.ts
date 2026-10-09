@@ -159,7 +159,7 @@ export function deriveTravelReportData({
         destinationLabel: destinationRule?.label || destinationCode,
         routeIndex: destinationRule?.index || 0,
         kms: destinationRule?.kms || 0,
-        fecha: formatTravelDate(ticket.fechaCreacion || ticket.fecha),
+        fecha: formatTravelDate(ticket.fechaCreacion || ticket.fecha || undefined),
         motivo: extractTicketIssueDescription(ticket),
       });
     });

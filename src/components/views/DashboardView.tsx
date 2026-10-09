@@ -35,18 +35,15 @@ type InventoryFocusAction = InventoryRiskFilter | 'FALLA';
 
 interface DashboardViewProps {
   dashboardWindow: { label: string };
-  dashboardOpenTicketsCurrent: TicketItem[];
-  dashboardCriticalTicketsCurrent: TicketItem[];
+  dashboardBacklogTickets: TicketItem[];
+  dashboardBacklogCriticalTickets: TicketItem[];
   dashboardUnassignedCount: number;
   dashboardRange: DashboardRange;
   setDashboardRange: (val: DashboardRange) => void;
   systemHealth: number;
   insumos: Insumo[];
-  dashboardOpenTrend: Trend;
   activos: Activo[];
-  dashboardCriticalTrend: Trend;
-  dashboardSlaExpiredCount: number;
-  dashboardSlaTrend: Trend;
+  dashboardBacklogSlaExpiredCount: number;
   setView: (view: ViewType) => void;
   applyTicketFocus: (focus: TicketFocusAction) => void;
   dashboardRecentTickets: TicketItem[];
@@ -62,27 +59,31 @@ interface DashboardViewProps {
   dashboardStateMax: number;
   dashboardBranchBars: BarChartItem[];
   dashboardBranchMax: number;
-  dashboardSlaCompliancePct: number;
+  dashboardSlaCompliancePct: number | null;
   dashboardSlaCompliantCount: number;
   dashboardSlaTotalCount: number;
+  dashboardCreatedCount: number;
+  dashboardResolvedCount: number;
+  dashboardClosedCount: number;
+  dashboardCreatedTrend: Trend;
+  dashboardResolvedTrend: Trend;
+  dashboardClosedTrend: Trend;
+  dashboardSlaComplianceTrend: Trend;
   dashboardAgingBars: BarChartItem[];
   dashboardAgingMax: number;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   dashboardWindow,
-  dashboardOpenTicketsCurrent,
-  dashboardCriticalTicketsCurrent,
+  dashboardBacklogTickets,
+  dashboardBacklogCriticalTickets,
   dashboardUnassignedCount,
   dashboardRange,
   setDashboardRange,
   systemHealth,
   insumos,
-  dashboardOpenTrend,
   activos,
-  dashboardCriticalTrend,
-  dashboardSlaExpiredCount,
-  dashboardSlaTrend,
+  dashboardBacklogSlaExpiredCount,
   setView,
   applyTicketFocus,
   dashboardRecentTickets,
@@ -101,6 +102,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   dashboardSlaCompliancePct,
   dashboardSlaCompliantCount,
   dashboardSlaTotalCount,
+  dashboardCreatedCount,
+  dashboardResolvedCount,
+  dashboardClosedCount,
+  dashboardCreatedTrend,
+  dashboardResolvedTrend,
+  dashboardClosedTrend,
+  dashboardSlaComplianceTrend,
   dashboardAgingBars,
   dashboardAgingMax,
 }) => {
@@ -109,9 +117,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="bg-slate-800 text-white p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3rem] flex flex-col gap-6 md:flex-row md:items-center md:justify-between shadow-2xl relative overflow-hidden">
         <div className="z-10 min-w-0">
           <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight mb-2">Estado del Sistema</h2>
-          <p className="text-slate-400 text-sm">Resumen operativo | Período: {dashboardWindow.label}</p>
+          <p className="text-slate-400 text-sm">Backlog actual | Período histórico: {dashboardWindow.label}</p>
           <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-300">
-            Abiertos: {dashboardOpenTicketsCurrent.length} | Críticos: {dashboardCriticalTicketsCurrent.length} | Sin Asignar: {dashboardUnassignedCount}
+            Pendientes de todos los períodos: {dashboardBacklogTickets.length} | Críticos: {dashboardBacklogCriticalTickets.length} | Sin Asignar: {dashboardUnassignedCount}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {DASHBOARD_RANGES.map((range) => (
@@ -163,9 +171,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {
             key: 'abiertos',
             label: 'Tickets abiertos',
-            value: dashboardOpenTicketsCurrent.length,
-            note: dashboardOpenTrend.label,
-            noteClass: dashboardOpenTrend.toneClass,
+            value: dashboardBacklogTickets.length,
+            note: 'Backlog actual',
+            noteClass: 'text-slate-400',
             skin: 'bg-white border-slate-200 hover:border-slate-300',
             labelClass: 'text-slate-400',
             valueClass: 'text-brand',
@@ -187,9 +195,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {
             key: 'criticos',
             label: 'Críticos',
-            value: dashboardCriticalTicketsCurrent.length,
-            note: dashboardCriticalTrend.label,
-            noteClass: dashboardCriticalTrend.toneClass,
+            value: dashboardBacklogCriticalTickets.length,
+            note: 'Backlog actual',
+            noteClass: 'text-amber-600',
             skin: 'bg-amber-50 border-amber-200 hover:border-amber-300',
             labelClass: 'text-amber-600',
             valueClass: 'text-amber-700',
@@ -199,9 +207,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {
             key: 'sla',
             label: 'SLA vencido',
-            value: dashboardSlaExpiredCount,
-            note: dashboardSlaTrend.label,
-            noteClass: dashboardSlaTrend.toneClass,
+            value: dashboardBacklogSlaExpiredCount,
+            note: 'Backlog actual',
+            noteClass: 'text-red-600',
             skin: 'bg-red-50 border-red-200 hover:border-red-300',
             labelClass: 'text-red-600',
             valueClass: 'text-red-700',
@@ -222,6 +230,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </Button>
         ))}
       </div>
+
+      <section className="space-y-4" aria-labelledby="period-metrics-title">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Métricas del período</p>
+          <h3 id="period-metrics-title" className="text-lg font-black uppercase text-slate-800">Actividad histórica · {dashboardWindow.label}</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Creados', value: dashboardCreatedCount, trend: dashboardCreatedTrend },
+            { label: 'Resueltos', value: dashboardResolvedCount, trend: dashboardResolvedTrend },
+            { label: 'Cerrados', value: dashboardClosedCount, trend: dashboardClosedTrend },
+            { label: 'Cumplimiento SLA', value: dashboardSlaCompliancePct === null ? 'N/D' : `${dashboardSlaCompliancePct}%`, trend: dashboardSlaComplianceTrend },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p>
+              <p className="mt-2 text-3xl font-black text-slate-700 tabular-nums">{metric.value}</p>
+              <p className={`mt-2 text-[10px] font-black uppercase ${metric.trend.toneClass}`}>{metric.trend.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl p-8">
@@ -425,15 +454,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-black uppercase text-slate-600">SLA Cumplido</p>
-              <p className="text-xl font-black text-green-600">{dashboardSlaCompliancePct}%</p>
+              <p className="text-xl font-black text-green-600">{dashboardSlaCompliancePct === null ? 'N/D' : `${dashboardSlaCompliancePct}%`}</p>
             </div>
             <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${dashboardSlaCompliancePct}%` }} />
+              <div className="h-full bg-green-500" style={{ width: `${dashboardSlaCompliancePct ?? 0}%` }} />
             </div>
             <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-500">
               <span>Cumplidos: {dashboardSlaCompliantCount}</span>
-              <span>Vencidos: {dashboardSlaExpiredCount}</span>
-              <span>Total: {dashboardSlaTotalCount}</span>
+              <span>Incumplidos: {dashboardSlaTotalCount - dashboardSlaCompliantCount}</span>
+              <span>Evaluables: {dashboardSlaTotalCount}</span>
             </div>
           </div>
 

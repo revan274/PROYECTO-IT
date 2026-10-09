@@ -62,6 +62,7 @@ type SupplySnapshot = {
 interface ReportsViewProps {
   openReportExecutivePresentation: () => void;
   exportReportExcel: () => void;
+  exportReportCsv: () => void;
   exportReportPdf: () => void;
   reportDateFrom: string;
   setReportDateFrom: React.Dispatch<React.SetStateAction<string>>;
@@ -125,11 +126,19 @@ interface ReportsViewProps {
   reportOpenCount: number;
   reportOpenTrend: Trend;
   reportClosedCount: number;
-  reportSlaCompliancePct: number;
+  reportSlaCompliancePct: number | null;
   reportSlaCompliantCount: number;
   reportSlaTotalCount: number;
   reportSlaComplianceTrend: Trend;
   reportSlaExpiredCount: number;
+  reportAvgFirstResponseHours: number | null;
+  reportMedianFirstResponseHours: number | null;
+  reportP90FirstResponseHours: number | null;
+  reportFirstResponseMedianTrend: Trend;
+  reportAvgResolutionHours: number | null;
+  reportMedianResolutionHours: number | null;
+  reportP90ResolutionHours: number | null;
+  reportMttrMedianTrend: Trend;
   reportTrendMode: 'DIARIA' | 'SEMANAL';
   reportCreatedInPeriodCount: number;
   reportClosedInPeriodCount: number;
@@ -167,6 +176,7 @@ interface ReportsViewProps {
 export function ReportsView({
   openReportExecutivePresentation,
   exportReportExcel,
+  exportReportCsv,
   exportReportPdf,
   reportDateFrom,
   setReportDateFrom,
@@ -235,6 +245,14 @@ export function ReportsView({
   reportSlaTotalCount,
   reportSlaComplianceTrend,
   reportSlaExpiredCount,
+  reportAvgFirstResponseHours,
+  reportMedianFirstResponseHours,
+  reportP90FirstResponseHours,
+  reportFirstResponseMedianTrend,
+  reportAvgResolutionHours,
+  reportMedianResolutionHours,
+  reportP90ResolutionHours,
+  reportMttrMedianTrend,
   reportTrendMode,
   reportCreatedInPeriodCount,
   reportClosedInPeriodCount,
@@ -284,12 +302,21 @@ export function ReportsView({
               Exportar Excel
             </Button>
             <Button variant="plain" size="bare"
+              onClick={exportReportCsv}
+              className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase text-emerald-700 hover:bg-emerald-100"
+            >
+              Exportar CSV
+            </Button>
+            <Button variant="plain" size="bare"
               onClick={exportReportPdf}
               className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 text-xs font-black uppercase text-blue-700 hover:bg-blue-100"
             >
               Exportar PDF
             </Button>
           </div>
+          <p className="text-xs font-bold text-slate-500" aria-live="polite">
+            Exportando {reportTicketsCount} registros según los filtros de Reportería
+          </p>
         </div>
 
         <div className="p-8 border-b border-slate-50 space-y-4">
@@ -590,9 +617,9 @@ export function ReportsView({
         </div>
         <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Cumplimiento SLA</p>
-          <p className="text-3xl font-black text-green-700">{reportSlaCompliancePct}%</p>
+          <p className="text-3xl font-black text-green-700">{reportSlaCompliancePct === null ? 'N/D' : `${reportSlaCompliancePct}%`}</p>
           <p className="text-[10px] font-black uppercase tracking-widest text-green-600">
-            {reportSlaCompliantCount}/{reportSlaTotalCount} en tiempo
+            {reportSlaTotalCount > 0 ? `${reportSlaCompliantCount}/${reportSlaTotalCount} resueltos en tiempo` : 'Sin resoluciones evaluables'}
           </p>
           {hasReportComparison && (
             <p className={`text-[10px] font-black uppercase tracking-wider mt-2 ${reportSlaComplianceTrend.toneClass}`}>
@@ -609,6 +636,56 @@ export function ReportsView({
           <p className="text-3xl font-black text-amber-600">{reportTravelCount}</p>
         </div>
       </div>
+
+      <section className="rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8" aria-labelledby="first-response-title">
+        <div className="mb-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Atención inicial</p>
+          <h4 id="first-response-title" className="text-base font-black uppercase text-slate-800">Tiempo de primera respuesta</h4>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Desde la creación hasta la primera atención. No es tiempo de resolución.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Promedio', value: reportAvgFirstResponseHours },
+            { label: 'Mediana', value: reportMedianFirstResponseHours },
+            { label: 'P90', value: reportP90FirstResponseHours },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p>
+              <p className="mt-2 text-3xl font-black text-indigo-700 tabular-nums">{metric.value === null ? 'N/D' : `${metric.value} h`}</p>
+              {metric.label === 'Mediana' && hasReportComparison && (
+                <p className={`mt-2 text-[10px] font-black uppercase tracking-wider ${reportFirstResponseMedianTrend.toneClass}`}>
+                  {reportFirstResponseMedianTrend.label}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-xl sm:p-8" aria-labelledby="resolution-time-title">
+        <div className="mb-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución técnica</p>
+          <h4 id="resolution-time-title" className="text-base font-black uppercase text-slate-800">MTTR por ciclo resuelto</h4>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Inicio del ciclo → resolución. El cierre administrativo no interviene.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Promedio', value: reportAvgResolutionHours },
+            { label: 'Mediana', value: reportMedianResolutionHours },
+            { label: 'P90', value: reportP90ResolutionHours },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p>
+              <p className="mt-2 text-3xl font-black text-emerald-700 tabular-nums">{metric.value === null ? 'N/D' : `${metric.value} h`}</p>
+              {metric.label === 'Mediana' && hasReportComparison && (
+                <p className={`mt-2 text-[10px] font-black uppercase tracking-wider ${reportMttrMedianTrend.toneClass}`}>
+                  {reportMttrMedianTrend.label}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 space-y-5 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">

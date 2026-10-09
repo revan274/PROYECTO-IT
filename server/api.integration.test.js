@@ -85,6 +85,11 @@ function createTicket({
   solicitadoPorUsername,
   departamento,
   asignadoA = '',
+  activoId,
+  areaId = 'AREA_CAJAS',
+  areaNombre = 'Línea de cajas',
+  categoriaId = 'CAT_POS',
+  categoriaNombre = 'Punto de venta',
 }) {
   return {
     id,
@@ -103,6 +108,11 @@ function createTicket({
     solicitadoPorUsername,
     departamento,
     asignadoA,
+    activoId,
+    areaId,
+    areaNombre,
+    categoriaId,
+    categoriaNombre,
     attachments: [],
     historial: [
       {
@@ -132,6 +142,7 @@ function buildFixtureDb() {
         tipo: 'POS',
         marca: 'IBM',
         ubicacion: 'Caja 1',
+        departamento: 'TJ01',
         estado: 'Operativo',
         serial: 'POS-001-SN',
         fechaCompra: '2025-01-10',
@@ -143,6 +154,7 @@ function buildFixtureDb() {
         tipo: 'Báscula',
         marca: 'Datalogic',
         ubicacion: 'Frutas',
+        departamento: 'TJ01',
         estado: 'Falla',
         serial: 'BAS-010-SN',
         fechaCompra: '2024-08-14',
@@ -163,6 +175,7 @@ function buildFixtureDb() {
     tickets: [
       createTicket({
         id: 701,
+        activoId: 1,
         activoTag: 'POS-001',
         descripcion: 'La terminal no sincroniza ventas.',
         prioridad: 'MEDIA',
@@ -179,6 +192,7 @@ function buildFixtureDb() {
       }),
       createTicket({
         id: 702,
+        activoId: 2,
         activoTag: 'BAS-010',
         descripcion: 'Báscula sin comunicación con caja.',
         prioridad: 'ALTA',
@@ -194,6 +208,8 @@ function buildFixtureDb() {
         solicitadoPorUsername: ADMIN_USER.username,
         departamento: ADMIN_USER.departamento,
         asignadoA: TECH_USER.nombre,
+        categoriaId: 'CAT_PERIFERICOS',
+        categoriaNombre: 'Periféricos de caja',
       }),
     ],
     auditoria: [],
@@ -250,6 +266,9 @@ async function startTestServer(dbFile, attachmentsDir) {
       NODE_ENV: 'test',
       PORT: String(port),
       DB_FILE: dbFile,
+      // Las pruebas de integración siempre usan su JSON efímero aunque exista un
+      // DATABASE_URL en el .env local del desarrollador.
+      DATABASE_URL: '',
       // Deliberadamente FUERA del árbol de DB_FILE: es la configuración de producción
       // recomendada (volumen persistente) y la que rompía la resolución de rutas.
       ATTACHMENTS_DIR: attachmentsDir,
@@ -323,18 +342,30 @@ async function requestJson(urlPath, {
 } = {}) {
   assert.ok(serverRuntime?.baseUrl, 'El servidor de integracion no fue inicializado.');
 
+  // La clasificación es parte del contrato mínimo de creación. Los casos históricos
+  // de esta suite heredan una clasificación válida para que cada prueba siga enfocada
+  // en su propia regla; las pruebas de clasificación envían valores explícitos.
+  const isTicketCreation = method === 'POST' && (urlPath === '/api/tickets' || urlPath === '/api/tickets/historical');
+  const effectiveBody = isTicketCreation && body && typeof body === 'object'
+    ? {
+        ...body,
+        ...(!Object.hasOwn(body, 'areaId') ? { areaId: 'AREA_CAJAS' } : {}),
+        ...(!Object.hasOwn(body, 'categoriaId') ? { categoriaId: 'CAT_POS' } : {}),
+      }
+    : body;
+
   const headers = {
     Accept: 'application/json',
     ...extraHeaders,
   };
 
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (effectiveBody !== undefined) headers['Content-Type'] = 'application/json';
 
   const response = await fetch(`${serverRuntime.baseUrl}${urlPath}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: effectiveBody === undefined ? undefined : JSON.stringify(effectiveBody),
   });
 
   const raw = await response.text();
@@ -392,7 +423,7 @@ test('push: guarda la suscripción en el usuario autenticado y permite retirarla
   assert.match(config.response.headers.get('cache-control') || '', /no-store/i);
 
   const subscription = {
-    endpoint: 'https://push.example.test/subscription/integration',
+    endpoint: 'https://fcm.googleapis.com/subscription/integration',
     keys: { p256dh: 'a'.repeat(88), auth: 'b'.repeat(24) },
   };
   const created = await requestJson('/api/push/subscriptions', {
@@ -424,8 +455,8 @@ test('GET /api/bootstrap limita el payload para solicitantes', async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(data.activos, [
-    { id: 1, tag: 'POS-001', tipo: 'POS', ubicacion: 'Caja 1', departamento: '' },
-    { id: 2, tag: 'BAS-010', tipo: 'BÁSCULA', ubicacion: 'Frutas', departamento: '' },
+    { id: 1, tag: 'POS-001', tipo: 'POS', ubicacion: 'Caja 1', departamento: 'TJ01' },
+    { id: 2, tag: 'BAS-010', tipo: 'BÁSCULA', ubicacion: 'Frutas', departamento: 'TJ01' },
   ]);
   assert.deepEqual(data.insumos, []);
   assert.deepEqual(data.users, []);
@@ -434,6 +465,11 @@ test('GET /api/bootstrap limita el payload para solicitantes', async () => {
   assert.equal(data.tickets.length, 1);
   assert.equal(data.tickets[0].id, 701);
   assert.equal(data.tickets[0].solicitadoPorUsername, REQUESTER_USER.username);
+  assert.equal(Object.hasOwn(data.tickets[0], 'historial'), false);
+  assert.equal(Object.hasOwn(data.tickets[0], 'attachments'), false);
+  assert.equal(data.tickets[0].historialCount, 1);
+  assert.equal(data.tickets[0].attachmentCount, 0);
+  assert.equal(data.tickets[0].ultimoComentario, 'Generado para prueba de integracion');
   assert.equal(data.riskSummary, undefined);
   assert.equal(Array.isArray(data.ticketStates), true);
   assert.equal(typeof data.meta.generatedAt, 'string');
@@ -448,7 +484,7 @@ test('GET /api/bootstrap responde 304 cuando la revisión no cambió', async () 
   assert.equal(first.response.status, 200, JSON.stringify(first.data));
   const etag = first.response.headers.get('etag');
   assert.equal(typeof etag, 'string');
-  assert.ok(etag?.startsWith('W/"mesa-it-bootstrap-v2-'));
+  assert.ok(etag?.startsWith('W/"mesa-it-bootstrap-v3-'));
   assert.equal(Number.isFinite(Number(first.data?.meta?.revision)), true);
   assert.match(first.response.headers.get('vary') || '', /Authorization/i);
 
@@ -477,9 +513,55 @@ test('GET /api/tickets pagina y ordena tickets para administradores', async () =
   assert.equal(data.items.length, 1);
   assert.equal(data.items[0].id, 702);
   assert.equal(data.items[0].activoTag, 'BAS-010');
-  assert.equal(Array.isArray(data.items[0].attachments), true);
+  assert.equal(Object.hasOwn(data.items[0], 'historial'), false);
+  assert.equal(Object.hasOwn(data.items[0], 'attachments'), false);
+  assert.equal(data.items[0].historialCount, 1);
+  assert.equal(data.items[0].attachmentCount, 0);
   assert.equal(typeof data.items[0].slaVencido, 'boolean');
   assert.equal(typeof data.items[0].slaRestanteMin, 'number');
+});
+
+test('GET /api/tickets/:id carga el expediente completo bajo demanda y respeta el alcance', async () => {
+  const admin = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const detail = await requestJson('/api/tickets/702', { token: admin.token });
+
+  assert.equal(detail.response.status, 200, JSON.stringify(detail.data));
+  assert.equal(detail.data.id, 702);
+  assert.equal(Array.isArray(detail.data.historial), true);
+  assert.equal(detail.data.historial.length, 1);
+  assert.equal(Array.isArray(detail.data.attachments), true);
+  assert.match(detail.response.headers.get('cache-control') || '', /no-store/i);
+
+  const requester = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const ownDetail = await requestJson('/api/tickets/701', { token: requester.token });
+  assert.equal(ownDetail.response.status, 200, JSON.stringify(ownDetail.data));
+  assert.equal(ownDetail.data.id, 701);
+
+  const foreignDetail = await requestJson('/api/tickets/702', { token: requester.token });
+  assert.equal(foreignDetail.response.status, 404);
+});
+
+test('GET /api/tickets usa el contrato compartido de búsqueda con múltiples términos', async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const cases = [
+    ['701 solicitante terminal norte punto', 701],
+    ['702 tecnico bascula datalogic perifer', 702],
+    ['sincroniza pos-001', 701],
+  ];
+
+  for (const [query, expectedId] of cases) {
+    const { response, data } = await requestJson(`/api/tickets?search=${encodeURIComponent(query)}`, {
+      token: session.token,
+    });
+    assert.equal(response.status, 200, JSON.stringify(data));
+    assert.deepEqual(data.map((ticket) => ticket.id), [expectedId]);
+  }
+
+  const noMatch = await requestJson('/api/tickets?search=701%20termino-inexistente', {
+    token: session.token,
+  });
+  assert.equal(noMatch.response.status, 200);
+  assert.deepEqual(noMatch.data, []);
 });
 
 test('GET /api/bootstrap sanea credenciales remotas legacy en API y runtime DB', async () => {
@@ -798,7 +880,7 @@ test('resolver un ticket mantiene el activo en falla si existe otro ticket abier
     method: 'PATCH',
     token: session.token,
     body: {
-      comentario: 'Atendido en sitio',
+      solucionAplicada: 'Atendido en sitio',
     },
   });
 
@@ -1005,13 +1087,15 @@ test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { con
     token: session.token,
     body: {
       estado: 'Resuelto',
+      solucionAplicada: 'Se corrigio la incidencia de prueba',
     },
   });
 
   assert.equal(firstClose.response.status, 200, JSON.stringify(firstClose.data));
   assert.equal(firstClose.data.estado, 'Resuelto');
-  assert.equal(typeof firstClose.data.fechaCierre, 'string');
-  const firstClosedAt = firstClose.data.fechaCierre;
+  assert.equal(firstClose.data.fechaCierre, null);
+  assert.equal(typeof firstClose.data.fechaResolucion, 'string');
+  const firstClosedAt = firstClose.data.fechaResolucion;
 
   await delay(20);
 
@@ -1020,15 +1104,19 @@ test('reabrir y cerrar de nuevo un ticket limpia y recalcula fechaCierre', { con
     token: session.token,
     body: {
       estado: 'Abierto',
+      motivoReapertura: 'Falla recurrente',
     },
   });
 
   assert.equal(reopened.response.status, 200, JSON.stringify(reopened.data));
   assert.equal(reopened.data.estado, 'Abierto');
-  assert.equal(reopened.data.fechaCierre, undefined);
+  assert.equal(reopened.data.fechaCierre, null);
+  assert.equal(reopened.data.fechaResolucion, null);
+  assert.ok(reopened.data.historial.some((event) => event.fechaResolucion === firstClosedAt));
 
   await delay(20);
 
+  assert.equal((await requestJson('/api/tickets/701/resolve', { method: 'PATCH', token: session.token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } })).response.status, 200);
   const secondClose = await requestJson('/api/tickets/701', {
     method: 'PATCH',
     token: session.token,
@@ -1721,4 +1809,547 @@ test('usuarios: conserva la trazabilidad de tickets y sus asignaciones al admini
   });
   assert.equal(removed.response.status, 409, JSON.stringify(removed.data));
   assert.match(removed.data.error, /tickets asociados/i);
+});
+
+test('TASK-HD-001 preserva relaciones al renombrar/importar y bloquea borrados referenciados', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const token = session.token;
+  const originalBranches = (await readPersistedDb()).catalogos.sucursales;
+  const branches = [...originalBranches, { code: 'ZZ99', name: 'Prueba integridad', activo: true }];
+  assert.equal((await requestJson('/api/catalogos', { method: 'PATCH', token, body: { sucursales: branches } })).response.status, 200);
+  const assetPayload = { tag: 'REF-001', tipo: 'Laptop', marca: 'Dell', serial: 'REF-SERIAL', ubicacion: 'TJ01 | IT', departamento: 'TJ01', fechaCompra: '2025-01-01' };
+  const asset = await requestJson('/api/activos', { method: 'POST', token, body: assetPayload });
+  assert.equal(asset.response.status, 201, JSON.stringify(asset.data));
+  const ticketPayload = { activoTag: 'REF-001', descripcion: 'Referencia estable', sucursal: 'TJ01', prioridad: 'MEDIA', atencionTipo: 'REMOTO' };
+  const ticket = await requestJson('/api/tickets', { method: 'POST', token, body: ticketPayload });
+  assert.equal(ticket.response.status, 201, JSON.stringify(ticket.data));
+  assert.equal(ticket.data.activoId, asset.data.id);
+  for (const endpoint of ['/api/tickets', '/api/tickets/historical']) {
+    const mismatch = await requestJson(endpoint, { method: 'POST', token, body: { ...ticketPayload, sucursal: 'ZZ99', estado: 'Abierto', fechaCreacion: '2025-01-02T12:00:00.000Z' } });
+    assert.equal(mismatch.response.status, 400, JSON.stringify(mismatch.data));
+    assert.match(mismatch.data.error, /sucursal del activo/);
+  }
+  const renamed = await requestJson(`/api/activos/${asset.data.id}`, { method: 'PATCH', token, body: { ...assetPayload, tag: 'REF-002' } });
+  assert.equal(renamed.response.status, 200, JSON.stringify(renamed.data));
+  let persisted = await readPersistedDb();
+  let linked = persisted.tickets.find((item) => item.id === ticket.data.id);
+  assert.equal(linked.activoTag, 'REF-002');
+  assert.equal(linked.activoId, asset.data.id);
+  assert.deepEqual(linked.historial, ticket.data.historial);
+  const imported = await requestJson('/api/activos/import', { method: 'POST', token, body: { upsert: true, items: [{ ...assetPayload, tag: 'REF-003' }] } });
+  assert.equal(imported.response.status, 200, JSON.stringify(imported.data));
+  assert.equal(imported.data.updated, 1, JSON.stringify(imported.data));
+  persisted = await readPersistedDb();
+  linked = persisted.tickets.find((item) => item.id === ticket.data.id);
+  assert.equal(linked.activoTag, 'REF-003');
+  assert.equal(linked.activoId, asset.data.id);
+  const beforeDeleteCount = persisted.activos.length;
+  for (const endpoint of [`/api/activos/${asset.data.id}`, '/api/activos']) {
+    const deleted = await requestJson(endpoint, { method: 'DELETE', token });
+    assert.equal(deleted.response.status, 409, JSON.stringify(deleted.data));
+    assert.equal((await readPersistedDb()).activos.length, beforeDeleteCount);
+  }
+  const removedBranch = await requestJson('/api/catalogos', { method: 'PATCH', token, body: { sucursales: branches.filter((branch) => branch.code !== 'TJ01') } });
+  assert.equal(removedBranch.response.status, 409, JSON.stringify(removedBranch.data));
+  const disabledBranch = await requestJson('/api/catalogos', { method: 'PATCH', token, body: { sucursales: branches.map((branch) => ({ ...branch, activo: branch.code !== 'TJ01' })) } });
+  assert.equal(disabledBranch.response.status, 200, JSON.stringify(disabledBranch.data));
+  assert.equal((await readPersistedDb()).tickets.find((item) => item.id === ticket.data.id).sucursal, 'TJ01');
+  assert.equal((await requestJson('/api/catalogos', { method: 'PATCH', token, body: { sucursales: originalBranches } })).response.status, 200);
+  const unlinked = await requestJson('/api/activos', { method: 'POST', token, body: { ...assetPayload, tag: 'UNLINKED', serial: 'UNLINKED' } });
+  assert.equal(unlinked.response.status, 201, JSON.stringify(unlinked.data));
+  assert.equal((await requestJson(`/api/activos/${unlinked.data.id}`, { method: 'DELETE', token })).response.status, 200);
+});
+
+test('TASK-HD-002 cancelacion conserva expediente y binarios; purga y reactivacion bloqueadas', { concurrency: false }, async () => {
+  const admin = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const tech = await login(TECH_USER.username, TECH_PASSWORD);
+  const requester = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const body = { activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Expediente conservado', prioridad: 'MEDIA' };
+  const created = await requestJson('/api/tickets', { method: 'POST', token: requester.token, body });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const url = `/api/tickets/${created.data.id}`;
+  const content = Buffer.from('evidencia que debe conservarse');
+  const upload = await requestJson(`${url}/attachments`, { method: 'POST', token: requester.token,
+    body: { fileName: 'evidencia.txt', mimeType: 'text/plain', contentBase64: content.toString('base64') } });
+  assert.equal(upload.response.status, 201, JSON.stringify(upload.data));
+  const original = (await readPersistedDb()).tickets.find((item) => item.id === created.data.id);
+  const missingReason = await requestJson(`${url}/retention`, { method: 'POST', token: tech.token, body: { accion: 'cancelar', motivo: ' ' } });
+  assert.equal(missingReason.response.status, 400);
+  const bypass = await requestJson(url, { method: 'PATCH', token: tech.token, body: { estado: 'cancelado' } });
+  assert.equal(bypass.response.status, 400);
+  const cancelled = await requestJson(`${url}/retention`, { method: 'POST', token: requester.token, body: { accion: 'cancelar', motivo: 'Solicitud duplicada por llamada' } });
+  assert.equal(cancelled.response.status, 200, JSON.stringify(cancelled.data));
+  assert.equal(cancelled.data.estado, 'Cancelado');
+  assert.equal(cancelled.data.cancelacion.usuarioId, REQUESTER_USER.id);
+  assert.equal(cancelled.data.cancelacion.estadoAnterior, 'Abierto');
+  assert.equal(new Date(cancelled.data.cancelacion.fecha).toISOString(), cancelled.data.cancelacion.fecha);
+  assert.deepEqual(cancelled.data.historial.slice(1), original.historial);
+  assert.deepEqual(cancelled.data.attachments, original.attachments);
+  for (const token of [tech.token, admin.token, requester.token]) {
+    assert.equal((await requestJson(url, { method: 'DELETE', token })).response.status, 403);
+  }
+  assert.equal((await requestJson(url, { method: 'PATCH', token: admin.token, body: { estado: 'Abierto' } })).response.status, 409);
+  assert.equal((await requestJson(`${url}/resolve`, { method: 'PATCH', token: tech.token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } })).response.status, 409);
+  const attachmentId = original.attachments[0].id;
+  assert.equal((await requestJson(`${url}/attachments/${attachmentId}`, { method: 'DELETE', token: admin.token })).response.status, 409);
+  const download = await fetch(`${serverRuntime.baseUrl}${url}/attachments/${attachmentId}/download`, { headers: { Authorization: `Bearer ${requester.token}` } });
+  assert.equal(download.status, 200);
+  assert.deepEqual(Buffer.from(await download.arrayBuffer()), content);
+  const archived = await requestJson(`${url}/retention`, { method: 'POST', token: admin.token, body: { accion: 'archivar', motivo: 'Expediente finalizado' } });
+  assert.equal(archived.response.status, 200, JSON.stringify(archived.data));
+  assert.equal(archived.data.estado, 'Cancelado');
+  assert.equal(archived.data.archivo.estadoAnterior, 'Cancelado');
+  const other = await requestJson('/api/tickets', { method: 'POST', token: admin.token, body: { ...body, atencionTipo: 'REMOTO' } });
+  assert.equal(other.response.status, 201, JSON.stringify(other.data));
+  const forbidden = await requestJson(`/api/tickets/${other.data.id}/retention`, { method: 'POST', token: requester.token, body: { accion: 'cancelar', motivo: 'Ajeno' } });
+  assert.equal(forbidden.response.status, 403);
+  assert.equal((await requestJson(`/api/tickets/${other.data.id}/retention`, { method: 'POST', token: admin.token, body: { accion: 'archivar', motivo: 'Pendiente' } })).response.status, 409);
+  assert.equal((await requestJson(`/api/tickets/${other.data.id}/resolve`, { method: 'PATCH', token: tech.token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } })).response.status, 200);
+  const archivedResolved = await requestJson(`/api/tickets/${other.data.id}/retention`, { method: 'POST', token: tech.token, body: { accion: 'archivar', motivo: 'Atencion terminada' } });
+  assert.equal(archivedResolved.response.status, 200);
+  assert.equal(archivedResolved.data.estado, 'Resuelto');
+});
+
+test('TASK-HD-003 rechaza destinos push no aprobados sin reflejar tokens', async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  for (const endpoint of ['https://localhost/SECRET', 'https://internal.example/SECRET', 'https://fcm.googleapis.com.evil.test/SECRET']) {
+    const result = await requestJson('/api/push/subscriptions', { method: 'POST', token: session.token,
+      body: { endpoint, keys: { p256dh: 'a'.repeat(88), auth: 'b'.repeat(24) } } });
+    assert.equal(result.response.status, 400);
+    assert.doesNotMatch(JSON.stringify(result.data), /SECRET|localhost|internal\.example/);
+  }
+  assert.equal((await readPersistedDb()).pushSubscriptions.some((item) => item.endpoint.includes('SECRET')), false);
+});
+
+test('TASK-HD-004 API separa primera atencion, resolucion y cierre sin sobrescritura', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const token = session.token;
+  const created = await requestJson('/api/tickets', { method: 'POST', token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Hitos independientes', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const url = `/api/tickets/${created.data.id}`;
+  assert.equal(created.data.fechaPrimeraAtencion, null);
+  const assigned = await requestJson(url, { method: 'PATCH', token, body: { asignadoA: TECH_USER.username } });
+  assert.equal(assigned.data.fechaPrimeraAtencion, null, 'asignar no equivale a atender');
+  const working = await requestJson(url, { method: 'PATCH', token, body: { estado: 'En Proceso' } });
+  assert.equal(working.response.status, 200);
+  assert.ok(working.data.fechaPrimeraAtencion);
+  await delay(10);
+  const resolved = await requestJson(`${url}/resolve`, { method: 'PATCH', token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } });
+  assert.equal(resolved.response.status, 200);
+  assert.equal(resolved.data.fechaCierre, null);
+  assert.equal(resolved.data.fechaPrimeraAtencion, working.data.fechaPrimeraAtencion);
+  assert.ok(resolved.data.fechaResolucion > working.data.fechaPrimeraAtencion);
+  await delay(10);
+  const closed = await requestJson(url, { method: 'PATCH', token, body: { estado: 'Cerrado' } });
+  assert.equal(closed.response.status, 200);
+  assert.equal(closed.data.fechaResolucion, resolved.data.fechaResolucion);
+  assert.ok(closed.data.fechaCierre > resolved.data.fechaResolucion);
+  assert.equal(closed.data.fechaCreacion, created.data.fechaCreacion);
+  for (const entry of closed.data.historial) assert.equal(new Date(entry.fecha).toISOString(), entry.fecha);
+});
+
+test('TASK-HD-005 transiciones y reapertura requieren motivo y preservan autor', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const token = session.token;
+  const created = await requestJson('/api/tickets', { method: 'POST', token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Maquina de estados', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201);
+  const url = `/api/tickets/${created.data.id}`;
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'Cerrado' } })).response.status, 409);
+  assert.equal((await requestJson(`${url}/resolve`, { method: 'PATCH', token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } })).response.status, 200);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'Cerrado' } })).response.status, 200);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { asignadoA: ADMIN_USER.nombre } })).response.status, 409);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'En Proceso' } })).response.status, 409);
+  assert.equal((await requestJson(`${url}/resolve`, { method: 'PATCH', token, body: { solucionAplicada: 'Se corrigio la incidencia de prueba' } })).response.status, 409);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'Abierto' } })).response.status, 400);
+  const reopened = await requestJson(url, { method: 'PATCH', token, body: { estado: 'Abierto', motivoReapertura: 'Persisten los sintomas' } });
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.data));
+  assert.equal(reopened.data.ultimaReapertura.usuarioId, TECH_USER.id);
+  assert.equal(reopened.data.ultimaReapertura.estadoAnterior, 'Cerrado');
+  assert.equal(reopened.data.historial[0].tipo, 'reapertura');
+  assert.equal(reopened.data.historial[0].motivo, 'Persisten los sintomas');
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'En Proceso' } })).response.status, 200);
+});
+
+test('TASK-HD-006 API exige solucion tanto en resolve como PATCH y conserva diagnostico', async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const token = session.token;
+  const created = await requestJson('/api/tickets', { method: 'POST', token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Solucion verificable', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201);
+  const url = `/api/tickets/${created.data.id}`;
+  for (const endpoint of [url, `${url}/resolve`]) {
+    for (const solucionAplicada of [undefined, '', '   ', 123, 'a'.repeat(8001)]) {
+      const result = await requestJson(endpoint, { method: 'PATCH', token, body: { estado: 'Resuelto', solucionAplicada } });
+      assert.equal(result.response.status, 400, JSON.stringify(result.data));
+    }
+  }
+  assert.equal((await readPersistedDb()).tickets.find((ticket) => ticket.id === created.data.id).estado, 'Abierto');
+  const resolved = await requestJson(`${url}/resolve`, { method: 'PATCH', token,
+    body: { solucionAplicada: 'Se reemplazo el cable', diagnostico: 'Cable danado' } });
+  assert.equal(resolved.response.status, 200);
+  assert.equal(resolved.data.solucionAplicada, 'Se reemplazo el cable');
+  assert.equal(resolved.data.diagnostico, 'Cable danado');
+  assert.equal(resolved.data.historial[0].solucionAplicada, 'Se reemplazo el cable');
+  assert.equal(resolved.data.historial[0].actorId, TECH_USER.id);
+});
+
+test('TASK-HD-007 reapertura conserva ciclo completo y nueva atencion no altera hitos anteriores', async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const token = session.token;
+  const created = await requestJson('/api/tickets', { method: 'POST', token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Ciclos verificables', prioridad: 'MEDIA', atencionTipo: 'REMOTO', asignadoA: TECH_USER.username,
+  } });
+  assert.equal(created.response.status, 201);
+  const url = `/api/tickets/${created.data.id}`;
+  assert.equal(created.data.ciclos.length, 1);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'En Proceso' } })).response.status, 200);
+  assert.equal((await requestJson(`${url}/resolve`, { method: 'PATCH', token, body: { solucionAplicada: 'Primera solucion' } })).response.status, 200);
+  const closed = await requestJson(url, { method: 'PATCH', token, body: { estado: 'Cerrado' } });
+  assert.equal(closed.response.status, 200);
+  const originalCycle = structuredClone(closed.data.ciclos[0]);
+  const firstAttention = closed.data.fechaPrimeraAtencion;
+  const reopened = await requestJson(url, { method: 'PATCH', token, body: { estado: 'Abierto', motivoReapertura: 'Recurrencia comprobada' } });
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.data));
+  assert.equal(reopened.data.ciclos.length, 2);
+  assert.deepEqual(reopened.data.ciclos[0], originalCycle);
+  assert.equal(reopened.data.ciclos[1].fechaPrimeraAtencion, null);
+  assert.equal(reopened.data.solucionAplicada, null);
+  await delay(10);
+  assert.equal((await requestJson(url, { method: 'PATCH', token, body: { estado: 'En Proceso' } })).response.status, 200);
+  const resolvedAgain = await requestJson(`${url}/resolve`, { method: 'PATCH', token, body: { solucionAplicada: 'Segunda solucion' } });
+  assert.equal(resolvedAgain.response.status, 200);
+  assert.equal(resolvedAgain.data.fechaPrimeraAtencion, firstAttention);
+  assert.deepEqual(resolvedAgain.data.ciclos[0], originalCycle);
+  assert.ok(resolvedAgain.data.ciclos[1].fechaPrimeraAtencion > firstAttention);
+  assert.equal(resolvedAgain.data.ciclos[1].solucionAplicada, 'Segunda solucion');
+  const stored = (await readPersistedDb()).tickets.find((ticket) => ticket.id === created.data.id);
+  assert.deepEqual(stored.ciclos[0], originalCycle);
+});
+
+test('TASK-HD-008 exige clasificación compatible y conserva etiquetas históricas', { concurrency: false }, async () => {
+  const session = await login(ADMIN_USER.username, ADMIN_PASSWORD);
+  const valid = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Clasificación estructurada', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    areaId: 'AREA_CAJAS', categoriaId: 'CAT_POS',
+  } });
+  assert.equal(valid.response.status, 201, JSON.stringify(valid.data));
+  assert.equal(valid.data.areaNombre, 'Línea de cajas');
+  assert.equal(valid.data.categoriaNombre, 'Punto de venta');
+
+  const mismatch = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Par incompatible', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    areaId: 'AREA_GERENCIA', categoriaId: 'CAT_POS',
+  } });
+  assert.equal(mismatch.response.status, 400);
+
+  const current = await requestJson('/api/catalogos', { token: session.token });
+  assert.equal(current.response.status, 200);
+  const customArea = { id: 'AREA_LABORATORIO', nombre: 'Laboratorio', activo: true };
+  const customCategory = { id: 'CAT_EQUIPO_LAB', areaId: customArea.id, nombre: 'Equipo de laboratorio', activo: true };
+  const expandedAreas = [...current.data.areas, customArea];
+  const expandedCategories = [...current.data.categorias, customCategory];
+  assert.equal((await requestJson('/api/catalogos', { method: 'PATCH', token: session.token,
+    body: { areas: expandedAreas, categorias: expandedCategories } })).response.status, 200);
+
+  const customTicket = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Etiqueta histórica estable', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    areaId: customArea.id, categoriaId: customCategory.id,
+  } });
+  assert.equal(customTicket.response.status, 201, JSON.stringify(customTicket.data));
+
+  const removeUsed = await requestJson('/api/catalogos', { method: 'PATCH', token: session.token, body: {
+    areas: expandedAreas,
+    categorias: expandedCategories.filter((category) => category.id !== customCategory.id),
+  } });
+  assert.equal(removeUsed.response.status, 409);
+
+  const deactivated = await requestJson('/api/catalogos', { method: 'PATCH', token: session.token, body: {
+    areas: expandedAreas.map((area) => area.id === customArea.id ? { ...area, nombre: 'Laboratorio clínico', activo: false } : area),
+    categorias: expandedCategories.map((category) => category.id === customCategory.id ? { ...category, nombre: 'Equipo clínico', activo: false } : category),
+  } });
+  assert.equal(deactivated.response.status, 200, JSON.stringify(deactivated.data));
+  const rejectedInactive = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'No debe usar clasificación inactiva', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    areaId: customArea.id, categoriaId: customCategory.id,
+  } });
+  assert.equal(rejectedInactive.response.status, 400);
+
+  const stored = (await readPersistedDb()).tickets.find((ticket) => ticket.id === customTicket.data.id);
+  assert.equal(stored.areaNombre, 'Laboratorio');
+  assert.equal(stored.categoriaNombre, 'Equipo de laboratorio');
+});
+
+test('TASK-HD-009 reclasifica prioridad con vencimiento y trazabilidad del ciclo actual', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const invalidCreate = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Prioridad inválida', prioridad: 'URGENTE', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(invalidCreate.response.status, 400);
+  assert.match(invalidCreate.data.error, /Prioridad/);
+
+  const created = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Reclasificación auditable', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const originalDueDate = created.data.fechaLimite;
+  const updated = await requestJson(`/api/tickets/${created.data.id}`, { method: 'PATCH', token: session.token,
+    body: { prioridad: 'ALTA' } });
+  assert.equal(updated.response.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.prioridad, 'ALTA');
+  assert.ok(Date.parse(updated.data.fechaLimite) < Date.parse(originalDueDate));
+  assert.equal(updated.data.historial[0].accion, 'Prioridad Ticket');
+  assert.equal(updated.data.historial[0].prioridadAnterior, 'MEDIA');
+  assert.equal(updated.data.historial[0].prioridadNueva, 'ALTA');
+  assert.equal(updated.data.historial[0].fechaLimiteAnterior, originalDueDate);
+  assert.equal(updated.data.ciclos[0].prioridad, 'ALTA');
+
+  const invalidPatch = await requestJson(`/api/tickets/${created.data.id}`, { method: 'PATCH', token: session.token,
+    body: { prioridad: 'BAJA' } });
+  assert.equal(invalidPatch.response.status, 400);
+  assert.equal((await readPersistedDb()).tickets.find((ticket) => ticket.id === created.data.id).prioridad, 'ALTA');
+
+  assert.equal((await requestJson(`/api/tickets/${created.data.id}/resolve`, { method: 'PATCH', token: session.token,
+    body: { solucionAplicada: 'Solución registrada' } })).response.status, 200);
+  const terminalChange = await requestJson(`/api/tickets/${created.data.id}`, { method: 'PATCH', token: session.token,
+    body: { prioridad: 'CRITICA' } });
+  assert.equal(terminalChange.response.status, 409);
+});
+
+test('TASK-HD-010 separa creador y solicitante sin ampliar acceso', { concurrency: false }, async () => {
+  const tech = await login(TECH_USER.username, TECH_PASSWORD);
+  const requester = await login(REQUESTER_USER.username, REQUESTER_PASSWORD);
+  const createdForRequester = await requestJson('/api/tickets', { method: 'POST', token: tech.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Llamada registrada por soporte', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    requesterUserId: REQUESTER_USER.id,
+  } });
+  assert.equal(createdForRequester.response.status, 201, JSON.stringify(createdForRequester.data));
+  assert.equal(createdForRequester.data.createdByUserId, TECH_USER.id);
+  assert.equal(createdForRequester.data.createdBy, TECH_USER.nombre);
+  assert.equal(createdForRequester.data.requesterUserId, REQUESTER_USER.id);
+  assert.equal(createdForRequester.data.solicitadoPor, REQUESTER_USER.nombre);
+  assert.notEqual(createdForRequester.data.createdByUserId, createdForRequester.data.requesterUserId);
+
+  const requesterBootstrap = await requestJson('/api/bootstrap', { token: requester.token });
+  assert.equal(requesterBootstrap.response.status, 200);
+  assert.ok(requesterBootstrap.data.tickets.some((ticket) => ticket.id === createdForRequester.data.id));
+
+  const impersonation = await requestJson('/api/tickets', { method: 'POST', token: requester.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Intento de atribución', prioridad: 'MEDIA',
+    requesterUserId: TECH_USER.id,
+  } });
+  assert.equal(impersonation.response.status, 403);
+
+  const unknownRequester = await requestJson('/api/tickets', { method: 'POST', token: tech.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Solicitante inexistente', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    requesterUserId: 999999,
+  } });
+  assert.equal(unknownRequester.response.status, 400);
+
+  const selfCreated = await requestJson('/api/tickets', { method: 'POST', token: requester.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Autoregistro del empleado', prioridad: 'MEDIA',
+  } });
+  assert.equal(selfCreated.response.status, 201, JSON.stringify(selfCreated.data));
+  assert.equal(selfCreated.data.createdByUserId, REQUESTER_USER.id);
+  assert.equal(selfCreated.data.requesterUserId, REQUESTER_USER.id);
+});
+
+test('TASK-HD-011 permite servicios sin activo y conserva incidentes vinculados', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const beforeAsset = (await readPersistedDb()).activos.find((asset) => asset.tag === 'POS-001');
+  const service = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    tipoSolicitud: 'SOLICITUD_SERVICIO', sucursal: 'TJ01', descripcion: 'Alta de cuenta de correo', prioridad: 'CRITICA', atencionTipo: 'REMOTO',
+    activoTag: '',
+  } });
+  assert.equal(service.response.status, 201, JSON.stringify(service.data));
+  assert.equal(service.data.tipoSolicitud, 'SOLICITUD_SERVICIO');
+  assert.equal(service.data.activoId, null);
+  assert.equal(service.data.activoTag, '');
+  const afterAsset = (await readPersistedDb()).activos.find((asset) => asset.tag === 'POS-001');
+  assert.equal(afterAsset.estado, beforeAsset.estado, 'un servicio crítico sin activo no cambia inventario');
+
+  const incidentWithoutAsset = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    tipoSolicitud: 'INCIDENTE_ACTIVO', sucursal: 'TJ01', descripcion: 'Incidente incompleto', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    activoTag: '',
+  } });
+  assert.equal(incidentWithoutAsset.response.status, 400);
+
+  const relatedService = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    tipoSolicitud: 'SOLICITUD_SERVICIO', sucursal: 'TJ01', descripcion: 'Instalar software en equipo', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+    activoTag: 'POS-001',
+  } });
+  assert.equal(relatedService.response.status, 201, JSON.stringify(relatedService.data));
+  assert.equal(relatedService.data.activoId, 1);
+
+  const invalidType = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    tipoSolicitud: 'OTRO', sucursal: 'TJ01', descripcion: 'Tipo desconocido', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(invalidType.response.status, 400);
+});
+
+test('TASK-HD-013 versiona el SLA por ciclo y congela el resultado histórico', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const created = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'SLA versionado', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const url = `/api/tickets/${created.data.id}`;
+  const initialSla = created.data.ciclos[0].slaAsignado;
+  assert.match(initialSla.versionPolitica, /^sla-[a-f0-9]{16}$/);
+  assert.equal(initialSla.horasAsignadas, 24);
+  assert.equal(initialSla.fechaLimite, created.data.fechaLimite);
+  assert.equal(initialSla.cicloId, created.data.ciclos[0].id);
+  assert.equal(initialSla.cicloNumero, 1);
+  assert.equal(initialSla.calendario.zonaHoraria, 'America/Mexico_City');
+
+  const reprioritized = await requestJson(url, { method: 'PATCH', token: session.token, body: { prioridad: 'ALTA' } });
+  assert.equal(reprioritized.response.status, 200, JSON.stringify(reprioritized.data));
+  const firstCycle = reprioritized.data.ciclos[0];
+  assert.equal(firstCycle.slaAsignado.horasAsignadas, 8);
+  assert.equal(firstCycle.slaRevisiones.length, 1);
+  assert.equal(firstCycle.slaRevisiones[0].anterior.horasAsignadas, 24);
+  assert.equal(firstCycle.slaRevisiones[0].nuevo.horasAsignadas, 8);
+
+  const resolved = await requestJson(`${url}/resolve`, { method: 'PATCH', token: session.token,
+    body: { solucionAplicada: 'Atención dentro del compromiso' } });
+  assert.equal(resolved.response.status, 200, JSON.stringify(resolved.data));
+  assert.equal(resolved.data.slaResultado.estado, 'CUMPLIDO');
+  assert.equal(resolved.data.slaResultado.fechaLimite, firstCycle.slaAsignado.fechaLimite);
+  assert.equal(resolved.data.slaResultado.versionPolitica, firstCycle.slaAsignado.versionPolitica);
+  assert.equal((await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { estado: 'Cerrado' } })).response.status, 200);
+  const closed = await requestJson('/api/bootstrap', { token: session.token });
+  const closedTicket = closed.data.tickets.find((ticket) => ticket.id === created.data.id);
+  const frozenCycle = structuredClone(closedTicket.ciclos[0]);
+
+  const reopened = await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { estado: 'Abierto', motivoReapertura: 'Nuevo ciclo de atención' } });
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.data));
+  assert.deepEqual(reopened.data.ciclos[0], frozenCycle);
+  assert.equal(reopened.data.ciclos[1].slaAsignado.horasAsignadas, 8);
+  assert.equal(reopened.data.ciclos[1].slaAsignado.cicloNumero, 2);
+  assert.equal(reopened.data.slaResultado, null);
+});
+
+test('TASK-HD-014 exige motivo de espera y aplica su regla explícita de SLA', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const created = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Espera controlada', prioridad: 'ALTA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const url = `/api/tickets/${created.data.id}`;
+  const originalDueDate = created.data.fechaLimite;
+
+  const missingReason = await requestJson(url, { method: 'PATCH', token: session.token, body: { estado: 'En Espera' } });
+  assert.equal(missingReason.response.status, 400);
+  assert.equal((await readPersistedDb()).tickets.find((ticket) => ticket.id === created.data.id).estado, 'Abierto');
+
+  const waitingApproval = await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { estado: 'En Espera', motivoEspera: 'AUTORIZACION' } });
+  assert.equal(waitingApproval.response.status, 200, JSON.stringify(waitingApproval.data));
+  assert.equal(waitingApproval.data.esperaActual.motivo, 'AUTORIZACION');
+  assert.equal(waitingApproval.data.esperaActual.pausaSla, false);
+  const resumed = await requestJson(url, { method: 'PATCH', token: session.token, body: { estado: 'En Proceso' } });
+  assert.equal(resumed.response.status, 200, JSON.stringify(resumed.data));
+  assert.equal(resumed.data.fechaLimite, originalDueDate);
+  assert.equal(resumed.data.ciclos[0].esperas[0].minutosPausados, 0);
+
+  const waitingUser = await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { estado: 'En Espera', motivoEspera: 'USUARIO' } });
+  assert.equal(waitingUser.response.status, 200, JSON.stringify(waitingUser.data));
+  assert.equal(waitingUser.data.esperaActual.pausaSla, true);
+  const resolved = await requestJson(`${url}/resolve`, { method: 'PATCH', token: session.token,
+    body: { solucionAplicada: 'Respuesta recibida y aplicada' } });
+  assert.equal(resolved.response.status, 200, JSON.stringify(resolved.data));
+  assert.equal(resolved.data.esperaActual, null);
+  assert.ok(resolved.data.ciclos[0].esperas[1].fechaFin);
+  assert.equal(resolved.data.ciclos[0].slaResultado.estado, 'CUMPLIDO');
+});
+
+test('TASK-HD-021 conserva una cronología estructurada y atribuible del ticket', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const created = await requestJson('/api/tickets', { method: 'POST', token: session.token, body: {
+    activoTag: 'POS-001', sucursal: 'TJ01', descripcion: 'Cronología completa', prioridad: 'MEDIA', atencionTipo: 'REMOTO',
+  } });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const url = `/api/tickets/${created.data.id}`;
+
+  assert.equal((await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { asignadoA: TECH_USER.nombre } })).response.status, 200);
+  assert.equal((await requestJson(url, { method: 'PATCH', token: session.token,
+    body: { prioridad: 'ALTA' } })).response.status, 200);
+  assert.equal((await requestJson(`${url}/comments`, { method: 'POST', token: session.token,
+    body: { comentario: 'Diagnóstico inicial confirmado' } })).response.status, 201);
+  const resolved = await requestJson(`${url}/resolve`, { method: 'PATCH', token: session.token,
+    body: { diagnostico: 'Cable de red defectuoso', solucionAplicada: 'Se reemplazó el cable y se validó conectividad' } });
+  assert.equal(resolved.response.status, 200, JSON.stringify(resolved.data));
+  const closed = await requestJson(url, { method: 'PATCH', token: session.token, body: { estado: 'Cerrado' } });
+  assert.equal(closed.response.status, 200, JSON.stringify(closed.data));
+
+  const expectedTypes = ['creacion', 'asignacion', 'prioridad', 'comentario', 'solucion', 'cierre'];
+  for (const type of expectedTypes) {
+    assert.ok(closed.data.historial.some((event) => event.tipo === type), `falta evento ${type}`);
+  }
+  for (const event of closed.data.historial.filter((item) => expectedTypes.includes(item.tipo))) {
+    assert.equal(event.actorId, TECH_USER.id);
+    assert.equal(event.nombreMostrado, TECH_USER.nombre);
+    assert.match(event.fecha, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.equal(typeof event.tipo, 'string');
+    assert.ok(Object.hasOwn(event, 'before'));
+    assert.ok(Object.hasOwn(event, 'after'));
+  }
+  const solutionEvent = closed.data.historial.find((event) => event.tipo === 'solucion');
+  assert.equal(solutionEvent.diagnostico, 'Cable de red defectuoso');
+  assert.equal(solutionEvent.solucionAplicada, 'Se reemplazó el cable y se validó conectividad');
+});
+
+test('TASK-HD-030 una intención concurrente crea un solo ticket y claves distintas permiten incidencias legítimas', { concurrency: false }, async () => {
+  const session = await login(TECH_USER.username, TECH_PASSWORD);
+  const payload = {
+    activoTag: 'POS-001',
+    sucursal: 'TJ01',
+    descripcion: 'Reintento idempotente de creación',
+    prioridad: 'MEDIA',
+    atencionTipo: 'REMOTO',
+  };
+  const key = 'ticket-intent-task-hd-030';
+  const options = {
+    method: 'POST',
+    token: session.token,
+    body: payload,
+    headers: { 'Idempotency-Key': key },
+  };
+
+  const [first, second] = await Promise.all([
+    requestJson('/api/tickets', options),
+    requestJson('/api/tickets', options),
+  ]);
+  assert.deepEqual([first.response.status, second.response.status].sort(), [200, 201]);
+  assert.equal(first.data.id, second.data.id);
+  assert.deepEqual(
+    [first.response.headers.get('idempotency-replayed'), second.response.headers.get('idempotency-replayed')].sort(),
+    ['false', 'true'],
+  );
+  let persisted = await readPersistedDb();
+  assert.equal(persisted.tickets.filter((ticket) => ticket.descripcion === payload.descripcion).length, 1);
+
+  const conflict = await requestJson('/api/tickets', {
+    ...options,
+    body: { ...payload, descripcion: 'Misma clave con contenido diferente' },
+  });
+  assert.equal(conflict.response.status, 409, JSON.stringify(conflict.data));
+  assert.match(conflict.data.error, /datos distintos/i);
+
+  const independent = await requestJson('/api/tickets', {
+    ...options,
+    headers: { 'Idempotency-Key': 'ticket-intent-task-hd-030-independent' },
+  });
+  assert.equal(independent.response.status, 201, JSON.stringify(independent.data));
+  assert.notEqual(independent.data.id, first.data.id);
+  persisted = await readPersistedDb();
+  assert.equal(persisted.tickets.filter((ticket) => ticket.descripcion === payload.descripcion).length, 2);
 });

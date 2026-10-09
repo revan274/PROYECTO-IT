@@ -1,9 +1,7 @@
 import { buildReportFilterLabels } from '../reports/reportFilterLabels';
 import type { RegistroAuditoria, TicketItem } from '../types/app';
-import { getTicketAreaLabel } from '../utils/appHelpers';
 import { auditModuleLabel } from '../utils/audit';
-import { formatDateTime } from '../utils/format';
-import { formatTicketAttentionType, isTicketSlaExpired } from '../utils/tickets';
+import { buildReportTicketExportRows } from './reportTicketsCsv';
 
 interface CountBar {
   label: string;
@@ -35,8 +33,8 @@ export interface ReportExcelData {
   reportClosedCount: number;
   reportCreatedInPeriodCount: number;
   reportClosedInPeriodCount: number;
-  reportSlaCompliancePct: number;
-  reportPreviousSlaCompliancePct: number;
+  reportSlaCompliancePct: number | null;
+  reportPreviousSlaCompliancePct: number | null;
   reportSlaComplianceTrend: TrendLabel;
   reportSlaExpiredCount: number;
   reportCriticalCount: number;
@@ -48,6 +46,13 @@ export interface ReportExcelData {
   reportP90ResolutionHours: number | null;
   reportPreviousP90ResolutionHours: number | null;
   reportP90ResolutionTrend: TrendLabel;
+  reportAvgFirstResponseHours: number | null;
+  reportPreviousAvgFirstResponseHours: number | null;
+  reportMedianFirstResponseHours: number | null;
+  reportPreviousMedianFirstResponseHours: number | null;
+  reportP90FirstResponseHours: number | null;
+  reportPreviousP90FirstResponseHours: number | null;
+  reportFirstResponseMedianTrend: TrendLabel;
   reportInventorySnapshot: { totalActivos: number; activosEnFalla: number };
   reportSupplySnapshot: { total: number; agotados: number; bajoMinimo: number };
   reportStateBars: CountBar[];
@@ -89,40 +94,34 @@ export async function downloadReportExcelWorkbook(data: ReportExcelData): Promis
     { Indicador: 'Tickets creados en periodo', Valor: data.reportCreatedInPeriodCount },
     { Indicador: 'Tickets cerrados en periodo', Valor: data.reportClosedInPeriodCount },
     { Indicador: 'Causas recurrentes detectadas', Valor: data.reportIncidentCauseBars.length },
-    { Indicador: 'Cumplimiento SLA (%)', Valor: data.reportSlaCompliancePct },
-    { Indicador: 'Cumplimiento SLA previo (%)', Valor: data.hasComparisonWindow ? data.reportPreviousSlaCompliancePct : 'N/D' },
+    { Indicador: 'Cumplimiento SLA (%)', Valor: data.reportSlaCompliancePct ?? 'N/D' },
+    { Indicador: 'Cumplimiento SLA previo (%)', Valor: data.hasComparisonWindow ? (data.reportPreviousSlaCompliancePct ?? 'N/D') : 'N/D' },
     { Indicador: 'Comparativo cumplimiento SLA', Valor: data.reportSlaComplianceTrend.label },
     { Indicador: 'SLA vencido', Valor: data.reportSlaExpiredCount },
     { Indicador: 'Críticos', Valor: data.reportCriticalCount },
-    { Indicador: 'MTTR promedio (horas)', Valor: data.reportAvgResolutionHours ?? 'N/D' },
-    { Indicador: 'MTTR promedio previo (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousAvgResolutionHours ?? 'N/D') : 'N/D' },
-    { Indicador: 'MTTR mediana (horas)', Valor: data.reportMedianResolutionHours ?? 'N/D' },
-    { Indicador: 'MTTR mediana previa (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousMedianResolutionHours ?? 'N/D') : 'N/D' },
-    { Indicador: 'Comparativo MTTR mediana', Valor: data.reportMttrMedianTrend.label },
-    { Indicador: 'P90 resolucion (horas)', Valor: data.reportP90ResolutionHours ?? 'N/D' },
-    { Indicador: 'P90 resolucion previo (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousP90ResolutionHours ?? 'N/D') : 'N/D' },
-    { Indicador: 'Comparativo P90 resolucion', Valor: data.reportP90ResolutionTrend.label },
+    { Indicador: 'Definicion MTTR', Valor: 'Inicio del ciclo -> resolucion; el cierre administrativo no interviene' },
+    { Indicador: 'MTTR por ciclo promedio (horas)', Valor: data.reportAvgResolutionHours ?? 'N/D' },
+    { Indicador: 'MTTR por ciclo promedio previo (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousAvgResolutionHours ?? 'N/D') : 'N/D' },
+    { Indicador: 'MTTR por ciclo mediana (horas)', Valor: data.reportMedianResolutionHours ?? 'N/D' },
+    { Indicador: 'MTTR por ciclo mediana previa (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousMedianResolutionHours ?? 'N/D') : 'N/D' },
+    { Indicador: 'Comparativo MTTR por ciclo mediana', Valor: data.reportMttrMedianTrend.label },
+    { Indicador: 'MTTR por ciclo P90 (horas)', Valor: data.reportP90ResolutionHours ?? 'N/D' },
+    { Indicador: 'MTTR por ciclo P90 previo (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousP90ResolutionHours ?? 'N/D') : 'N/D' },
+    { Indicador: 'Comparativo MTTR por ciclo P90', Valor: data.reportP90ResolutionTrend.label },
+    { Indicador: 'Primera respuesta promedio (horas)', Valor: data.reportAvgFirstResponseHours ?? 'N/D' },
+    { Indicador: 'Primera respuesta promedio previa (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousAvgFirstResponseHours ?? 'N/D') : 'N/D' },
+    { Indicador: 'Primera respuesta mediana (horas)', Valor: data.reportMedianFirstResponseHours ?? 'N/D' },
+    { Indicador: 'Primera respuesta mediana previa (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousMedianFirstResponseHours ?? 'N/D') : 'N/D' },
+    { Indicador: 'Comparativo primera respuesta mediana', Valor: data.reportFirstResponseMedianTrend.label },
+    { Indicador: 'Primera respuesta P90 (horas)', Valor: data.reportP90FirstResponseHours ?? 'N/D' },
+    { Indicador: 'Primera respuesta P90 previa (horas)', Valor: data.hasComparisonWindow ? (data.reportPreviousP90FirstResponseHours ?? 'N/D') : 'N/D' },
     { Indicador: 'Activos totales', Valor: data.reportInventorySnapshot.totalActivos },
     { Indicador: 'Activos en falla', Valor: data.reportInventorySnapshot.activosEnFalla },
     { Indicador: 'Insumos total', Valor: data.reportSupplySnapshot.total },
     { Indicador: 'Insumos agotados', Valor: data.reportSupplySnapshot.agotados },
     { Indicador: 'Insumos bajo mínimo', Valor: data.reportSupplySnapshot.bajoMinimo },
   ];
-  const detailRows = data.reportTickets.map((ticket) => ({
-    ID: ticket.id,
-    Fecha: formatDateTime(ticket.fechaCreacion || ticket.fecha),
-    Sucursal: data.formatTicketBranchFromCatalog(ticket.sucursal),
-    Área: getTicketAreaLabel(ticket),
-    Tag: ticket.activoTag,
-    Prioridad: ticket.prioridad,
-    Estado: ticket.estado,
-    Atención: formatTicketAttentionType(ticket.atencionTipo),
-    SLA: isTicketSlaExpired(ticket, data.nowMs) ? 'VENCIDO' : 'EN TIEMPO',
-    Asignado: ticket.asignadoA || 'Sin asignar',
-    SolicitadoPor: ticket.solicitadoPor || '',
-    Departamento: ticket.departamento || '',
-    Descripción: ticket.descripcion,
-  }));
+  const detailRows = buildReportTicketExportRows(data);
   const stateRows = data.reportStateBars.map((row) => ({ Estado: row.label, Cantidad: row.count }));
   const branchRows = data.reportBranchBars.map((row) => ({ Sucursal: row.label, Cantidad: row.count }));
   const areaRows = data.reportAreaBars.map((row) => ({ Área: row.label, Cantidad: row.count }));

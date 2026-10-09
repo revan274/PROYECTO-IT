@@ -1,6 +1,7 @@
-import { Download, Pencil, Printer, QrCode, Trash2, X } from 'lucide-react';
+import { Download, ExternalLink, Pencil, Printer, QrCode, TicketCheck, Trash2, X } from 'lucide-react';
 import { Suspense, useId } from 'react';
 import type { ComponentType, MouseEvent } from 'react';
+import type { TicketItem } from '../../types/app';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ModalDialog } from '../ui/ModalDialog';
@@ -51,7 +52,10 @@ interface AssetDetailModalProps {
   LazyQRCodeCanvas: ComponentType<LazyQrCanvasLikeProps>;
   buildAssetQrCanvasId: (assetId: number) => string;
   formatDateTime: (value?: string) => string;
+  assetTickets: TicketItem[];
+  incidentsLast90Days: number;
   onClose: () => void;
+  onOpenTicket: (ticketId: number) => void;
   onEdit: () => void;
   onDownloadQr: () => void;
   onPrintQr: () => void;
@@ -68,7 +72,10 @@ export function AssetDetailModal({
   LazyQRCodeCanvas,
   buildAssetQrCanvasId,
   formatDateTime,
+  assetTickets,
+  incidentsLast90Days,
   onClose,
+  onOpenTicket,
   onEdit,
   onDownloadQr,
   onPrintQr,
@@ -191,6 +198,67 @@ export function AssetDetailModal({
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Comentarios</p>
             <p className="text-sm font-semibold text-slate-600">{asset.comentarios || 'Sin comentarios.'}</p>
           </div>
+
+          <section className="rounded-2xl bg-slate-50 border border-slate-100 p-5" aria-labelledby={`${titleId}-tickets`}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p id={`${titleId}-tickets`} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Incidencias / Tickets
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                  {incidentsLast90Days} {incidentsLast90Days === 1 ? 'incidencia' : 'incidencias'} en los últimos 90 días
+                </p>
+              </div>
+              <Badge variant="ticket creado">{assetTickets.length} en el historial</Badge>
+            </div>
+
+            {assetTickets.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white p-5 text-center">
+                <TicketCheck className="mx-auto text-slate-300" size={24} aria-hidden="true" />
+                <p className="mt-2 text-xs font-black uppercase text-slate-500">Sin tickets relacionados</p>
+              </div>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {assetTickets.map((ticket) => (
+                  <li key={ticket.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-black text-slate-800">Ticket #{ticket.id}</span>
+                          <Badge variant={ticket.estado}>{ticket.estado}</Badge>
+                          <Badge variant={ticket.prioridad}>{ticket.prioridad}</Badge>
+                        </div>
+                        <p className="mt-2 text-xs font-bold text-slate-500">
+                          {formatDateTime(ticket.fechaCreacion || ticket.fecha || undefined)} · {ticket.categoriaNombre || 'Sin categoría'}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-700 break-words">{ticket.descripcion || 'Sin descripción.'}</p>
+                        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                          <div>
+                            <dt className="font-black uppercase text-slate-400">Técnico</dt>
+                            <dd className="font-semibold text-slate-600">{ticket.asignadoA || 'Sin asignar'}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-black uppercase text-slate-400">Solución</dt>
+                            <dd className="font-semibold text-slate-600 break-words">{ticket.solucionAplicada || 'Pendiente'}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                      <Button
+                        variant="plain"
+                        size="bare"
+                        type="button"
+                        onClick={() => onOpenTicket(ticket.id)}
+                        className="shrink-0 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                        aria-label={`Abrir ticket ${ticket.id}`}
+                      >
+                        <ExternalLink size={14} /> Abrir ticket
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5">
             <div className="flex flex-col lg:flex-row gap-6">

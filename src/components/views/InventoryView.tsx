@@ -18,6 +18,7 @@ import type {
   InventorySortDirection,
   InventorySortField,
   ModalType,
+  TicketItem,
 } from '../../types/app';
 
 interface ImportPreviewSummary {
@@ -108,6 +109,9 @@ interface InventoryViewProps {
   LazyQRCodeCanvas: React.ComponentType<LazyQrCanvasLikeProps>;
   buildAssetQrCanvasId: (assetId: number) => string;
   formatDateTime: (value?: string) => string;
+  selectedAssetTickets: TicketItem[];
+  selectedAssetIncidentsLast90Days: number;
+  openTicketFromAsset: (ticketId: number) => void;
   openAssetEditModal: () => void;
   descargarQrActivoSeleccionado: () => void;
   imprimirEtiquetaQrActivoSeleccionado: () => void;
@@ -183,6 +187,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   LazyQRCodeCanvas,
   buildAssetQrCanvasId,
   formatDateTime,
+  selectedAssetTickets,
+  selectedAssetIncidentsLast90Days,
+  openTicketFromAsset,
   openAssetEditModal,
   descargarQrActivoSeleccionado,
   imprimirEtiquetaQrActivoSeleccionado,
@@ -216,6 +223,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               variant="plain"
               ref={inventoryImportInputRef}
               type="file"
+              aria-label="Archivo de inventario para importar"
               accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={(event) => void handleImportInventory(event)}
@@ -549,7 +557,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         LazyQRCodeCanvas={LazyQRCodeCanvas}
         buildAssetQrCanvasId={buildAssetQrCanvasId}
         formatDateTime={formatDateTime}
+        assetTickets={selectedAssetTickets}
+        incidentsLast90Days={selectedAssetIncidentsLast90Days}
         onClose={() => setSelectedAsset(null)}
+        onOpenTicket={openTicketFromAsset}
         onEdit={openAssetEditModal}
         onDownloadQr={descargarQrActivoSeleccionado}
         onPrintQr={imprimirEtiquetaQrActivoSeleccionado}

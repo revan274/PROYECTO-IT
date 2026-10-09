@@ -25,6 +25,7 @@ import {
   SLA_POLICY_HOURS,
   TICKET_STATES as SHARED_TICKET_STATES,
 } from '../../shared/ticket-rules.js';
+import { DEFAULT_TICKET_AREAS, DEFAULT_TICKET_CATEGORIES } from '../../shared/ticket-classification.js';
 export const INVENTARIO_ACTIVOS_INICIAL: Activo[] = [
   { id: 1, tag: 'POS-001', tipo: 'POS', marca: 'IBM SurePOS', ubicacion: 'Caja Rápida 1', estado: 'Operativo', serial: 'SN-99201', fechaCompra: '2022-01-15' },
   { id: 2, tag: 'POS-002', tipo: 'POS', marca: 'IBM SurePOS', ubicacion: 'Caja Rápida 2', estado: 'Operativo', serial: 'SN-99202', fechaCompra: '2022-01-15' },
@@ -146,6 +147,8 @@ export const DEFAULT_CATALOGS: CatalogState = {
     { value: 'consulta', label: 'Consulta', permissions: 'Solo consulta', activo: true },
     { value: 'solicitante', label: 'Solicitante', permissions: 'Crear y dar seguimiento a tickets', activo: true },
   ],
+  areas: DEFAULT_TICKET_AREAS.map((area) => ({ ...area })),
+  categorias: DEFAULT_TICKET_CATEGORIES.map((category) => ({ ...category })),
 };
 export const TICKET_AREA_OPTIONS = ['Recibos', 'Gerencia', 'Línea de cajas', 'Tienda', 'Mantenimiento'] as const;
 export const COMMON_TICKET_ISSUES = [

@@ -131,16 +131,9 @@ function buildAdminBootstrap() {
         solicitadoPorId: REQUESTER_USER.id,
         solicitadoPorUsername: REQUESTER_USER.username,
         departamento: REQUESTER_USER.departamento,
-        historial: [
-          {
-            fecha: '2026-03-29 09:00',
-            usuario: REQUESTER_USER.nombre,
-            accion: 'Ticket Creado',
-            estado: 'Abierto',
-            comentario: 'Generado en pruebas UI',
-          },
-        ],
-        attachments: [],
+        historialCount: 1,
+        attachmentCount: 0,
+        ultimoComentario: 'Generado en pruebas UI',
       },
       {
         id: 702,
@@ -158,16 +151,9 @@ function buildAdminBootstrap() {
         solicitadoPorId: ADMIN_USER.id,
         solicitadoPorUsername: ADMIN_USER.username,
         departamento: ADMIN_USER.departamento,
-        historial: [
-          {
-            fecha: '2026-03-30 12:00',
-            usuario: ADMIN_USER.nombre,
-            accion: 'Ticket Creado',
-            estado: 'En Proceso',
-            comentario: 'Generado en pruebas UI',
-          },
-        ],
-        attachments: [],
+        historialCount: 1,
+        attachmentCount: 0,
+        ultimoComentario: 'Generado en pruebas UI',
       },
     ],
     auditoria: [],
@@ -209,16 +195,9 @@ function buildRequesterBootstrap() {
         solicitadoPorId: REQUESTER_USER.id,
         solicitadoPorUsername: REQUESTER_USER.username,
         departamento: REQUESTER_USER.departamento,
-        historial: [
-          {
-            fecha: '2026-03-30 08:30',
-            usuario: REQUESTER_USER.nombre,
-            accion: 'Ticket Creado',
-            estado: 'Abierto',
-            comentario: 'Generado en pruebas UI',
-          },
-        ],
-        attachments: [],
+        historialCount: 1,
+        attachmentCount: 0,
+        ultimoComentario: 'Generado en pruebas UI',
       },
     ],
     auditoria: [],
@@ -290,7 +269,7 @@ describe('App UI flow', () => {
         path: '/api/bootstrap',
         response: (_input: string | URL | Request, init?: RequestInit) => {
           const headers = new Headers(init?.headers);
-          const etag = 'W/"mesa-it-bootstrap-v2-10-501-admin"';
+          const etag = 'W/"mesa-it-bootstrap-v3-10-501-admin"';
           if (headers.get('If-None-Match') === etag) {
             return new Response(null, {
               status: 304,
@@ -304,6 +283,36 @@ describe('App UI flow', () => {
               ETag: etag,
             },
           });
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/tickets/701',
+        response: {
+          ...buildAdminBootstrap().tickets[0],
+          historial: [{
+            fecha: '2026-03-29T09:00:00.000Z',
+            usuario: REQUESTER_USER.nombre,
+            accion: 'Ticket Creado',
+            estado: 'Abierto',
+            comentario: 'Generado en pruebas UI',
+          }],
+          attachments: [],
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/tickets/702',
+        response: {
+          ...buildAdminBootstrap().tickets[1],
+          historial: [{
+            fecha: '2026-03-30T12:00:00.000Z',
+            usuario: ADMIN_USER.nombre,
+            accion: 'Ticket Creado',
+            estado: 'En Proceso',
+            comentario: 'Generado en pruebas UI',
+          }],
+          attachments: [],
         },
       },
     ]);
@@ -337,7 +346,7 @@ describe('App UI flow', () => {
     expect(bootstrapCalls.length).toBeGreaterThanOrEqual(2);
     const conditionalCall = bootstrapCalls.at(-1);
     const conditionalHeaders = new Headers(conditionalCall?.[1]?.headers);
-    expect(conditionalHeaders.get('If-None-Match')).toBe('W/"mesa-it-bootstrap-v2-10-501-admin"');
+    expect(conditionalHeaders.get('If-None-Match')).toBe('W/"mesa-it-bootstrap-v3-10-501-admin"');
     expect(useAppStore.getState().tickets).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
@@ -347,6 +356,42 @@ describe('App UI flow', () => {
     expect(screen.getByRole('button', { name: /Nuevo Ticket/i })).toBeTruthy();
     expect(screen.getByText(/POS-001\s+\|\s+Impresora fiscal desconectada/i)).toBeTruthy();
     expect(screen.getByText(/BAS-010\s+\|\s+Báscula sin comunicación con caja/i)).toBeTruthy();
+
+    expect(fetchMock.mock.calls.some(([input]) => /^\/api\/tickets\/\d+$/.test(getRequestPath(input)))).toBe(false);
+    fireEvent.click(screen.getAllByRole('button', { name: /Ver detalle/i })[0]);
+    await screen.findByText('Ticket Creado');
+    expect(fetchMock.mock.calls.some(([input]) => /^\/api\/tickets\/\d+$/.test(getRequestPath(input)))).toBe(true);
+  });
+
+  test('pagina resúmenes de tickets sin montar toda la lista', async () => {
+    const bootstrap = buildAdminBootstrap();
+    const template = bootstrap.tickets[0];
+    bootstrap.tickets = Array.from({ length: 21 }, (_, index) => ({
+      ...template,
+      id: 1001 + index,
+      descripcion: `Incidencia paginada ${index + 1}`,
+      fecha: `2026-03-${String(30 - Math.min(index, 20)).padStart(2, '0')} 09:00`,
+      fechaCreacion: `2026-03-${String(30 - Math.min(index, 20)).padStart(2, '0')}T09:00:00.000Z`,
+    }));
+    installFetchMock([
+      {
+        method: 'POST',
+        path: '/api/auth/login',
+        response: { user: ADMIN_USER, token: 'token-admin-pagination-ui', loggedAt: '2026-03-30T18:00:00.000Z' },
+      },
+      { method: 'GET', path: '/api/bootstrap', response: bootstrap },
+    ]);
+
+    renderApp();
+    fillLoginForm(ADMIN_USER.username, 'Admin.Ui.123');
+    await screen.findByText('Backend Online');
+    fireEvent.click(screen.getByRole('link', { name: /^Tickets$/i }));
+
+    await screen.findByText(/Mostrando 1–20 de 21 filtrados/i);
+    expect(screen.queryByText(/Incidencia paginada 21/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+    await screen.findByText(/Mostrando 21–21 de 21 filtrados/i);
+    expect(screen.getByText(/Incidencia paginada 21/i)).toBeTruthy();
   });
 
   test('un solicitante entra directo a tickets y no ve navegacion administrativa', async () => {

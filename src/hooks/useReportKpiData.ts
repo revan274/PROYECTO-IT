@@ -4,6 +4,7 @@ import type { TicketItem } from '../types/app';
 import {
   calculateMedian,
   calculatePercentile,
+  collectFirstResponseHours,
   collectResolutionHours,
   formatMetricTrend,
   roundHours,
@@ -12,6 +13,7 @@ import {
   isTicketClosed,
   isTicketSlaExpired,
 } from '../utils/tickets';
+import { summarizeHistoricalSla } from '../utils/sla';
 
 interface ReportKpiDataOptions {
   reportTickets: readonly TicketItem[];
@@ -32,37 +34,28 @@ export function deriveReportKpiData({
   liveNow,
 }: ReportKpiDataOptions) {
   const reportOpenCount = reportTickets.filter((ticket) => !isTicketClosed(ticket)).length;
-  const reportClosedCount = reportTickets.length - reportOpenCount;
+  const reportClosedCount = reportTickets.filter((ticket) => ticket.estado === 'Resuelto' || ticket.estado === 'Cerrado').length;
   const reportCriticalCount = reportTickets
     .filter((ticket) => ticket.prioridad === 'CRITICA').length;
   const reportSlaExpiredCount = reportTickets
     .filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
-  const reportSlaTotalCount = reportTickets.length;
-  const reportSlaCompliantCount = Math.max(
-    0,
-    reportSlaTotalCount - reportSlaExpiredCount,
-  );
-  const reportSlaCompliancePct = reportSlaTotalCount > 0
-    ? Math.round((reportSlaCompliantCount / reportSlaTotalCount) * 100)
-    : 100;
+  const reportSlaSummary = summarizeHistoricalSla(reportTickets);
+  const reportSlaTotalCount = reportSlaSummary.total;
+  const reportSlaCompliantCount = reportSlaSummary.compliant;
+  const reportSlaCompliancePct = reportSlaSummary.percentage;
 
   const reportPreviousOpenCount = reportPreviousTickets
     .filter((ticket) => !isTicketClosed(ticket)).length;
-  const reportPreviousSlaExpiredCount = reportPreviousTickets
-    .filter((ticket) => isTicketSlaExpired(ticket, liveNow)).length;
-  const reportPreviousSlaTotalCount = reportPreviousTickets.length;
-  const reportPreviousSlaCompliantCount = Math.max(
-    0,
-    reportPreviousSlaTotalCount - reportPreviousSlaExpiredCount,
-  );
-  const reportPreviousSlaCompliancePct = reportPreviousSlaTotalCount > 0
-    ? Math.round(
-        (reportPreviousSlaCompliantCount / reportPreviousSlaTotalCount) * 100,
-      )
-    : 100;
+  const reportPreviousSlaSummary = summarizeHistoricalSla(reportPreviousTickets);
+  const reportPreviousSlaCompliancePct = reportPreviousSlaSummary.percentage;
 
   const reportResolutionHours = collectResolutionHours([...reportTickets]);
   const reportPreviousResolutionHours = collectResolutionHours([...reportPreviousTickets]);
+  const reportFirstResponseHours = collectFirstResponseHours([...reportTickets]);
+  const reportPreviousFirstResponseHours = collectFirstResponseHours([...reportPreviousTickets]);
+  const average = (values: number[]) => values.length > 0
+    ? roundHours(values.reduce((sum, value) => sum + value, 0) / values.length)
+    : null;
   const reportAvgResolutionHours = reportResolutionHours.length > 0
     ? roundHours(
         reportResolutionHours.reduce((sum, value) => sum + value, 0)
@@ -84,6 +77,12 @@ export function deriveReportKpiData({
     reportPreviousResolutionHours,
     90,
   );
+  const reportAvgFirstResponseHours = average(reportFirstResponseHours);
+  const reportMedianFirstResponseHours = calculateMedian(reportFirstResponseHours);
+  const reportP90FirstResponseHours = calculatePercentile(reportFirstResponseHours, 90);
+  const reportPreviousAvgFirstResponseHours = average(reportPreviousFirstResponseHours);
+  const reportPreviousMedianFirstResponseHours = calculateMedian(reportPreviousFirstResponseHours);
+  const reportPreviousP90FirstResponseHours = calculatePercentile(reportPreviousFirstResponseHours, 90);
 
   return {
     reportOpenCount,
@@ -101,6 +100,12 @@ export function deriveReportKpiData({
     reportPreviousAvgResolutionHours,
     reportPreviousMedianResolutionHours,
     reportPreviousP90ResolutionHours,
+    reportAvgFirstResponseHours,
+    reportMedianFirstResponseHours,
+    reportP90FirstResponseHours,
+    reportPreviousAvgFirstResponseHours,
+    reportPreviousMedianFirstResponseHours,
+    reportPreviousP90FirstResponseHours,
     reportTicketsTrend: hasComparisonWindow
       ? formatMetricTrend(reportTickets.length, reportPreviousTickets.length, {
           positiveIsGood: false,
@@ -143,6 +148,13 @@ export function deriveReportKpiData({
             unitSuffix: ' h',
           },
         )
+      : DEFAULT_TREND,
+    reportFirstResponseMedianTrend: hasComparisonWindow
+      ? formatMetricTrend(reportMedianFirstResponseHours, reportPreviousMedianFirstResponseHours, {
+          positiveIsGood: false,
+          decimals: 1,
+          unitSuffix: ' h',
+        })
       : DEFAULT_TREND,
   };
 }

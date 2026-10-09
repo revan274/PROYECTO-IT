@@ -32,7 +32,9 @@ function ledgerQueSiempreConcede() {
   const reclamados = [];
   return {
     reclamados,
-    async reclamar(id, tipo) { reclamados.push(`${id}:${tipo}`); return true; },
+    async iniciar(id, tipo) { reclamados.push(`${id}:${tipo}`); return { acquired: true, token: `${id}:${tipo}` }; },
+    async marcarEnviada() { return true; },
+    async marcarFallida() { return true; },
   };
 }
 
@@ -79,7 +81,7 @@ test('fuera de jornada no se avisa: un correo de madrugada no lo lee nadie', asy
     leerDb: async () => ({ tickets: [ticket()], users: [] }),
     ledger: ledgerQueSiempreConcede(),
     ahoraMs: MIERCOLES_3H,
-    enviar: (aviso) => enviados.push(aviso),
+    enviar: (aviso) => { enviados.push(aviso); return { sent: true }; },
   });
 
   assert.equal(resumen.motivo, 'fuera-de-jornada');
@@ -99,7 +101,7 @@ test('con responsable el aviso es personal; sin responsable se difunde', async (
     }),
     ledger: ledgerQueSiempreConcede(),
     ahoraMs: MIERCOLES_10H,
-    enviar: (aviso) => enviados.push(aviso),
+    enviar: (aviso) => { enviados.push(aviso); return { sent: true }; },
   });
 
   assert.equal(enviados.length, 2);
@@ -112,9 +114,9 @@ test('si el registro dice que ya se aviso, no se repite', async () => {
   const enviados = [];
   const resumen = await revisarSlaUnaVez({
     leerDb: async () => ({ tickets: [ticket()], users: [] }),
-    ledger: { async reclamar() { return false; } },
+    ledger: { async iniciar() { return { acquired: false }; } },
     ahoraMs: MIERCOLES_10H,
-    enviar: (aviso) => enviados.push(aviso),
+    enviar: (aviso) => { enviados.push(aviso); return { sent: true }; },
   });
 
   assert.equal(resumen.revisados, 1);
@@ -127,9 +129,9 @@ test('si no se puede dejar constancia NO se envia: mejor perder un aviso que rep
   const registrados = [];
   const resumen = await revisarSlaUnaVez({
     leerDb: async () => ({ tickets: [ticket()], users: [] }),
-    ledger: { async reclamar() { throw new Error('Neon dormida'); } },
+    ledger: { async iniciar() { throw new Error('Neon dormida'); } },
     ahoraMs: MIERCOLES_10H,
-    enviar: (aviso) => enviados.push(aviso),
+    enviar: (aviso) => { enviados.push(aviso); return { sent: true }; },
     log: (...args) => registrados.push(args),
   });
 
@@ -158,10 +160,10 @@ test('el aviso se reserva con el tipo esperado', async () => {
     leerDb: async () => ({ tickets: [ticket({ id: 77 })], users: [] }),
     ledger,
     ahoraMs: MIERCOLES_10H,
-    enviar: () => {},
+    enviar: () => ({ sent: true }),
   });
 
-  assert.deepEqual(ledger.reclamados, [`77:${TIPO_AVISO_SLA}`]);
+  assert.deepEqual(ledger.reclamados, [`77:${TIPO_AVISO_SLA}:${ticket({ id: 77 }).fechaLimite}`]);
 });
 
 test('la jornada se respeta: sabado medio dia, domingo cerrado', () => {

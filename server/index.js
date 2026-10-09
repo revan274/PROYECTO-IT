@@ -1,3 +1,4 @@
+import { linkTicketAssets, resolveAssetBranchCode } from '../shared/asset-relations.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -63,6 +64,7 @@ import {
   normalizeTicketBranch,
   ticketAuditAction,
   serializeTicket,
+  serializeTicketSummary,
   buildTicketAttachmentResponse,
   filterTicketsForUser,
   ticketBelongsToUser,
@@ -84,7 +86,7 @@ import {
   isSupplyActive,
   isLowStock,
   // SLA helpers
-  calcDueDate,
+  createSlaAssignment,
   isSlaBreached,
   // Auth helpers
   isDemoPasswordUser,
@@ -665,6 +667,7 @@ function importAssets(db, options) {
       }
 
       Object.assign(existing, merged);
+      linkTicketAssets(db);
       report.updated += 1;
       if (details.length < detailLimit) {
         details.push({ rowNumber, status: 'updated', tag: existing.tag });
@@ -703,7 +706,7 @@ function buildBootstrapEtag(req) {
   const version = Math.max(0, Math.trunc(Number(req.appDbVersion) || 0));
   const userId = Math.max(0, Math.trunc(Number(req.authUser?.id) || 0));
   const role = asNonEmptyString(req.authUser?.rol).toLowerCase().replace(/[^a-z0-9_-]/g, '');
-  return `W/"mesa-it-bootstrap-v2-${version}-${userId}-${role || 'unknown'}"`;
+  return `W/"mesa-it-bootstrap-v3-${version}-${userId}-${role || 'unknown'}"`;
 }
 
 function requestAcceptsEtag(req, etag) {
@@ -777,7 +780,7 @@ app.post('/api/push/subscriptions', requireAuth, async (req, res, next) => {
       username: req.authUser?.username,
     });
     if (!subscription) {
-      return res.status(400).json({ error: 'Suscripción push inválida.' });
+      return res.status(400).json({ error: 'Suscripcion push invalida o proveedor no permitido. Usa un navegador compatible con Google, Mozilla, Apple o Microsoft.' });
     }
 
     await updateDb((db) => {
@@ -963,7 +966,9 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     const hasBranchUpdate = req.body?.sucursales !== undefined;
     const hasCargoUpdate = req.body?.cargos !== undefined;
     const hasRoleUpdate = req.body?.roles !== undefined;
-    if (!hasBranchUpdate && !hasCargoUpdate && !hasRoleUpdate) {
+    const hasAreaUpdate = req.body?.areas !== undefined;
+    const hasCategoryUpdate = req.body?.categorias !== undefined;
+    if (!hasBranchUpdate && !hasCargoUpdate && !hasRoleUpdate && !hasAreaUpdate && !hasCategoryUpdate) {
       return res.status(400).json({ error: 'No hay cambios de catálogos para aplicar.' });
     }
 
@@ -976,6 +981,12 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
     if (hasRoleUpdate && !Array.isArray(req.body?.roles)) {
       return res.status(400).json({ error: 'El catálogo de roles debe ser una lista.' });
     }
+    if (hasAreaUpdate && !Array.isArray(req.body?.areas)) {
+      return res.status(400).json({ error: 'El catálogo de áreas debe ser una lista.' });
+    }
+    if (hasCategoryUpdate && !Array.isArray(req.body?.categorias)) {
+      return res.status(400).json({ error: 'El catálogo de categorías debe ser una lista.' });
+    }
 
     const updated = await updateDb((db) => {
       const current = getCatalogsFromDb(db);
@@ -983,6 +994,8 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
         sucursales: hasBranchUpdate ? req.body.sucursales : current.sucursales,
         cargos: hasCargoUpdate ? req.body.cargos : current.cargos,
         roles: hasRoleUpdate ? req.body.roles : current.roles,
+        areas: hasAreaUpdate ? req.body.areas : current.areas,
+        categorias: hasCategoryUpdate ? req.body.categorias : current.categorias,
       };
       const normalized = normalizeCatalogState(nextDraft);
 
@@ -992,11 +1005,27 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       if (hasRoleUpdate && normalized.roles.find((role) => role.value === 'admin')?.activo === false) {
         return { ok: false, code: 'ADMIN_ROLE_DISABLED' };
       }
+      if (hasAreaUpdate && normalized.areas.length === 0) return { ok: false, code: 'INVALID_AREAS' };
+      if (hasCategoryUpdate && normalized.categorias.length === 0) return { ok: false, code: 'INVALID_CATEGORIES' };
+      const retainedAreaIds = new Set(normalized.areas.map((item) => item.id));
+      const retainedCategoryIds = new Set(normalized.categorias.map((item) => item.id));
+      if (db.tickets.some((ticket) =>
+        (ticket.areaId && !retainedAreaIds.has(ticket.areaId))
+        || (ticket.categoriaId && !retainedCategoryIds.has(ticket.categoriaId)))) {
+        return { ok: false, code: 'CLASSIFICATION_IN_USE' };
+      }
 
+      const retainedCodes = new Set(normalized.sucursales.map((branch) => branch.code));
+      const previousCodes = new Set(current.sucursales.map((branch) => branch.code));
+      if (hasBranchUpdate && (db.tickets.some((ticket) => previousCodes.has(ticket.sucursal) && !retainedCodes.has(ticket.sucursal))
+        || db.activos.some((asset) => {
+          const code = resolveAssetBranchCode(asset, previousCodes);
+          return code && !retainedCodes.has(code);
+        }))) return { ok: false, code: 'BRANCH_IN_USE' };
       db.catalogos = normalized;
       pushAuditWithContext(db, req, {
         accion: 'Catálogos Actualizados',
-        item: `Sucursales: ${normalized.sucursales.length} | Cargos: ${normalized.cargos.length} | Roles: ${normalized.roles.length}`,
+        item: `Sucursales: ${normalized.sucursales.length} | Áreas: ${normalized.areas.length} | Categorías: ${normalized.categorias.length}`,
         cantidad: 1,
         usuario,
         modulo: 'otros',
@@ -1005,6 +1034,15 @@ app.patch('/api/catalogos', requireAuth, async (req, res, next) => {
       return { ok: true, catalogos: normalized };
     });
 
+    if (!updated?.ok && updated?.code === 'BRANCH_IN_USE') {
+      return res.status(409).json({ error: 'La sucursal tiene activos o tickets asociados. Desactivela en lugar de eliminarla.' });
+    }
+    if (!updated?.ok && updated?.code === 'CLASSIFICATION_IN_USE') {
+      return res.status(409).json({ error: 'El área o categoría tiene tickets asociados. Desactívala en lugar de eliminarla.' });
+    }
+    if (!updated?.ok && ['INVALID_AREAS', 'INVALID_CATEGORIES'].includes(updated?.code)) {
+      return res.status(400).json({ error: 'Los catálogos de áreas y categorías deben conservar al menos una opción válida.' });
+    }
     if (!updated?.ok && updated?.code === 'INVALID_BRANCHES') {
       return res.status(400).json({ error: 'Catálogo de sucursales inválido.' });
     }
@@ -1194,7 +1232,7 @@ app.get('/api/bootstrap', requireAuth, async (req, res, next) => {
         ? db.activos.filter((a) => a.activo !== false).map((a) => ({ id: a.id, tag: a.tag, tipo: a.tipo, ubicacion: a.ubicacion, departamento: a.departamento, nombreVisible: a.nombreVisible }))
         : db.activos.map((asset) => stripSensitiveAssetFields(asset, rol)),
       insumos: requesterOnly ? [] : db.insumos.filter(isSupplyActive),
-      tickets: visibleTickets.map(serializeTicket),
+      tickets: visibleTickets.map(serializeTicketSummary),
       auditoria: requesterOnly ? [] : getBootstrapAuditRows(db.auditoria),
       users: requesterOnly ? [] : users,
       catalogos: getCatalogsFromDb(db),
@@ -1496,9 +1534,10 @@ const ticketRouteDeps = {
   getBranchCodesFromCatalog,
   normalizeTicketBranch,
   findTicketAssignee,
-  calcDueDate,
+  createSlaAssignment,
   pushAuditWithContext,
   serializeTicket,
+  serializeTicketSummary,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -1518,6 +1557,7 @@ const ticketRouteDeps = {
   paginateList,
   notifyTicketCreated,
   notifyTicketAssigned,
+  notificationLedger,
 };
 
 const activosRouteDeps = {

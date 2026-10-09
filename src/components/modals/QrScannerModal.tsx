@@ -93,6 +93,7 @@ export function QrScannerModal({
           <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Resolución Manual</p>
             <TextArea
+              aria-label="Token QR firmado"
               variant="soft"
               value={manualInput}
               onChange={(e) => onManualInputChange(e.target.value)}

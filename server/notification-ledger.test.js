@@ -1,98 +1,78 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { NOTIFICATION_STATES, PG_LEDGER_TABLE, createNotificationLedger, entregarNotificacion } from './modules/notification-ledger.js';
 
-import { PG_LEDGER_TABLE, createNotificationLedger } from './modules/notification-ledger.js';
-
-// Pool falso: registra las consultas y simula la semantica de la clave primaria.
-function poolFalso({ fallaDdl = false } = {}) {
-  const consultas = [];
-  const filas = new Set();
-  return {
-    consultas,
-    async query(sql, params) {
-      consultas.push({ sql, params });
-      if (sql.includes('CREATE TABLE')) {
-        if (fallaDdl) throw new Error('Neon dormida');
-        return { rowCount: 0, rows: [] };
-      }
-      const clave = `${params[0]}:${params[1]}`;
-      if (filas.has(clave)) return { rowCount: 0, rows: [] };
-      filas.add(clave);
-      return { rowCount: 1, rows: [{ ticket_id: params[0] }] };
-    },
-  };
-}
-
-test('sin Postgres la constancia es de este proceso y evita repetir en la misma vida', async () => {
+test('pending solo cambia a sent después de que el proveedor confirma', async () => {
   const ledger = createNotificationLedger({ getPool: async () => null, backend: 'file' });
-
-  assert.equal(await ledger.reclamar(1, 'sla'), true);
-  assert.equal(await ledger.reclamar(1, 'sla'), false, 'la segunda vez ya no toca');
-  assert.equal(await ledger.reclamar(1, 'otro'), true, 'otro tipo de aviso es independiente');
-  assert.equal(await ledger.reclamar(2, 'sla'), true, 'otro ticket es independiente');
-});
-
-test('con Postgres solo gana quien inserta la fila: dos instancias no duplican el aviso', async () => {
-  const pool = poolFalso();
-  const instanciaA = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
-  const instanciaB = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
-
-  const ganoA = await instanciaA.reclamar(7, 'sla-por-vencer');
-  const ganoB = await instanciaB.reclamar(7, 'sla-por-vencer');
-
-  assert.equal(ganoA, true);
-  assert.equal(ganoB, false, 'la segunda instancia no debe volver a avisar');
-});
-
-test('la reserva usa ON CONFLICT DO NOTHING sobre la tabla esperada', async () => {
-  const pool = poolFalso();
-  const ledger = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
-  await ledger.reclamar(3, 'sla-por-vencer');
-
-  const insercion = pool.consultas.find((c) => c.sql.includes('INSERT INTO'));
-  assert.ok(insercion, 'debe haber una insercion');
-  assert.ok(insercion.sql.includes(PG_LEDGER_TABLE));
-  assert.ok(insercion.sql.includes('ON CONFLICT'));
-  assert.ok(insercion.sql.includes('DO NOTHING'));
-  assert.deepEqual(insercion.params, [3, 'sla-por-vencer']);
-});
-
-test('la tabla se crea una sola vez aunque se reclamen varios avisos', async () => {
-  const pool = poolFalso();
-  const ledger = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
-
-  await ledger.reclamar(1, 'sla');
-  await ledger.reclamar(2, 'sla');
-  await ledger.reclamar(3, 'sla');
-
-  const ddl = pool.consultas.filter((c) => c.sql.includes('CREATE TABLE'));
-  assert.equal(ddl.length, 1, 'el DDL debe estar memoizado');
-});
-
-test('un fallo de DDL no queda cacheado: se reintenta en la siguiente reserva', async () => {
-  let intentos = 0;
-  const pool = {
-    async query(sql, params) {
-      if (sql.includes('CREATE TABLE')) {
-        intentos += 1;
-        // La base estaba dormida en el primer intento; despierta despues.
-        if (intentos === 1) throw new Error('Neon dormida');
-        return { rowCount: 0, rows: [] };
-      }
-      return { rowCount: 1, rows: [{ ticket_id: params[0] }] };
+  let stateDuringSend;
+  const result = await entregarNotificacion({
+    ledger, ticketId: 1, tipo: 'resuelto:ciclo-1',
+    enviar: async () => {
+      stateDuringSend = (await ledger.obtener(1, 'resuelto:ciclo-1')).status;
+      return { sent: true };
     },
-  };
-  const ledger = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
-
-  await assert.rejects(() => ledger.reclamar(1, 'sla'));
-  assert.equal(await ledger.reclamar(1, 'sla'), true, 'debe recuperarse en el siguiente intento');
-  assert.equal(intentos, 2);
+  });
+  assert.equal(stateDuringSend, NOTIFICATION_STATES.PENDING);
+  assert.equal(result.status, NOTIFICATION_STATES.SENT);
+  assert.equal((await ledger.obtener(1, 'resuelto:ciclo-1')).status, NOTIFICATION_STATES.SENT);
 });
 
-test('el backend queda expuesto para el diagnostico', () => {
-  const conPg = createNotificationLedger({ getPool: async () => null, backend: 'postgres' });
-  const sinPg = createNotificationLedger({ getPool: async () => null, backend: 'file' });
+test('un fallo queda failed y permite reintento controlado sin duplicar éxitos', async () => {
+  const ledger = createNotificationLedger({ getPool: async () => null, backend: 'file' });
+  let calls = 0;
+  const send = async () => ({ sent: ++calls > 1, reason: 'SEND_ERROR' });
+  const first = await entregarNotificacion({ ledger, ticketId: 2, tipo: 'comentario:9', enviar: send, retryDelayMs: 0 });
+  assert.equal(first.status, NOTIFICATION_STATES.FAILED);
+  assert.equal((await ledger.obtener(2, 'comentario:9')).attempts, 1);
+  const second = await entregarNotificacion({ ledger, ticketId: 2, tipo: 'comentario:9', enviar: send, retryDelayMs: 0 });
+  assert.equal(second.status, NOTIFICATION_STATES.SENT);
+  assert.equal((await ledger.obtener(2, 'comentario:9')).attempts, 2);
+  const duplicate = await entregarNotificacion({ ledger, ticketId: 2, tipo: 'comentario:9', enviar: send, retryDelayMs: 0 });
+  assert.equal(duplicate.skipped, true);
+  assert.equal(calls, 2);
+});
 
-  assert.equal(conPg.usaPostgres, true);
-  assert.equal(sinPg.usaPostgres, false);
+test('los reintentos se detienen al alcanzar el máximo', async () => {
+  const ledger = createNotificationLedger({ getPool: async () => null, backend: 'file' });
+  let calls = 0;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await entregarNotificacion({ ledger, ticketId: 3, tipo: 'sla:ciclo-1', maxAttempts: 3, retryDelayMs: 0,
+      enviar: async () => { calls += 1; return { sent: false, reason: 'SEND_ERROR' }; } });
+  }
+  assert.equal(calls, 3);
+  assert.equal((await ledger.obtener(3, 'sla:ciclo-1')).attempts, 3);
+});
+
+test('Postgres crea/migra estados y adquiere con conflicto atómico', async () => {
+  const queries = [];
+  const pool = { async query(sql, params) {
+    queries.push({ sql, params });
+    if (sql.includes('INSERT INTO')) return { rowCount: 1, rows: [{ status: 'pending', attempts: 1 }] };
+    return { rowCount: 0, rows: [] };
+  } };
+  const ledger = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
+  const started = await ledger.iniciar(7, 'sla:ciclo-2');
+  assert.equal(started.acquired, true);
+  const ddl = queries.find((query) => query.sql.includes('CREATE TABLE'));
+  const insert = queries.find((query) => query.sql.includes('INSERT INTO'));
+  assert.ok(ddl.sql.includes(PG_LEDGER_TABLE));
+  assert.match(ddl.sql, /status|attempts|next_retry_at/);
+  assert.match(insert.sql, /ON CONFLICT[\s\S]*status = 'failed'/);
+  assert.equal(insert.params[0], 7);
+  assert.equal(insert.params[1], 'sla:ciclo-2');
+});
+
+test('un DDL fallido se reintenta', async () => {
+  let ddlAttempts = 0;
+  const pool = { async query(sql) {
+    if (sql.includes('CREATE TABLE')) {
+      ddlAttempts += 1;
+      if (ddlAttempts === 1) throw new Error('Neon dormida');
+    }
+    return { rowCount: 1, rows: [{}] };
+  } };
+  const ledger = createNotificationLedger({ getPool: async () => pool, backend: 'postgres' });
+  await assert.rejects(() => ledger.iniciar(1, 'sla'));
+  assert.equal((await ledger.iniciar(1, 'sla')).acquired, true);
+  assert.equal(ddlAttempts, 2);
 });

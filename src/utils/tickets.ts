@@ -310,7 +310,7 @@ export function isTicketSlaExpired(ticket: TicketItem, nowMs = Date.now()): bool
 
 export function getSlaStatus(ticket: TicketItem, nowMs = Date.now()): { label: string; className: string } {
   if (isTicketClosed(ticket)) {
-    return { label: 'SLA CERRADO', className: 'bg-slate-100 text-slate-500 border-slate-200' };
+    return { label: ticket.estado === 'Cancelado' ? 'CANCELADO ? SIN SLA' : 'SLA CERRADO', className: 'bg-slate-100 text-slate-500 border-slate-200' };
   }
 
   const remaining = getTicketSlaRemainingMinutes(ticket, nowMs);

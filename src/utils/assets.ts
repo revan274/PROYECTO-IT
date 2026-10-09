@@ -15,6 +15,7 @@ import type {
 } from '../types/app';
 import { normalizeForCompare } from './format';
 import { USER_ROLE_ORDER, isUserRole } from './roles';
+import { normalizeTicketClassificationCatalogs } from '../../shared/ticket-classification.js';
 
 const NETWORK_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
 const RESPONSIBLE_RISK_EXEMPT_ASSET_TYPES = new Set(['MON', 'IMP', 'BSC', 'AUD', 'VPR', 'VDP']);
@@ -142,31 +143,7 @@ export function formatTicketBranch(value?: string, labels: Record<string, string
   return labels[code] || code;
 }
 
-export function resolveAssetBranchCode(
-  asset: Pick<Activo, 'departamento' | 'ubicacion'>,
-  validBranchCodes: ReadonlySet<string>,
-): string {
-  const departamento = String(asset.departamento || '').trim().toUpperCase();
-  if (departamento && validBranchCodes.has(departamento)) return departamento;
-
-  const ubicacion = String(asset.ubicacion || '').trim().toUpperCase();
-  if (!ubicacion) return '';
-
-  const segments = ubicacion.split('|').map((part) => part.trim()).filter(Boolean);
-  for (const segment of segments) {
-    if (validBranchCodes.has(segment)) return segment;
-    const tokens = segment.split(/\s+/).map((token) => token.trim()).filter(Boolean);
-    for (const token of tokens) {
-      if (validBranchCodes.has(token)) return token;
-    }
-  }
-
-  for (const code of validBranchCodes) {
-    if (ubicacion.includes(code)) return code;
-  }
-
-  return '';
-}
+export { resolveAssetBranchCode } from '../../shared/asset-relations.js';
 
 export function formatUserCargo(value?: string, labels: Record<string, string> = USER_CARGO_LABEL_BY_VALUE): string {
   const cargo = String(value || '').trim().toUpperCase();
@@ -343,7 +320,7 @@ export function normalizeCatalogState(value?: Partial<CatalogState>): CatalogSta
     }
   ));
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, roles, ...normalizeTicketClassificationCatalogs(value) };
 }
 
 export function calculateAssetRiskSummary(activos: Activo[]): AssetRiskSummary {

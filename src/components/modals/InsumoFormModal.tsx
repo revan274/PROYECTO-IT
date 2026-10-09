@@ -49,6 +49,7 @@ export function InsumoFormModal({
             className="w-full"
             invalid={Boolean(insumoTouched.nombre && validationErrors.nombre)}
             required
+            aria-label="Nombre del insumo"
             data-autofocus
             placeholder="NOMBRE"
             value={formData.nombre || ''}
@@ -63,6 +64,7 @@ export function InsumoFormModal({
               className="w-full"
               invalid={Boolean(insumoTouched.unidad && validationErrors.unidad)}
               required
+              aria-label="Unidad del insumo"
               placeholder="UNIDAD"
               value={formData.unidad || ''}
               onBlur={() => onTouchField('unidad')}
@@ -83,6 +85,7 @@ export function InsumoFormModal({
               className="w-full"
               invalid={Boolean(insumoTouched.stock && validationErrors.stock)}
               required
+              aria-label="Stock actual"
               type="number"
               min={0}
               step={1}
@@ -100,6 +103,7 @@ export function InsumoFormModal({
               className="w-full"
               invalid={Boolean(insumoTouched.min && validationErrors.min)}
               required
+              aria-label="Stock mínimo"
               type="number"
               min={0}
               step={1}
@@ -118,6 +122,7 @@ export function InsumoFormModal({
             className="w-full"
             invalid={Boolean(insumoTouched.categoria && validationErrors.categoria)}
             required
+            aria-label="Categoría del insumo"
             value={formData.categoria || ''}
             onBlur={() => onTouchField('categoria')}
             onChange={(e) => onChange({ categoria: e.target.value.toUpperCase() })}
@@ -130,6 +135,7 @@ export function InsumoFormModal({
         </Field>
         <div className="space-y-1">
           <Input
+            aria-label="Ubicación del insumo"
             variant="soft"
             className="w-full"
             invalid={Boolean(insumoTouched.ubicacion && validationErrors.ubicacion)}
@@ -141,6 +147,7 @@ export function InsumoFormModal({
         </div>
         <div className="space-y-1">
           <Input
+            aria-label="Proveedor o marca"
             variant="soft"
             className="w-full"
             invalid={Boolean(insumoTouched.proveedor && validationErrors.proveedor)}

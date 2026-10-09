@@ -52,6 +52,7 @@ export function auditIntegrity(db, options = {}) {
   const users = Array.isArray(db?.users) ? db.users : [];
   const sucursales = Array.isArray(db?.catalogos?.sucursales) ? db.catalogos.sucursales : [];
 
+  const assetIds = new Set(activos.map((asset) => Number(asset.id)));
   const assetTags = new Set(activos.map((asset) => text(asset?.tag).toUpperCase()).filter(Boolean));
   const userIds = new Set(users.map((user) => Number(user?.id)).filter((id) => Number.isSafeInteger(id) && id > 0));
   const userNames = new Set(users.map((user) => nameKey(user?.nombre)).filter(Boolean));
@@ -61,7 +62,7 @@ export function auditIntegrity(db, options = {}) {
     const ticketId = Number(ticket?.id) || null;
 
     const activoTag = text(ticket?.activoTag).toUpperCase();
-    if (activoTag && !assetTags.has(activoTag)) {
+    if (ticket.activoReferenciaPendiente || (ticket.activoId && !assetIds.has(Number(ticket.activoId))) || (activoTag && !assetTags.has(activoTag))) {
       add('TICKET_ACTIVO_INEXISTENTE', SEVERITY.MEDIA, ticketId,
         `El ticket referencia el activo "${activoTag}", que ya no existe en el inventario.`);
     }

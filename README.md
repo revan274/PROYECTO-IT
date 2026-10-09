@@ -263,6 +263,32 @@ DATABASE_URL="postgresql://...neon.tech/...?sslmode=require" npm run integrity:c
 Detecta: adjuntos cuyo archivo ya no está en disco, archivos huérfanos que nadie
 referencia, tickets apuntando a activos o usuarios inexistentes, e ids duplicados.
 
+### Medir la persistencia antes de normalizar
+
+El estado de negocio sigue en un único documento JSONB. Antes de proponer tablas por
+entidad, mide tamaño, volumen, costo de serialización y contención con el comando de solo
+diagnóstico:
+
+```bash
+npm run persistence:measure
+```
+
+Por defecto analiza `server/data/runtime/db.json` y no modifica datos. Para medir una base
+PostgreSQL de staging, define `MEASURE_DATABASE_URL` explícitamente. Ese modo lee
+`mesa_it_state`, reescribe únicamente una tabla temporal de la sesión, revierte la
+transacción y usa un advisory lock reservado para aproximar la espera entre clientes:
+
+```bash
+MEASURE_DATABASE_URL="postgresql://..." npm run persistence:measure -- \
+  --iterations=100 \
+  --output-json=medicion-persistencia.json \
+  --output-markdown=medicion-persistencia.md
+```
+
+No uses una cadena de producción para pruebas de concurrencia. La decisión de normalizar
+requiere datos representativos de staging y un SLO acordado; el tamaño del código o una
+medición local aislada no bastan.
+
 ### Frontend en Cloudflare
 
 1. Define en `.env.production` la URL absoluta de la API:

@@ -2,7 +2,8 @@ import { LOGO_GIGANTES_DATA_URI } from '../assets/logoGigantes';
 import type { TicketItem } from '../types/app';
 import { getTicketAreaLabel } from '../utils/appHelpers';
 import { escapeHtml, formatDateTime } from '../utils/format';
-import { formatTicketAttentionType, isTicketSlaExpired } from '../utils/tickets';
+import { formatTicketAttentionType } from '../utils/tickets';
+import { formatTicketSlaResult } from '../utils/sla';
 import { buildReportFilterLabels } from './reportFilterLabels';
 
 interface CountBar {
@@ -38,10 +39,18 @@ export interface ExecutiveReportData {
   reportAuditModuleBars: CountBar[];
   reportOpenCount: number;
   reportClosedCount: number;
-  reportSlaCompliancePct: number;
+  reportSlaCompliancePct: number | null;
   reportSlaCompliantCount: number;
   reportSlaTotalCount: number;
   reportSlaExpiredCount: number;
+  reportAvgFirstResponseHours: number | null;
+  reportMedianFirstResponseHours: number | null;
+  reportP90FirstResponseHours: number | null;
+  reportFirstResponseMedianTrend: TrendLabel;
+  reportAvgResolutionHours: number | null;
+  reportMedianResolutionHours: number | null;
+  reportP90ResolutionHours: number | null;
+  reportMttrMedianTrend: TrendLabel;
   reportInventorySnapshot: { totalActivos: number; activosEnFalla: number };
   reportSupplySnapshot: { total: number; agotados: number; bajoMinimo: number };
   sessionUserName: string;
@@ -82,6 +91,14 @@ export function buildExecutiveReportHtml(data: ExecutiveReportData): string {
     reportSlaCompliantCount,
     reportSlaTotalCount,
     reportSlaExpiredCount,
+    reportAvgFirstResponseHours,
+    reportMedianFirstResponseHours,
+    reportP90FirstResponseHours,
+    reportFirstResponseMedianTrend,
+    reportAvgResolutionHours,
+    reportMedianResolutionHours,
+    reportP90ResolutionHours,
+    reportMttrMedianTrend,
     reportInventorySnapshot,
     reportSupplySnapshot,
     sessionUserName,
@@ -118,18 +135,24 @@ export function buildExecutiveReportHtml(data: ExecutiveReportData): string {
   const ticketsTrendHtml = hasComparisonWindow ? `<div class="delta">${safeTicketsTrend}</div>` : '';
   const openTrendHtml = hasComparisonWindow ? `<div class="delta">${safeOpenTrend}</div>` : '';
   const slaTrendHtml = hasComparisonWindow ? `<div class="delta">${safeSlaTrend}</div>` : '';
+  const firstResponseTrendHtml = hasComparisonWindow
+    ? `<div class="delta">${escapeHtml(reportFirstResponseMedianTrend.label)}</div>`
+    : '';
+  const mttrTrendHtml = hasComparisonWindow
+    ? `<div class="delta">${escapeHtml(reportMttrMedianTrend.label)}</div>`
+    : '';
   const ticketRows = reportTickets.slice(0, 40).map((ticket) => {
     const area = getTicketAreaLabel(ticket);
     const branch = formatTicketBranchFromCatalog(ticket.sucursal);
     const attention = formatTicketAttentionType(ticket.atencionTipo);
-    const sla = isTicketSlaExpired(ticket, nowMs) ? 'Vencido' : 'En tiempo';
+    const sla = formatTicketSlaResult(ticket, nowMs);
     return `
         <tr>
           <td>${ticket.id}</td>
           <td>${escapeHtml(formatDateTime(ticket.fechaCreacion || ticket.fecha))}</td>
           <td>${escapeHtml(branch)}</td>
           <td>${escapeHtml(area)}</td>
-          <td>${escapeHtml(ticket.activoTag)}</td>
+          <td>${escapeHtml(ticket.activoTag || 'SIN ACTIVO')}</td>
           <td>${escapeHtml(ticket.prioridad)}</td>
           <td>${escapeHtml(ticket.estado)}</td>
           <td>${escapeHtml(attention)}</td>
@@ -214,8 +237,22 @@ export function buildExecutiveReportHtml(data: ExecutiveReportData): string {
       <div class="card"><div class="label">Tickets</div><div class="kpi">${reportTickets.length}</div>${ticketsTrendHtml}</div>
       <div class="card"><div class="label">Abiertos</div><div class="kpi">${reportOpenCount}</div>${openTrendHtml}</div>
       <div class="card"><div class="label">Cerrados</div><div class="kpi">${reportClosedCount}</div></div>
-      <div class="card"><div class="label">SLA cumplido</div><div class="kpi">${reportSlaCompliancePct}%</div><div class="delta">${reportSlaCompliantCount}/${reportSlaTotalCount} en tiempo</div>${slaTrendHtml}</div>
+      <div class="card"><div class="label">SLA cumplido</div><div class="kpi">${reportSlaCompliancePct === null ? 'N/D' : `${reportSlaCompliancePct}%`}</div><div class="delta">${reportSlaTotalCount > 0 ? `${reportSlaCompliantCount}/${reportSlaTotalCount} resueltos en tiempo` : 'Sin resoluciones evaluables'}</div>${slaTrendHtml}</div>
       <div class="card"><div class="label">SLA vencido</div><div class="kpi">${reportSlaExpiredCount}</div></div>
+    </div>
+    <p class="section-title">Tiempo de primera respuesta</p>
+    <p class="meta">Creación → primera atención. No representa tiempo de resolución.</p>
+    <div class="grid">
+      <div class="card"><div class="label">Promedio</div><div class="kpi">${reportAvgFirstResponseHours === null ? 'N/D' : `${reportAvgFirstResponseHours} h`}</div></div>
+      <div class="card"><div class="label">Mediana</div><div class="kpi">${reportMedianFirstResponseHours === null ? 'N/D' : `${reportMedianFirstResponseHours} h`}</div>${firstResponseTrendHtml}</div>
+      <div class="card"><div class="label">P90</div><div class="kpi">${reportP90FirstResponseHours === null ? 'N/D' : `${reportP90FirstResponseHours} h`}</div></div>
+    </div>
+    <p class="section-title">MTTR por ciclo resuelto</p>
+    <p class="meta">Inicio del ciclo → resolución. El cierre administrativo no interviene.</p>
+    <div class="grid">
+      <div class="card"><div class="label">Promedio</div><div class="kpi">${reportAvgResolutionHours === null ? 'N/D' : `${reportAvgResolutionHours} h`}</div></div>
+      <div class="card"><div class="label">Mediana</div><div class="kpi">${reportMedianResolutionHours === null ? 'N/D' : `${reportMedianResolutionHours} h`}</div>${mttrTrendHtml}</div>
+      <div class="card"><div class="label">P90</div><div class="kpi">${reportP90ResolutionHours === null ? 'N/D' : `${reportP90ResolutionHours} h`}</div></div>
     </div>
     <div class="grid">
       <div class="card"><div class="label">Activos totales</div><div class="kpi">${reportInventorySnapshot.totalActivos}</div></div>

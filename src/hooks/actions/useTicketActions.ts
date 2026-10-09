@@ -1,4 +1,7 @@
-import { useCallback } from 'react';
+import { isTicketReopening } from '../../../shared/ticket-rules.js';
+import type { TicketWaitReasonValue } from '../../../shared/ticket-wait-policy.js';
+import { useCallback, useRef } from 'react';
+import { retainTicket } from '../../api/tickets';
 import type React from 'react';
 import { CLIENT_ATTACHMENT_MAX_BYTES, CLIENT_ATTACHMENT_MAX_COUNT } from '../../constants/app';
 import type {
@@ -13,6 +16,7 @@ import type {
   RefreshAppData,
   SetTickets,
   ShowConfirm,
+  ShowPrompt,
   ShowToast,
 } from '../../types/actionDependencies';
 import { ApiError, apiRequest, getApiErrorMessage } from '../../utils/api';
@@ -20,7 +24,6 @@ import { buildApiUrl, getStoredSessionToken } from '../../utils/app';
 import { ticketBelongsToSessionUser } from '../../utils/appHelpers';
 import { isRequesterOnlyRole } from '../../utils/roles';
 import {
-  buildTicketDescription,
   buildTicketHistoryEntry,
   normalizeTicketAttentionType,
   normalizeTicketTravelRequired,
@@ -32,6 +35,7 @@ interface UseTicketActionsProps {
   refreshAppData: RefreshAppData | null;
   showToast: ShowToast;
   showConfirm: ShowConfirm | null;
+  showPrompt?: ShowPrompt | null;
   tickets: TicketItem[];
   setTickets: SetTickets;
   canEdit: boolean;
@@ -42,6 +46,8 @@ interface UseTicketActionsProps {
   ticketAssetOptionsIncludes: (tag: string) => boolean;
   setTicketCommentDrafts: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   ticketCommentDrafts: Record<number, string>;
+  setTicketCommentResponseRequests: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
+  ticketCommentResponseRequests: Record<number, boolean>;
   setTicketAttachmentLoadingId: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
@@ -62,12 +68,20 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function createTicketIntentKey(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `ticket-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useTicketActions({
   sessionUser,
   backendConnected,
   refreshAppData,
   showToast,
   showConfirm,
+  showPrompt,
   tickets,
   setTickets,
   canEdit,
@@ -78,8 +92,11 @@ export function useTicketActions({
   ticketAssetOptionsIncludes,
   setTicketCommentDrafts,
   ticketCommentDrafts,
+  setTicketCommentResponseRequests,
+  ticketCommentResponseRequests,
   setTicketAttachmentLoadingId,
 }: UseTicketActionsProps) {
+  const ticketCreationIntentRef = useRef<{ signature: string; key: string } | null>(null);
   const ensureBackendConnected = useCallback(
     (action: string) => {
       if (backendConnected) return true;
@@ -101,6 +118,7 @@ export function useTicketActions({
 
   const canDeleteTicket = useCallback(
     (ticket: TicketItem) => {
+      if (ticket.archivo) return false;
       if (canEdit) return true;
       if (!isRequesterOnlyRole(sessionUser?.rol)) return false;
       if (!canAccessTicketBySession(ticket)) return false;
@@ -116,23 +134,31 @@ export function useTicketActions({
     }
 
     const activoTag = String(formData.activoTag || '').trim().toUpperCase();
+    const tipoSolicitud = formData.tipoSolicitud || 'INCIDENTE_ACTIVO';
+    const requiresAsset = tipoSolicitud === 'INCIDENTE_ACTIVO';
     const sucursal = String(formData.sucursal || '').trim().toUpperCase();
-    const areaAfectada = String(formData.areaAfectada || '').trim();
+    const areaId = String(formData.areaId || '').trim();
+    const categoriaId = String(formData.categoriaId || '').trim();
     const atencionTipo = normalizeTicketAttentionType(formData.atencionTipo);
     const trasladoRequerido = normalizeTicketTravelRequired(formData.trasladoRequerido);
     const descripcionBase = String(formData.descripcion || '').trim();
     const prioridad = formData.prioridad || 'MEDIA';
+    const requesterUserId = Number(formData.requesterUserId || sessionUser?.id);
 
     const ticketValidationError = !isValidTicketBranchValue(sucursal)
       ? 'Selecciona una sucursal valida para el ticket'
-      : ticketAssetOptionsCount === 0
+      : requiresAsset && ticketAssetOptionsCount === 0
         ? 'No hay activos registrados en la sucursal seleccionada'
-        : !activoTag
+        : requiresAsset && !activoTag
           ? 'Selecciona un TAG del equipo'
-          : !ticketAssetOptionsIncludes(activoTag)
+          : activoTag && !ticketAssetOptionsIncludes(activoTag)
             ? 'Selecciona un TAG valido para la sucursal elegida'
-            : !areaAfectada
+            : !areaId
               ? 'Selecciona área afectada'
+              : !categoriaId
+                ? 'Selecciona la categoría del ticket'
+              : !Number.isSafeInteger(requesterUserId) || requesterUserId <= 0
+                ? 'Selecciona un solicitante válido'
               : canEdit && !atencionTipo
                 ? 'Selecciona el tipo de atención del ticket'
                 : !descripcionBase
@@ -145,10 +171,13 @@ export function useTicketActions({
     }
     if (!ensureBackendConnected('Crear tickets')) return false;
 
-    const descripcionFinal = buildTicketDescription(areaAfectada, descripcionBase);
     const payload: Record<string, unknown> = {
       activoTag,
-      descripcion: descripcionFinal,
+      tipoSolicitud,
+      descripcion: descripcionBase,
+      areaId,
+      categoriaId,
+      requesterUserId,
       sucursal,
       prioridad,
     };
@@ -195,7 +224,7 @@ export function useTicketActions({
           showToast('La fecha de cierre no puede ser anterior a la de creación', 'warning');
           return false;
         }
-        payload.fechaCierre = fechaCierreDate.toISOString();
+        payload[estadoHistorico === 'Resuelto' ? 'fechaResolucion' : 'fechaCierre'] = fechaCierreDate.toISOString();
       }
 
       payload.fechaCreacion = fechaCreacionDate.toISOString();
@@ -204,11 +233,21 @@ export function useTicketActions({
       endpoint = '/tickets/historical';
     }
 
+    const intentSignature = JSON.stringify([endpoint, payload]);
+    if (ticketCreationIntentRef.current?.signature !== intentSignature) {
+      ticketCreationIntentRef.current = { signature: intentSignature, key: createTicketIntentKey() };
+    }
+    const idempotencyKey = ticketCreationIntentRef.current.key;
+
     try {
       await apiRequest(endpoint, {
         method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify(payload),
       });
+      if (ticketCreationIntentRef.current?.signature === intentSignature) {
+        ticketCreationIntentRef.current = null;
+      }
       await refreshData();
       showToast(isHistorical ? 'Ticket histórico registrado' : 'Ticket creado', 'success');
       return true;
@@ -226,6 +265,8 @@ export function useTicketActions({
       comentario?: string;
       atencionTipo?: TicketAttentionType;
       trasladoRequerido?: boolean;
+      prioridad?: 'MEDIA' | 'ALTA' | 'CRITICA';
+      motivoEspera?: TicketWaitReasonValue;
     },
   ): Promise<boolean> => {
     if (!canEdit) {
@@ -233,11 +274,23 @@ export function useTicketActions({
       return false;
     }
     if (!ensureBackendConnected('Actualizar tickets')) return false;
+    const currentTicket = tickets.find((ticket) => ticket.id === ticketId);
+    let motivoReapertura: string | null = null;
+    if (currentTicket && updates.estado && isTicketReopening(currentTicket.estado, updates.estado)) {
+      motivoReapertura = showPrompt
+        ? await showPrompt('Indica por que necesita nueva atencion.', { title: 'Reabrir ticket' })
+        : window.prompt('Motivo de reapertura:');
+      if (motivoReapertura === null) return false;
+      if (!motivoReapertura.trim() || motivoReapertura.trim().length > 2000) {
+        showToast('La reapertura requiere un motivo de 1 a 2000 caracteres', 'warning');
+        return false;
+      }
+    }
 
     try {
       await apiRequest(`/tickets/${ticketId}`, {
         method: 'PATCH',
-        body: JSON.stringify(updates),
+        body: JSON.stringify({ ...updates, ...(motivoReapertura ? { motivoReapertura: motivoReapertura.trim() } : {}) }),
       });
       await refreshData();
       showToast('Ticket actualizado', 'success');
@@ -248,7 +301,7 @@ export function useTicketActions({
     }
   };
 
-  const resolverTicket = async (id: number): Promise<boolean> => {
+  const resolverTicket = async (id: number, solucionAplicada: string, diagnostico?: string): Promise<boolean> => {
     if (!canEdit) {
       showToast('Tu rol no permite resolver tickets', 'warning');
       return false;
@@ -258,9 +311,10 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${id}/resolve`, {
         method: 'PATCH',
+        body: JSON.stringify({ solucionAplicada, diagnostico }),
       });
       await refreshData();
-      showToast('Ticket cerrado', 'success');
+      showToast('Ticket resuelto', 'success');
       return true;
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'No se pudo cerrar el ticket', 'error');
@@ -275,6 +329,7 @@ export function useTicketActions({
     }
 
     const comentario = String(ticketCommentDrafts[id] || '').trim();
+    const requiereRespuesta = ticketCommentResponseRequests[id] === true;
     if (!comentario) {
       showToast('Escribe un comentario para guardar', 'warning');
       return false;
@@ -291,14 +346,15 @@ export function useTicketActions({
     try {
       await apiRequest(`/tickets/${id}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ comentario }),
+        body: JSON.stringify({ comentario, requiereRespuesta }),
       });
       await refreshData();
       setTicketCommentDrafts((prev) => ({
         ...prev,
         [id]: '',
       }));
-      showToast('Comentario agregado', 'success');
+      setTicketCommentResponseRequests((prev) => ({ ...prev, [id]: false }));
+      showToast(requiereRespuesta ? 'Comentario agregado y aviso solicitado' : 'Comentario agregado', 'success');
       return true;
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'No se pudo guardar el comentario', 'error');
@@ -314,21 +370,23 @@ export function useTicketActions({
       return false;
     }
 
-    const confirmed = showConfirm
-      ? await showConfirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta acción no se puede deshacer.`)
-      : window.confirm(`Eliminar ticket #${ticketToDelete.id} (${ticketToDelete.activoTag})? Esta acción no se puede deshacer.`);
-    if (!confirmed) return false;
-    if (!ensureBackendConnected('Eliminar tickets')) return false;
-
+    const accion = ['Resuelto', 'Cerrado', 'Cancelado'].includes(ticketToDelete.estado) ? 'archivar' : 'cancelar';
+    const motivo = showPrompt
+      ? await showPrompt('Motivo obligatorio. Se conservaran el historial y las evidencias.', { title: accion === 'cancelar' ? 'Cancelar ticket' : 'Archivar ticket' })
+      : window.prompt('Motivo obligatorio para ' + accion + ' el ticket:');
+    if (motivo === null) return false;
+    if (!motivo.trim() || motivo.trim().length > 2000) {
+      showToast('Escribe un motivo de 1 a 2000 caracteres', 'warning');
+      return false;
+    }
+    if (!ensureBackendConnected('Conservar expediente')) return false;
     try {
-      await apiRequest(`/tickets/${ticketId}`, {
-        method: 'DELETE',
-      });
+      await retainTicket(ticketId, accion, motivo.trim());
       await refreshData();
-      showToast('Ticket eliminado', 'success');
+      showToast(accion === 'cancelar' ? 'Ticket cancelado; expediente conservado' : 'Ticket archivado', 'success');
       return true;
     } catch (error) {
-      showToast(getApiErrorMessage(error) || 'No se pudo eliminar el ticket', 'error');
+      showToast(getApiErrorMessage(error) || 'No se pudo actualizar el expediente', 'error');
       return false;
     }
   };
@@ -349,8 +407,10 @@ export function useTicketActions({
       return false;
     }
 
-    const currentAttachments = target.attachments || [];
-    if (currentAttachments.length >= CLIENT_ATTACHMENT_MAX_COUNT) {
+    const currentAttachmentCount = Array.isArray(target.attachments)
+      ? target.attachments.length
+      : Math.max(0, Number(target.attachmentCount) || 0);
+    if (currentAttachmentCount >= CLIENT_ATTACHMENT_MAX_COUNT) {
       showToast(`Limite de ${CLIENT_ATTACHMENT_MAX_COUNT} adjuntos por ticket alcanzado`, 'warning');
       return false;
     }

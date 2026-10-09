@@ -21,7 +21,7 @@ const USERS = [
 
 function subscription(userId, username, suffix) {
   return {
-    endpoint: `https://push.example.test/subscription/${suffix}`,
+    endpoint: `https://fcm.googleapis.com/subscription/${suffix}`,
     keys: { p256dh: 'a'.repeat(88), auth: 'b'.repeat(24) },
     userId,
     username,
@@ -62,7 +62,7 @@ test('envía un payload mínimo y limpia suscripciones expiradas', async () => {
 
   assert.equal(result.sent, 1);
   assert.equal(sent[0].body, 'Ticket #18 · CRITICA · PC-18');
-  assert.deepEqual(removed, ['https://push.example.test/subscription/expired']);
+  assert.deepEqual(removed, ['https://fcm.googleapis.com/subscription/expired']);
   assert.equal(buildTicketPushPayload({ id: 1, prioridad: 'ALTA' }).url, '/#/tickets');
 });
 

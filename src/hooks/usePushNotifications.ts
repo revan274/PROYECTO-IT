@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiRequest, getApiErrorMessage } from '../utils/api';
+import { ApiError, apiRequest, getApiErrorMessage } from '../utils/api';
 import type { ShowToast } from '../types/actionDependencies';
 
 export type PushNotificationStatus = 'idle' | 'enabled' | 'denied' | 'unsupported' | 'loading';
@@ -77,6 +77,7 @@ export function usePushNotifications({ sessionUser, showToast }: UsePushNotifica
     }
 
     setStatus('loading');
+    let attemptedSubscription: PushSubscription | null = null;
     try {
       const configuration = await apiRequest<PushConfigurationResponse>('/push/config', {
         cache: 'no-store',
@@ -100,6 +101,7 @@ export function usePushNotifications({ sessionUser, showToast }: UsePushNotifica
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToArrayBuffer(configuration.publicKey),
         });
+      attemptedSubscription = subscription;
       await apiRequest('/push/subscriptions', {
         method: 'POST',
         body: JSON.stringify(subscription.toJSON()),
@@ -107,6 +109,9 @@ export function usePushNotifications({ sessionUser, showToast }: UsePushNotifica
       setStatus('enabled');
       showToast('Notificaciones push activadas en este dispositivo.', 'success');
     } catch (error) {
+      if (error instanceof ApiError && error.status === 400) {
+        await attemptedSubscription?.unsubscribe().catch(() => false);
+      }
       setStatus('idle');
       showToast(getApiErrorMessage(error) || 'No se pudieron activar las notificaciones push.', 'error');
     }

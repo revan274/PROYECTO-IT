@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { addBusinessMinutes, businessMinutesBetween } from '../shared/business-calendar.js';
 import { parseHolidayList, buildSlaCalendar } from './modules/sla-calendar.js';
 
 test('parseHolidayList acepta fechas ISO separadas por coma y descarta basura', () => {
@@ -27,4 +28,18 @@ test('buildSlaCalendar conserva la jornada de Mesa IT y aplica los feriados del 
 test('buildSlaCalendar permite sobreescribir la zona horaria', () => {
   assert.equal(buildSlaCalendar({}).timeZone, 'America/Mexico_City');
   assert.equal(buildSlaCalendar({ SLA_TIMEZONE: 'America/Tijuana' }).timeZone, 'America/Tijuana');
+});
+
+test('las pausas cuentan y agregan únicamente minutos hábiles', () => {
+  const calendar = buildSlaCalendar({ SLA_TIMEZONE: 'UTC' });
+  const paused = businessMinutesBetween(
+    Date.parse('2026-01-09T16:00:00.000Z'),
+    Date.parse('2026-01-12T09:30:00.000Z'),
+    calendar,
+  );
+  assert.equal(paused, 330, 'viernes 60 min + sábado 180 min + lunes 90 min; domingo no cuenta');
+  assert.equal(
+    addBusinessMinutes(Date.parse('2026-01-12T16:00:00.000Z'), paused, calendar),
+    '2026-01-13T12:30:00.000Z',
+  );
 });

@@ -1,3 +1,4 @@
+import { linkTicketAssets, ticketReferencesAsset } from '../../shared/asset-relations.js';
 import express from 'express';
 import { readDb, updateDb, nextId } from '../store.js';
 import { getRequestDb } from '../utils/helpers.js';
@@ -225,6 +226,7 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
       const nextItem = { ...db.activos[idx], ...normalized, id };
       db.activos[idx] = nextItem;
+      linkTicketAssets(db);
       pushAuditWithContext(db, req, {
         accion: 'Edición Activo',
         item: nextItem.tag,
@@ -311,6 +313,9 @@ router.delete('/', requireAuth, async (req, res, next) => {
 
     const result = await updateDb((db) => {
       const removedCount = Array.isArray(db.activos) ? db.activos.length : 0;
+      if (db.activos.some((asset) => db.tickets.some((ticket) => ticketReferencesAsset(ticket, asset)))) {
+        return { blocked: true };
+      }
       if (removedCount > 0) {
         db.activos = [];
         pushAuditWithContext(db, req, {
@@ -326,6 +331,7 @@ router.delete('/', requireAuth, async (req, res, next) => {
       return { removedCount };
     });
 
+    if (result?.blocked) return res.status(409).json({ error: 'Hay activos vinculados a tickets. No se puede borrar el inventario.' });
     res.json({ ok: true, removedCount: Number(result?.removedCount || 0) });
   } catch (error) {
     next(error);
@@ -342,6 +348,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     const removed = await updateDb((db) => {
       const idx = db.activos.findIndex((a) => a.id === id);
       if (idx < 0) return null;
+      if (db.tickets.some((ticket) => ticketReferencesAsset(ticket, db.activos[idx]))) return { blocked: true };
       const [activo] = db.activos.splice(idx, 1);
       pushAuditWithContext(db, req, {
         accion: 'Baja Activo',
@@ -356,6 +363,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       return activo;
     });
 
+    if (removed?.blocked) return res.status(409).json({ error: 'El activo tiene tickets asociados y debe conservarse.' });
     if (!removed) return res.status(404).json({ error: 'Activo no encontrado.' });
     res.json({ ok: true, removed });
   } catch (error) {

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-09T21:23:50.918Z",
+  "input": {
+    "localFile": "server/data/runtime/db.json",
+    "iterations": 80,
+    "postgresMeasured": false
+  },
+  "local": {
+    "source": "local-json-snapshot",
+    "document": {
+      "jsonBytes": 139560,
+      "gzipBytes": 17889,
+      "gzipRatio": 0.1282
+    },
+    "volume": {
+      "users": 5,
+      "assets": 154,
+      "supplies": 10,
+      "tickets": 0,
+      "auditRows": 98,
+      "ticketHistoryEvents": 0,
+      "ticketAttachments": 0,
+      "ticketCycles": 0
+    },
+    "cpuLatency": {
+      "parse": {
+        "samples": 80,
+        "minMs": 0.296,
+        "meanMs": 0.324,
+        "p50Ms": 0.307,
+        "p95Ms": 0.384,
+        "maxMs": 0.77
+      },
+      "stringify": {
+        "samples": 80,
+        "minMs": 0.329,
+        "meanMs": 0.385,
+        "p50Ms": 0.355,
+        "p95Ms": 0.56,
+        "maxMs": 0.692
+      },
+      "fullRewriteCpu": {
+        "samples": 80,
+        "minMs": 0.636,
+        "meanMs": 0.694,
+        "p50Ms": 0.663,
+        "p95Ms": 0.93,
+        "maxMs": 1.022
+      }
+    },
+    "syntheticConcurrency": [
+      {
+        "concurrency": 1,
+        "operations": 8,
+        "elapsedMs": 5.823,
+        "operationsPerSecond": 1373.86,
+        "simulatedLockWait": {
+          "samples": 8,
+          "minMs": 0.038,
+          "meanMs": 2.68,
+          "p50Ms": 2.695,
+          "p95Ms": 4.885,
+          "maxMs": 5.12
+        },
+        "parseMutateStringify": {
+          "samples": 8,
+          "minMs": 0.648,
+          "meanMs": 0.716,
+          "p50Ms": 0.676,
+          "p95Ms": 0.876,
+          "maxMs": 0.958
+        }
+      },
+      {
+        "concurrency": 2,
+        "operations": 8,
+        "elapsedMs": 5.737,
+        "operationsPerSecond": 1394.46,
+        "simulatedLockWait": {
+          "samples": 8,
+          "minMs": 0.009,
+          "meanMs": 2.4,
+          "p50Ms": 2.347,
+          "p95Ms": 4.698,
+          "maxMs": 5.043
+        },
+        "parseMutateStringify": {
+          "samples": 8,
+          "minMs": 0.656,
+          "meanMs": 0.713,
+          "p50Ms": 0.672,
+          "p95Ms": 0.888,
+          "maxMs": 0.987
+        }
+      },
+      {
+        "concurrency": 4,
+        "operations": 16,
+        "elapsedMs": 11.125,
+        "operationsPerSecond": 1438.22,
+        "simulatedLockWait": {
+          "samples": 16,
+          "minMs": 0.011,
+          "meanMs": 5.111,
+          "p50Ms": 5.089,
+          "p95Ms": 9.92,
+          "maxMs": 10.417
+        },
+        "parseMutateStringify": {
+          "samples": 16,
+          "minMs": 0.646,
+          "meanMs": 0.693,
+          "p50Ms": 0.669,
+          "p95Ms": 0.812,
+          "maxMs": 0.98
+        }
+      },
+      {
+        "concurrency": 8,
+        "operations": 32,
+        "elapsedMs": 22.268,
+        "operationsPerSecond": 1437.03,
+        "simulatedLockWait": {
+          "samples": 32,
+          "minMs": 0.031,
+          "meanMs": 10.62,
+          "p50Ms": 10.641,
+          "p95Ms": 20.529,
+          "maxMs": 21.573
+        },
+        "parseMutateStringify": {
+          "samples": 32,
+          "minMs": 0.646,
+          "meanMs": 0.693,
+          "p50Ms": 0.663,
+          "p95Ms": 0.849,
+          "maxMs": 1.182
+        }
+      }
+    ],
+    "limitations": [
+      "La contención es una simulación local de exclusión serial; no mide red, PostgreSQL ni Neon.",
+      "La reescritura se ejecuta en memoria y no incluye WAL, fsync, índices ni transferencia al servidor."
+    ]
+  },
+  "postgres": null,
+  "decision": "NO_MIGRATION_DECISION_WITHOUT_REPRESENTATIVE_POSTGRES_EVIDENCE"
+}

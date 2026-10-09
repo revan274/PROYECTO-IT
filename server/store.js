@@ -1,3 +1,6 @@
+import { normalizePushSubscription } from './modules/push-notifications.js';
+import { linkTicketAssets } from '../shared/asset-relations.js';
+import { migrateLegacyTicketClassification, normalizeTicketClassificationCatalogs } from '../shared/ticket-classification.js';
 import { promises as fs } from 'node:fs';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -8,7 +11,7 @@ import {
   normalizeStoredUserRole,
 } from './domain/roles.js';
 import { mutatePostgresStateWithLock } from './modules/postgres-state.js';
-import { calcSlaDueDate } from './modules/sla-calendar.js';
+import { normalizeTicketDates, syncTicketCycle } from './domain/ticket-lifecycle.js';
 import { buildPoolOptions, attachPoolErrorHandler, withPgRetry } from './modules/postgres-pool.js';
 import { resolveRuntimePaths } from './modules/runtime-paths.js';
 
@@ -54,7 +57,7 @@ const DEFAULT_USER_CARGOS = [
   'Auxiliar de Sistemas',
   'CeDis',
 ];
-const TICKET_BRANCH_CODES = new Set(DEFAULT_TICKET_BRANCHES.map((branch) => branch.code));
+
 let pgPool = null;
 let pgInitPromise = null;
 
@@ -281,27 +284,9 @@ function normalizeTicketTravelRequired(value) {
   return undefined;
 }
 
-function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
-  const copy = { ...ticket };
-  if (!copy.fechaCreacion) {
-    copy.fechaCreacion = new Date().toISOString();
-  }
-  if (!copy.fechaLimite) {
-    // Antes duplicaba la política SLA con números mágicos (2/8/24) y saltaba el calendario
-    // laboral: cualquier cambio en SLA_POLICY_HOURS no llegaba hasta aquí.
-    copy.fechaLimite = calcSlaDueDate(copy.prioridad);
-  }
-  if (!Array.isArray(copy.historial)) {
-    copy.historial = [
-      {
-        fecha: copy.fecha || now(),
-        usuario: 'Sistema',
-        accion: 'Migrado',
-        estado: copy.estado || 'Abierto',
-        comentario: 'Ticket normalizado',
-      },
-    ];
-  }
+function normalizeTicket(ticket) {
+  const copy = normalizeTicketDates(ticket);
+  copy.tipoSolicitud = copy.tipoSolicitud === 'SOLICITUD_SERVICIO' ? 'SOLICITUD_SERVICIO' : 'INCIDENTE_ACTIVO';
   if (!copy.estado) copy.estado = 'Abierto';
   if (!copy.prioridad) copy.prioridad = 'MEDIA';
   if (!copy.asignadoA) copy.asignadoA = '';
@@ -318,8 +303,14 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
     ? copy.attachments.map(normalizeTicketAttachment).filter(Boolean)
     : [];
   copy.sucursal = text(copy.sucursal).toUpperCase();
-  if (!validBranchCodes.has(copy.sucursal)) copy.sucursal = '';
+  // Preserve unknown historical branch codes for integrity review.
   copy.departamento = text(copy.departamento).toUpperCase();
+  const requesterUserId = Math.trunc(Number(copy.requesterUserId ?? copy.solicitadoPorId));
+  copy.requesterUserId = Number.isSafeInteger(requesterUserId) && requesterUserId > 0 ? requesterUserId : null;
+  copy.solicitadoPorId = copy.requesterUserId;
+  const createdByUserId = Math.trunc(Number(copy.createdByUserId));
+  copy.createdByUserId = Number.isSafeInteger(createdByUserId) && createdByUserId > 0 ? createdByUserId : null;
+  if (!copy.createdByUserId) copy.createdByLegacyPending = true;
   if (!text(copy.solicitadoPor)) {
     const firstHistory = Array.isArray(copy.historial) && copy.historial.length > 0
       ? copy.historial[copy.historial.length - 1]
@@ -328,6 +319,8 @@ function normalizeTicket(ticket, validBranchCodes = TICKET_BRANCH_CODES) {
   } else {
     copy.solicitadoPor = text(copy.solicitadoPor);
   }
+  if (Array.isArray(copy.ciclos)) copy.ciclos = copy.ciclos.map((cycle) => ({ ...cycle }));
+  syncTicketCycle(copy);
   return copy;
 }
 
@@ -397,7 +390,7 @@ function normalizeCatalogs(catalogos) {
   });
   const roles = DEFAULT_ROLE_CATALOG.map((role) => roleMap.get(role.value)).filter(Boolean);
 
-  return { sucursales, cargos, roles };
+  return { sucursales, cargos, roles, ...normalizeTicketClassificationCatalogs(source) };
 }
 
 function normalizeSupply(item) {
@@ -848,9 +841,6 @@ function normalizeAsset(item) {
 function normalizeDbShape(db) {
   const normalized = { ...db };
   normalized.catalogos = normalizeCatalogs(db.catalogos);
-  const validBranchCodes = new Set(
-    normalized.catalogos.sucursales.map((branch) => text(branch?.code).toUpperCase()).filter(Boolean),
-  );
   normalized.users = Array.isArray(db.users) && db.users.length > 0
     ? db.users.map((user) => {
       const copy = { ...user };
@@ -875,6 +865,7 @@ function normalizeDbShape(db) {
   // usuario. Se descarta cualquier registro incompleto al cargar datos antiguos.
   const subscriptionsByEndpoint = new Map();
   for (const raw of Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : []) {
+    if (!normalizePushSubscription(raw)) continue;
     const endpoint = String(raw?.endpoint || '').trim();
     const p256dh = String(raw?.keys?.p256dh || '').trim();
     const auth = String(raw?.keys?.auth || '').trim();
@@ -896,10 +887,13 @@ function normalizeDbShape(db) {
     ? db.travelAdjustments.map(normalizeTravelAdjustment).filter(Boolean)
     : [];
   normalized.tickets = Array.isArray(db.tickets)
-    ? db.tickets.map((ticket) => normalizeTicket(ticket, validBranchCodes))
+    ? db.tickets.map(normalizeTicket)
     : [];
+  normalized.tickets = normalized.tickets.map((ticket) =>
+    migrateLegacyTicketClassification(ticket, normalized.catalogos));
   // `asignadoA` permanece como etiqueta visible, pero `asignadoAId` es la identidad
   // estable. Los tickets anteriores se migran al normalizar el documento.
+  linkTicketAssets(normalized);
   const usersById = new Map(normalized.users.map((user) => [Number(user.id), user]));
   const usersByName = new Map(normalized.users.map((user) => [text(user.nombre).toLocaleLowerCase(), user]));
   for (const ticket of normalized.tickets) {
@@ -1098,7 +1092,9 @@ function getDbMigrationFlags(parsed) {
   const catalogsRequireMigration = !parsed?.catalogos
     || !Array.isArray(parsed.catalogos?.sucursales)
     || !Array.isArray(parsed.catalogos?.cargos)
-    || !Array.isArray(parsed.catalogos?.roles);
+    || !Array.isArray(parsed.catalogos?.roles)
+    || !Array.isArray(parsed.catalogos?.areas)
+    || !Array.isArray(parsed.catalogos?.categorias);
   const revisionRequiresMigration = !Number.isFinite(Number(parsed?.meta?.revision));
 
   return {
@@ -1239,7 +1235,7 @@ export function nextId(db) {
 }
 
 export function now() {
-  return new Date().toLocaleString('es-MX', { hour12: false });
+  return new Date().toISOString();
 }
 
 export function sanitizeUser(user) {

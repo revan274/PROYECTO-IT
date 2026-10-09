@@ -1,10 +1,37 @@
+function readResolution(body) {
+  const solucionAplicada = typeof body?.solucionAplicada === 'string' ? body.solucionAplicada.trim() : '';
+  const diagnostico = typeof body?.diagnostico === 'string' ? body.diagnostico.trim() : '';
+  if (!solucionAplicada || solucionAplicada.length > 8000 || diagnostico.length > 8000) {
+    throw Object.assign(new Error('La solucion aplicada es obligatoria; solucion y diagnostico admiten hasta 8000 caracteres.'), { status: 400 });
+  }
+  return { solucionAplicada, diagnostico: diagnostico || null };
+}
+
+import { canTransitionTicket, isTicketReopening } from '../../shared/ticket-rules.js';
+import { parseTicketWaitReason } from '../../shared/ticket-wait-policy.js';
+import { assignSlaToCurrentCycle, recordTicketMilestones, recordTicketWaitTransition, syncTicketCycle } from '../domain/ticket-lifecycle.js';
+function assertTicketMutable(ticket) {
+  if (ticket.estado === 'Cancelado' || ticket.archivo) {
+    throw Object.assign(new Error('El expediente cancelado o archivado conserva su estado y evidencias.'), { status: 409 });
+  }
+}
+
+import { resolveAssetBranchCode } from '../../shared/asset-relations.js';
+import { resolveTicketClassification } from '../../shared/ticket-classification.js';
+import { ticketMatchesSearch } from '../../shared/ticket-search.js';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import express from 'express';
 import { updateDb, now, nextId } from '../store.js';
 import { getRequestDb } from '../utils/helpers.js';
-import { keepsAssetInFailureState } from '../../shared/ticket-rules.js';
-import { avisar, planDeAvisoAlCrear, MOTIVOS } from '../modules/ticket-notifications.js';
+import { keepsAssetInFailureState, parseTicketPriority, parseTicketRequestType } from '../../shared/ticket-rules.js';
+import { avisar, planDeAvisoAlCrear, planDeAvisoAlResolver, planDeAvisoDeComentario, MOTIVOS } from '../modules/ticket-notifications.js';
+import { entregarNotificacion, NOTIFICATION_STATES } from '../modules/notification-ledger.js';
+import {
+  createTicketIdempotencyContext,
+  findTicketCreationReplay,
+  rememberTicketCreation,
+} from '../modules/ticket-idempotency.js';
 
 export function createTicketsRouter({
   requireAuth,
@@ -18,9 +45,10 @@ export function createTicketsRouter({
   getBranchCodesFromCatalog,
   normalizeTicketBranch,
   findTicketAssignee,
-  calcDueDate,
+  createSlaAssignment,
   pushAuditWithContext,
   serializeTicket,
+  serializeTicketSummary,
   toInt,
   normalizeEstadoTicket,
   CLOSED_STATES,
@@ -40,6 +68,7 @@ export function createTicketsRouter({
   paginateList,
   notifyTicketCreated = () => Promise.resolve(),
   notifyTicketAssigned = () => Promise.resolve(),
+  notificationLedger = null,
 }) {
   const router = express.Router();
   const SAFE_DOWNLOAD_MIME_TYPES = new Set([
@@ -52,6 +81,50 @@ export function createTicketsRouter({
     'application/zip',
     'application/octet-stream',
   ]);
+
+  function historyEvent({ fecha = now(), actorId = null, actorName = 'Sistema', tipo, accion, estado,
+    before = null, after = null, comentario = '', ...extra }) {
+    const parsedActorId = Number(actorId);
+    const nombreMostrado = asNonEmptyString(actorName) || 'Sistema';
+    return {
+      fecha,
+      actorId: Number.isSafeInteger(parsedActorId) && parsedActorId > 0 ? parsedActorId : null,
+      usuario: nombreMostrado,
+      nombreMostrado,
+      tipo,
+      accion,
+      estado,
+      before,
+      after,
+      ...(comentario ? { comentario } : {}),
+      ...extra,
+    };
+  }
+
+  function avisarConfiablemente({ ticket, tipo, plan }) {
+    if (!Array.isArray(plan?.destinatarios) || plan.destinatarios.length === 0) return;
+    if (!notificationLedger) {
+      void avisar({ ticket, ...plan });
+      return;
+    }
+    let localAttempt = 0;
+    const retryDelayMs = 30_000;
+    const deliver = async () => {
+      localAttempt += 1;
+      const result = await entregarNotificacion({
+        ledger: notificationLedger,
+        ticketId: ticket.id,
+        tipo,
+        retryDelayMs,
+        enviar: () => avisar({ ticket, ...plan }),
+      });
+      if (result.status === NOTIFICATION_STATES.FAILED && localAttempt < 3) {
+        const timer = setTimeout(deliver, retryDelayMs + 100);
+        timer.unref?.();
+      }
+    };
+    void deliver();
+  }
 
   function normalizeSupplyUsageInput(items, { allowZero = false } = {}) {
     const normalized = [];
@@ -183,10 +256,21 @@ export function createTicketsRouter({
 router.post('/', requireAuth, async (req, res, next) => {
   try {
     if (!ensurePermission(req, res, 'tickets.create')) return;
+    const idempotency = createTicketIdempotencyContext({
+      key: req.get('Idempotency-Key'),
+      actorId: req.authUser?.id,
+      scope: 'ticket:create',
+      payload: req.body,
+    });
     const activoTag = asNonEmptyString(req.body?.activoTag);
+    const tipoSolicitud = req.body?.tipoSolicitud === undefined
+      ? 'INCIDENTE_ACTIVO'
+      : parseTicketRequestType(req.body.tipoSolicitud);
     const descripcion = asNonEmptyString(req.body?.descripcion);
+    const areaId = asNonEmptyString(req.body?.areaId);
+    const categoriaId = asNonEmptyString(req.body?.categoriaId);
     const sucursalInput = req.body?.sucursal;
-    const prioridad = normalizePrioridad(req.body?.prioridad);
+    const prioridad = req.body?.prioridad === undefined ? 'MEDIA' : parseTicketPriority(req.body.prioridad);
     const isEditorRole = canEditByRole(req.authUser?.rol);
     const atencionTipo = isEditorRole ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const hasTrasladoField = isEditorRole && req.body?.trasladoRequerido !== undefined;
@@ -194,7 +278,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     const hasSupplyUsage = req.body?.insumosUsados !== undefined;
     const rawSupplyUsage = isEditorRole && Array.isArray(req.body?.insumosUsados) ? req.body.insumosUsados : [];
     const asignadoA = isEditorRole ? asNonEmptyString(req.body?.asignadoA) : '';
-    const { usuario, departamento } = getRequestActor(req);
+    const requestedRequesterUserId = req.body?.requesterUserId === undefined
+      ? Number(req.authUser?.id)
+      : toInt(req.body.requesterUserId);
+    const { usuario } = getRequestActor(req);
 
     if (!isEditorRole && Array.isArray(req.body?.insumosUsados) && req.body.insumosUsados.length > 0) {
       return res.status(403).json({ error: 'No autorizado para registrar consumo de insumos.' });
@@ -202,8 +289,16 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (isEditorRole && hasSupplyUsage && !Array.isArray(req.body?.insumosUsados)) {
       return res.status(400).json({ error: 'insumosUsados debe ser una lista.' });
     }
-    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || (isEditorRole && !atencionTipo)) {
+    if (!tipoSolicitud) return res.status(400).json({ error: 'Tipo de solicitud no válido.' });
+    if ((tipoSolicitud === 'INCIDENTE_ACTIVO' && !activoTag) || !descripcion || !areaId || !categoriaId || !asNonEmptyString(sucursalInput) || (isEditorRole && !atencionTipo)) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
+    }
+    if (!prioridad) return res.status(400).json({ error: 'Prioridad no válida.' });
+    if (requestedRequesterUserId === null || requestedRequesterUserId <= 0) {
+      return res.status(400).json({ error: 'Solicitante no válido.' });
+    }
+    if (!isEditorRole && requestedRequesterUserId !== Number(req.authUser?.id)) {
+      return res.status(403).json({ error: 'No puedes registrar tickets a nombre de otro usuario.' });
     }
     if (hasTrasladoField && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no válido.' });
@@ -217,52 +312,81 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const created = await updateDb((db) => {
+      const replay = findTicketCreationReplay(db, idempotency);
+      if (replay.status === 'conflict') return { ok: false, code: 'IDEMPOTENCY_CONFLICT' };
+      if (replay.status === 'replay') return { ok: true, ticket: replay.ticket, replayed: true };
       const branchCodes = getBranchCodesFromCatalog(db);
       const sucursal = normalizeTicketBranch(sucursalInput, branchCodes);
       if (!sucursal) return { ok: false, code: 'INVALID_BRANCH' };
+      const classification = resolveTicketClassification(db.catalogos, { areaId, categoriaId });
+      if (!classification) return { ok: false, code: 'INVALID_CLASSIFICATION' };
+      const activeArea = db.catalogos.areas.find((item) => item.id === classification.areaId)?.activo !== false;
+      const activeCategory = db.catalogos.categorias.find((item) => item.id === classification.categoriaId)?.activo !== false;
+      if (!activeArea || !activeCategory) return { ok: false, code: 'INACTIVE_CLASSIFICATION' };
+      const requesterUser = db.users.find((item) => Number(item.id) === requestedRequesterUserId && item.activo !== false);
+      if (!requesterUser) return { ok: false, code: 'REQUESTER_INVALID' };
       let assignedUser = null;
       if (asignadoA) {
         assignedUser = findTicketAssignee(db.users, asignadoA);
         if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
       }
-      const asset = db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag));
-      if (!asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
+      const asset = activoTag
+        ? db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag))
+        : null;
+      if (tipoSolicitud === 'INCIDENTE_ACTIVO' && !asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
+      if (asset && resolveAssetBranchCode(asset, branchCodes) !== sucursal) return { ok: false, code: 'ASSET_BRANCH_MISMATCH' };
 
       const supplyUsage = prepareSupplyUsage(db, parsedSupplyUsage.items);
       if (!supplyUsage.ok) return supplyUsage;
 
       const createdAtIso = new Date().toISOString();
+      const slaAssignment = createSlaAssignment(prioridad, Date.parse(createdAtIso), createdAtIso);
       const ticket = {
         id: nextId(db),
-        activoTag: asset.tag,
+        tipoSolicitud,
+        activoId: asset?.id || null,
+        activoTag: asset?.tag || '',
         descripcion,
+        ...classification,
         sucursal,
         prioridad,
         ...(atencionTipo ? { atencionTipo } : {}),
         ...(hasTrasladoField ? { trasladoRequerido } : {}),
         estado: 'Abierto',
         fecha: now(),
+        fechasVersion: 1,
+        fechaPrimeraAtencion: null,
+        fechaResolucion: null,
+        fechaCierre: null,
         fechaCreacion: createdAtIso,
-        fechaLimite: calcDueDate(prioridad),
+        fechaLimite: slaAssignment.fechaLimite,
+        slaActual: slaAssignment,
         asignadoA: assignedUser ? assignedUser.nombre : '',
         asignadoAId: assignedUser ? Number(assignedUser.id) : null,
-        solicitadoPor: usuario,
-        solicitadoPorId: Number(req.authUser?.id) || null,
-        solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
-        departamento,
+        solicitadoPor: requesterUser.nombre,
+        solicitadoPorId: Number(requesterUser.id),
+        requesterUserId: Number(requesterUser.id),
+        solicitadoPorUsername: asNonEmptyString(requesterUser.username).toLowerCase(),
+        departamento: asNonEmptyString(requesterUser.departamento).toUpperCase(),
+        createdByUserId: Number(req.authUser?.id) || null,
+        createdBy: usuario,
+        createdByUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
         insumosUsados: supplyUsage.items,
         attachments: [],
-        historial: [
-          {
-            fecha: now(),
-            usuario,
-            accion: 'Ticket Creado',
-            estado: 'Abierto',
-            comentario: 'Registro inicial',
-          },
-        ],
+        historial: [historyEvent({
+          actorId: req.authUser.id,
+          actorName: usuario,
+          tipo: 'creacion',
+          accion: 'Ticket Creado',
+          estado: 'Abierto',
+          before: null,
+          after: { estado: 'Abierto', prioridad, asignadoA: assignedUser?.nombre || '', asignadoAId: assignedUser?.id || null },
+          comentario: 'Registro inicial',
+        })],
       };
+      syncTicketCycle(ticket).reconstruccionLegacy = Boolean(ticket.esHistorico);
       db.tickets.push(ticket);
+      rememberTicketCreation(db, idempotency, ticket.id);
 
       if (supplyUsage.operations.length > 0) {
         for (const { supply, stockDelta } of supplyUsage.operations) {
@@ -285,13 +409,13 @@ router.post('/', requireAuth, async (req, res, next) => {
 
       // Solo roles editores (técnico/admin) pueden derivar el estado operativo del activo
       // desde un ticket; un solicitante no debe poder marcar activos como "Falla".
-      if (prioridad === 'CRITICA' && isEditorRole) {
+      if (asset && prioridad === 'CRITICA' && isEditorRole) {
         asset.estado = 'Falla';
       }
 
       pushAuditWithContext(db, req, {
         accion: 'Nuevo Ticket',
-        item: `${activoTag} | ${sucursal} | ${atencionTipo || 'SIN DEFINIR'}${trasladoRequerido ? ' | TRASLADO' : ''}`,
+        item: `${asset?.tag || 'SERVICIO'} | ${sucursal} | ${atencionTipo || 'SIN DEFINIR'}${trasladoRequerido ? ' | TRASLADO' : ''}`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
@@ -313,8 +437,20 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
       return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
     }
+    if (!created?.ok && created?.code === 'IDEMPOTENCY_CONFLICT') {
+      return res.status(409).json({ error: 'La misma Idempotency-Key ya se usó con datos distintos.' });
+    }
+    if (!created?.ok && created?.code === 'REQUESTER_INVALID') {
+      return res.status(400).json({ error: 'El solicitante debe ser un usuario activo.' });
+    }
     if (!created?.ok && created?.code === 'INVALID_BRANCH') {
       return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
+    }
+    if (!created?.ok && created?.code === 'ASSET_BRANCH_MISMATCH') {
+      return res.status(400).json({ error: 'La sucursal del activo debe estar definida y coincidir con la del ticket.' });
+    }
+    if (!created?.ok && ['INVALID_CLASSIFICATION', 'INACTIVE_CLASSIFICATION'].includes(created?.code)) {
+      return res.status(400).json({ error: 'Selecciona un área y una categoría activas y compatibles.' });
     }
     if (!created?.ok && created?.code === 'ASSET_NOT_FOUND') {
       return res.status(400).json({ error: 'El activo indicado no existe.' });
@@ -324,15 +460,18 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo crear el ticket.' });
     }
 
-    const plan = planDeAvisoAlCrear(created.ticket, created.usuariosParaAviso);
-    avisar({ ticket: created.ticket, ...plan });
-    // Igual que el correo, el push nunca bloquea la creación del ticket.
-    void notifyTicketCreated({
-      ticket: created.ticket,
-      users: created.usuariosParaAviso,
-      subscriptions: created.pushSubscriptions,
-    }).catch((error) => console.error(`No se pudo preparar el push del ticket #${created.ticket.id}:`, error));
-    res.status(201).json(serializeTicket(created.ticket));
+    if (!created.replayed) {
+      const plan = planDeAvisoAlCrear(created.ticket, created.usuariosParaAviso);
+      avisarConfiablemente({ ticket: created.ticket, tipo: 'ticket-creado', plan });
+      // Igual que el correo, el push nunca bloquea la creación del ticket.
+      void notifyTicketCreated({
+        ticket: created.ticket,
+        users: created.usuariosParaAviso,
+        subscriptions: created.pushSubscriptions,
+      }).catch((error) => console.error(`No se pudo preparar el push del ticket #${created.ticket.id}:`, error));
+    }
+    res.set('Idempotency-Replayed', created.replayed ? 'true' : 'false');
+    res.status(created.replayed ? 200 : 201).json(serializeTicket(created.ticket));
   } catch (error) {
     next(error);
   }
@@ -342,8 +481,13 @@ router.post('/', requireAuth, async (req, res, next) => {
 router.post('/historical', requireAuth, async (req, res, next) => {
   try {
     if (!ensurePermission(req, res, 'tickets.historical')) return;
+    const idempotency = createTicketIdempotencyContext({
+      key: req.get('Idempotency-Key'),
+      actorId: req.authUser?.id,
+      scope: 'ticket:historical',
+      payload: req.body,
+    });
 
-    const formatLocal = (iso) => new Date(iso).toLocaleString('es-MX', { hour12: false });
     const parseDate = (value) => {
       const text = asNonEmptyString(value);
       if (!text) return null;
@@ -352,24 +496,38 @@ router.post('/historical', requireAuth, async (req, res, next) => {
     };
 
     const activoTag = asNonEmptyString(req.body?.activoTag);
+    const tipoSolicitud = req.body?.tipoSolicitud === undefined
+      ? 'INCIDENTE_ACTIVO'
+      : parseTicketRequestType(req.body.tipoSolicitud);
     const descripcion = asNonEmptyString(req.body?.descripcion);
+    const areaId = asNonEmptyString(req.body?.areaId);
+    const categoriaId = asNonEmptyString(req.body?.categoriaId);
     const sucursalInput = req.body?.sucursal;
-    const prioridad = normalizePrioridad(req.body?.prioridad);
+    const prioridad = req.body?.prioridad === undefined ? 'MEDIA' : parseTicketPriority(req.body.prioridad);
     const atencionTipo = normalizeTicketAttentionType(req.body?.atencionTipo);
     const hasTrasladoField = req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoField ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
     const asignadoA = asNonEmptyString(req.body?.asignadoA);
+    const requestedRequesterUserId = req.body?.requesterUserId === undefined
+      ? Number(req.authUser?.id)
+      : toInt(req.body.requesterUserId);
     const estado = normalizeEstadoTicket(req.body?.estado) || 'Cerrado';
     const comentarioResolucion = asNonEmptyString(req.body?.comentarioResolucion);
-    const { usuario, departamento } = getRequestActor(req);
+    const { usuario } = getRequestActor(req);
 
     const fechaCreacion = parseDate(req.body?.fechaCreacion);
-    const fechaCierreInput = parseDate(req.body?.fechaCierre);
+    const fechaCierreInput = parseDate(estado === 'Resuelto' ? (req.body?.fechaResolucion || req.body?.fechaCierre) : req.body?.fechaCierre);
     const nowMs = Date.now();
+    if (estado === 'Cancelado') return res.status(400).json({ error: 'Registra el ticket y utiliza Cancelar con motivo.' });
     const isClosedState = CLOSED_STATES.has(estado);
 
-    if (!activoTag || !descripcion || !asNonEmptyString(sucursalInput) || !atencionTipo) {
+    if (!tipoSolicitud) return res.status(400).json({ error: 'Tipo de solicitud no válido.' });
+    if ((tipoSolicitud === 'INCIDENTE_ACTIVO' && !activoTag) || !descripcion || !areaId || !categoriaId || !asNonEmptyString(sucursalInput) || !atencionTipo) {
       return res.status(400).json({ error: 'Campos requeridos incompletos para ticket.' });
+    }
+    if (!prioridad) return res.status(400).json({ error: 'Prioridad no válida.' });
+    if (requestedRequesterUserId === null || requestedRequesterUserId <= 0) {
+      return res.status(400).json({ error: 'Solicitante no válido.' });
     }
     if (hasTrasladoField && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no válido.' });
@@ -395,75 +553,112 @@ router.post('/historical', requireAuth, async (req, res, next) => {
       }
     }
 
+    const historicalResolution = isClosedState ? readResolution({ ...req.body, solucionAplicada: req.body?.solucionAplicada || comentarioResolucion }) : {};
     const createdAtIso = fechaCreacion.toISOString();
     const closedAtIso = isClosedState ? fechaCierreInput.toISOString() : null;
 
     const created = await updateDb((db) => {
+      const replay = findTicketCreationReplay(db, idempotency);
+      if (replay.status === 'conflict') return { ok: false, code: 'IDEMPOTENCY_CONFLICT' };
+      if (replay.status === 'replay') return { ok: true, ticket: replay.ticket, replayed: true };
       const branchCodes = getBranchCodesFromCatalog(db);
       const sucursal = normalizeTicketBranch(sucursalInput, branchCodes);
       if (!sucursal) return { ok: false, code: 'INVALID_BRANCH' };
+      const classification = resolveTicketClassification(db.catalogos, { areaId, categoriaId });
+      if (!classification) return { ok: false, code: 'INVALID_CLASSIFICATION' };
+      const activeArea = db.catalogos.areas.find((item) => item.id === classification.areaId)?.activo !== false;
+      const activeCategory = db.catalogos.categorias.find((item) => item.id === classification.categoriaId)?.activo !== false;
+      if (!activeArea || !activeCategory) return { ok: false, code: 'INACTIVE_CLASSIFICATION' };
+      const requesterUser = db.users.find((item) => Number(item.id) === requestedRequesterUserId && item.activo !== false);
+      if (!requesterUser) return { ok: false, code: 'REQUESTER_INVALID' };
       let assignedUser = null;
       if (asignadoA) {
         assignedUser = findTicketAssignee(db.users, asignadoA);
         if (!assignedUser) return { ok: false, code: 'ASSIGNEE_INVALID' };
       }
-      const asset = db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag));
-      if (!asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
+      const asset = activoTag
+        ? db.activos.find((item) => normalizeTextKey(item?.tag) === normalizeTextKey(activoTag))
+        : null;
+      if (tipoSolicitud === 'INCIDENTE_ACTIVO' && !asset) return { ok: false, code: 'ASSET_NOT_FOUND' };
+      if (asset && resolveAssetBranchCode(asset, branchCodes) !== sucursal) return { ok: false, code: 'ASSET_BRANCH_MISMATCH' };
 
-      const historial = [
-        {
-          fecha: formatLocal(createdAtIso),
-          usuario,
-          accion: 'Ticket Creado',
-          estado: 'Abierto',
-          comentario: 'Registro histórico',
-        },
-      ];
+      const historial = [historyEvent({
+        fecha: createdAtIso,
+        actorId: req.authUser.id,
+        actorName: usuario,
+        tipo: 'creacion',
+        accion: 'Ticket Creado',
+        estado: 'Abierto',
+        before: null,
+        after: { estado: 'Abierto', prioridad, asignadoA: assignedUser?.nombre || '', asignadoAId: assignedUser?.id || null },
+        comentario: 'Registro histórico',
+      })];
       if (estado !== 'Abierto') {
-        historial.unshift({
-          fecha: formatLocal(closedAtIso || createdAtIso),
-          usuario,
+        historial.unshift(historyEvent({
+          fecha: closedAtIso,
+          actorId: req.authUser.id,
+          actorName: usuario,
+          tipo: estado === 'Cerrado' ? 'cierre' : 'solucion',
           accion: ticketAuditAction(estado),
           estado,
+          before: { estado: 'Abierto' },
+          after: { estado, ...(historicalResolution || {}) },
           comentario: comentarioResolucion || 'Registro histórico',
-        });
+          ...(historicalResolution || {}),
+        }));
       }
 
+      const slaAssignment = createSlaAssignment(prioridad, fechaCreacion.getTime(), createdAtIso);
       const ticket = {
         id: nextId(db),
-        activoTag: asset.tag,
+        tipoSolicitud,
+        activoId: asset?.id || null,
+        activoTag: asset?.tag || '',
         descripcion,
+        ...classification,
         sucursal,
         prioridad,
         atencionTipo,
         ...(hasTrasladoField ? { trasladoRequerido } : {}),
         estado,
-        fecha: formatLocal(createdAtIso),
+        fecha: createdAtIso,
+        fechasVersion: 1,
+        fechaPrimeraAtencion: null,
+        fechaResolucion: null,
+        fechaCierre: null,
         fechaCreacion: createdAtIso,
-        fechaLimite: calcDueDate(prioridad, fechaCreacion.getTime()),
-        ...(closedAtIso ? { fechaCierre: closedAtIso } : {}),
+        fechaLimite: slaAssignment.fechaLimite,
+        slaActual: slaAssignment,
+        ...(closedAtIso ? (estado === 'Resuelto' ? { fechaResolucion: closedAtIso } : { fechaCierre: closedAtIso }) : {}),
         asignadoA: assignedUser ? assignedUser.nombre : '',
         asignadoAId: assignedUser ? Number(assignedUser.id) : null,
-        solicitadoPor: usuario,
-        solicitadoPorId: Number(req.authUser?.id) || null,
-        solicitadoPorUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
-        departamento,
+        solicitadoPor: requesterUser.nombre,
+        solicitadoPorId: Number(requesterUser.id),
+        requesterUserId: Number(requesterUser.id),
+        solicitadoPorUsername: asNonEmptyString(requesterUser.username).toLowerCase(),
+        departamento: asNonEmptyString(requesterUser.departamento).toUpperCase(),
+        createdByUserId: Number(req.authUser?.id) || null,
+        createdBy: usuario,
+        createdByUsername: asNonEmptyString(req.authUser?.username).toLowerCase(),
         esHistorico: true,
+        ...historicalResolution,
         insumosUsados: [],
         attachments: [],
         historial,
       };
+      syncTicketCycle(ticket).reconstruccionLegacy = Boolean(ticket.esHistorico);
       db.tickets.push(ticket);
+      rememberTicketCreation(db, idempotency, ticket.id);
 
       // Solo recalculamos el estado del activo si el ticket histórico queda activo;
       // un histórico cerrado no debe sobrescribir el estado operativo actual del activo.
-      if (keepsAssetInFailureState(estado)) {
-        syncAssetOperationalState(db, activoTag);
+      if (asset && keepsAssetInFailureState(estado)) {
+        syncAssetOperationalState(db, asset.tag);
       }
 
       pushAuditWithContext(db, req, {
         accion: 'Ticket Histórico',
-        item: `${activoTag} | ${sucursal} | ${estado}`,
+        item: `${asset?.tag || 'SERVICIO'} | ${sucursal} | ${estado}`,
         cantidad: 1,
         usuario,
         modulo: 'tickets',
@@ -477,8 +672,20 @@ router.post('/historical', requireAuth, async (req, res, next) => {
     if (!created?.ok && created?.code === 'ASSIGNEE_INVALID') {
       return res.status(400).json({ error: 'Asignado a inválido. Debe ser un técnico/admin activo.' });
     }
+    if (!created?.ok && created?.code === 'IDEMPOTENCY_CONFLICT') {
+      return res.status(409).json({ error: 'La misma Idempotency-Key ya se usó con datos distintos.' });
+    }
+    if (!created?.ok && created?.code === 'REQUESTER_INVALID') {
+      return res.status(400).json({ error: 'El solicitante debe ser un usuario activo.' });
+    }
     if (!created?.ok && created?.code === 'INVALID_BRANCH') {
       return res.status(400).json({ error: 'Sucursal inválida para el ticket.' });
+    }
+    if (!created?.ok && created?.code === 'ASSET_BRANCH_MISMATCH') {
+      return res.status(400).json({ error: 'La sucursal del activo debe estar definida y coincidir con la del ticket.' });
+    }
+    if (!created?.ok && ['INVALID_CLASSIFICATION', 'INACTIVE_CLASSIFICATION'].includes(created?.code)) {
+      return res.status(400).json({ error: 'Selecciona un área y una categoría activas y compatibles.' });
     }
     if (!created?.ok && created?.code === 'ASSET_NOT_FOUND') {
       return res.status(400).json({ error: 'El activo indicado no existe.' });
@@ -487,7 +694,8 @@ router.post('/historical', requireAuth, async (req, res, next) => {
       return res.status(500).json({ error: 'No se pudo registrar el ticket histórico.' });
     }
 
-    res.status(201).json(serializeTicket(created.ticket));
+    res.set('Idempotency-Replayed', created.replayed ? 'true' : 'false');
+    res.status(created.replayed ? 200 : 201).json(serializeTicket(created.ticket));
   } catch (error) {
     next(error);
   }
@@ -498,11 +706,15 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     if (!ensurePermission(req, res, 'tickets.update')) return;
     const id = toInt(req.params.id);
     const estado = req.body?.estado ? normalizeEstadoTicket(req.body?.estado) : null;
+    if (estado === 'Cancelado') return res.status(400).json({ error: 'Utiliza Cancelar con un motivo.' });
     const asignadoA = req.body?.asignadoA !== undefined ? asNonEmptyString(req.body?.asignadoA) : undefined;
     const hasAtencionTipoUpdate = req.body?.atencionTipo !== undefined;
     const atencionTipo = hasAtencionTipoUpdate ? normalizeTicketAttentionType(req.body?.atencionTipo) : '';
     const hasTrasladoUpdate = req.body?.trasladoRequerido !== undefined;
     const trasladoRequerido = hasTrasladoUpdate ? normalizeTicketTravelRequired(req.body?.trasladoRequerido) : undefined;
+    const hasPriorityUpdate = req.body?.prioridad !== undefined;
+    const prioridad = hasPriorityUpdate ? parseTicketPriority(req.body.prioridad) : null;
+    const waitReason = req.body?.motivoEspera === undefined ? null : parseTicketWaitReason(req.body.motivoEspera);
     const hasInsumosUpdate = req.body?.insumosUsados !== undefined;
     if (hasInsumosUpdate && !Array.isArray(req.body?.insumosUsados)) {
       return res.status(400).json({ error: 'insumosUsados debe ser una lista.' });
@@ -515,10 +727,10 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const { usuario } = getRequestActor(req);
 
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
-    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate && !hasInsumosUpdate) {
+    if (!estado && asignadoA === undefined && !comentario && !hasAtencionTipoUpdate && !hasTrasladoUpdate && !hasPriorityUpdate && !hasInsumosUpdate) {
       return res.status(400).json({ error: 'No hay cambios para aplicar.' });
     }
-    if (req.body?.estado && !estado) {
+    if (req.body?.estado !== undefined && !estado) {
       return res.status(400).json({ error: 'Estado de ticket no válido.' });
     }
     if (hasAtencionTipoUpdate && !atencionTipo) {
@@ -526,6 +738,9 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
     if (hasTrasladoUpdate && trasladoRequerido === undefined) {
       return res.status(400).json({ error: 'Indicador de traslado no válido.' });
+    }
+    if (hasPriorityUpdate && !prioridad) {
+      return res.status(400).json({ error: 'Prioridad no válida.' });
     }
     if (!parsedSupplyUsage.ok) {
       const message = parsedSupplyUsage.code === 'DUPLICATE_SUPPLY_USAGE'
@@ -537,7 +752,29 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     const updated = await updateDb((db) => {
       const ticket = db.tickets.find((t) => t.id === id);
       if (!ticket) return { ok: false, code: 'NOT_FOUND' };
+      assertTicketMutable(ticket);
 
+      const reopening = isTicketReopening(ticket.estado, estado);
+      if (estado && !canTransitionTicket(ticket.estado, estado)) {
+        throw Object.assign(new Error('Transicion no permitida. Reabre formalmente los tickets terminados.'), { status: 409 });
+      }
+      if (estado === 'En Espera' && ticket.estado !== 'En Espera' && !waitReason) {
+        throw Object.assign(new Error('Selecciona un motivo de espera válido para aplicar su regla de SLA.'), { status: 400 });
+      }
+      if (ticket.estado === 'Cerrado' && !reopening) {
+        throw Object.assign(new Error('El ticket cerrado requiere reapertura antes de editarse.'), { status: 409 });
+      }
+      if (hasPriorityUpdate && CLOSED_STATES.has(ticket.estado) && !reopening) {
+        throw Object.assign(new Error('Reabre el ticket antes de reclasificar su prioridad.'), { status: 409 });
+      }
+      const motivoReapertura = asNonEmptyString(req.body?.motivoReapertura);
+      if (reopening && (!motivoReapertura || motivoReapertura.length > 2000)) {
+        throw Object.assign(new Error('La reapertura requiere un motivo de 1 a 2000 caracteres.'), { status: 400 });
+      }
+      const reopeningMetadata = reopening ? { motivo: motivoReapertura, usuarioId: req.authUser.id,
+        usuario, fecha: new Date().toISOString(), estadoAnterior: ticket.estado } : null;
+
+      const resolution = estado === 'Resuelto' ? readResolution(req.body) : null;
       let nextAssignee;
       let nextAssigneeId;
       let correoDelNuevoResponsable = '';
@@ -563,44 +800,118 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
         : null;
       if (supplyUsage && !supplyUsage.ok) return supplyUsage;
 
+      if (reopeningMetadata) ticket.ultimaReapertura = reopeningMetadata;
       const previousState = ticket.estado;
+      const previousPriority = ticket.prioridad;
+      const previousDueDate = ticket.fechaLimite || null;
       const previousAttentionType = normalizeTicketAttentionType(ticket.atencionTipo);
       const previousTravelRequired = ticket.trasladoRequerido === true;
+      if (resolution) Object.assign(ticket, resolution);
       if (estado) ticket.estado = estado;
       if (nextAssignee !== undefined) ticket.asignadoA = nextAssignee;
       if (nextAssigneeId !== undefined) ticket.asignadoAId = nextAssigneeId;
       if (hasAtencionTipoUpdate) ticket.atencionTipo = atencionTipo;
       if (hasTrasladoUpdate) ticket.trasladoRequerido = trasladoRequerido;
+      if (hasPriorityUpdate) ticket.prioridad = prioridad;
       const attentionChanged = hasAtencionTipoUpdate && atencionTipo !== previousAttentionType;
       const travelChanged = hasTrasladoUpdate && trasladoRequerido !== previousTravelRequired;
+      const priorityChanged = hasPriorityUpdate && prioridad !== previousPriority;
+      const assigneeChanged = nextAssignee !== undefined
+        && (nextAssigneeId !== responsablePrevioId || nextAssignee !== responsablePrevio);
+
+      if (priorityChanged && !reopening) {
+        const currentCycle = syncTicketCycle(ticket);
+        const cycleStartedAt = Date.parse(currentCycle.fechaInicio || ticket.fechaCreacion || '');
+        const changedAt = new Date().toISOString();
+        const slaAssignment = createSlaAssignment(
+          ticket.prioridad,
+          Number.isFinite(cycleStartedAt) ? cycleStartedAt : Date.now(),
+          changedAt,
+        );
+        assignSlaToCurrentCycle(ticket, slaAssignment, {
+          fecha: changedAt,
+          motivo: 'CAMBIO_PRIORIDAD',
+          actorId: Number(req.authUser.id),
+          prioridadAnterior: previousPriority,
+          prioridadNueva: prioridad,
+        });
+      }
 
       const stateChanged = !!estado && estado !== previousState;
-      if (CLOSED_STATES.has(ticket.estado)) {
-        if (stateChanged && !CLOSED_STATES.has(previousState)) {
-          ticket.fechaCierre = new Date().toISOString();
-        }
-      } else if (ticket.fechaCierre) {
-        delete ticket.fechaCierre;
-      }
+      const milestoneAt = new Date().toISOString();
+      const reopeningSla = isTicketReopening(previousState, ticket.estado)
+        ? createSlaAssignment(ticket.prioridad, Date.parse(milestoneAt), milestoneAt)
+        : null;
+      const waitEvent = stateChanged && (previousState === 'En Espera' || ticket.estado === 'En Espera')
+        ? recordTicketWaitTransition(ticket, previousState, milestoneAt, waitReason, Number(req.authUser.id))
+        : null;
+      recordTicketMilestones(ticket, previousState, milestoneAt, reopeningSla);
 
       if (stateChanged) {
         syncAssetOperationalState(db, ticket.activoTag);
       }
 
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
-      ticket.historial.unshift({
-        fecha: now(),
-        usuario,
-        accion: estado
-          ? ticketAuditAction(ticket.estado)
-          : attentionChanged
-            ? 'Tipo Atención Ticket'
-            : travelChanged
-              ? 'Traslado Ticket'
-              : 'Ticket Actualizado',
-        estado: ticket.estado,
-        comentario: comentario || '',
-      });
+      const historyEvents = [];
+      if (priorityChanged) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: 'prioridad', accion: 'Prioridad Ticket', estado: ticket.estado,
+          before: { prioridad: previousPriority, fechaLimite: previousDueDate },
+          after: { prioridad, fechaLimite: ticket.fechaLimite },
+          prioridadAnterior: previousPriority, prioridadNueva: prioridad,
+          fechaLimiteAnterior: previousDueDate, fechaLimiteNueva: ticket.fechaLimite,
+        }));
+      }
+      if (assigneeChanged) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario,
+          tipo: responsablePrevio ? 'reasignacion' : 'asignacion', accion: responsablePrevio ? 'Ticket Reasignado' : 'Ticket Asignado',
+          estado: ticket.estado,
+          before: { asignadoA: responsablePrevio, asignadoAId: responsablePrevioId },
+          after: { asignadoA: ticket.asignadoA, asignadoAId: ticket.asignadoAId },
+        }));
+      }
+      if (stateChanged) {
+        const eventType = reopening ? 'reapertura'
+          : ticket.estado === 'Resuelto' ? 'solucion'
+          : ticket.estado === 'Cerrado' ? 'cierre'
+          : 'estado';
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: eventType,
+          accion: reopening ? 'Ticket Reabierto' : ticketAuditAction(ticket.estado), estado: ticket.estado,
+          before: { estado: previousState },
+          after: { estado: ticket.estado, ...(resolution || {}) },
+          comentario: resolution?.solucionAplicada || comentario || motivoReapertura || '',
+          ...(reopeningMetadata ? { anterior: previousState, nuevo: estado, motivo: motivoReapertura } : {}),
+          ...(waitEvent ? { espera: waitEvent } : {}),
+          ...(resolution || {}),
+        }));
+      }
+      if (attentionChanged) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: 'atencion', accion: 'Tipo Atención Ticket', estado: ticket.estado,
+          before: { atencionTipo: previousAttentionType || null }, after: { atencionTipo },
+        }));
+      }
+      if (travelChanged) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: 'traslado', accion: 'Traslado Ticket', estado: ticket.estado,
+          before: { trasladoRequerido: previousTravelRequired }, after: { trasladoRequerido },
+        }));
+      }
+      if (comentario && !resolution) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: 'comentario', accion: 'Comentario', estado: ticket.estado,
+          comentario,
+        }));
+      }
+      if (historyEvents.length === 0) {
+        historyEvents.push(historyEvent({
+          actorId: req.authUser.id, actorName: usuario, tipo: 'actualizacion', accion: 'Ticket Actualizado', estado: ticket.estado,
+          before: null, after: null,
+        }));
+      }
+      ticket.historial.unshift(...historyEvents);
 
       if (estado && estado !== previousState) {
         pushAuditWithContext(db, req, {
@@ -650,6 +961,20 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
           after: ticket,
         });
       }
+      if (priorityChanged) {
+        pushAuditWithContext(db, req, {
+          accion: 'Prioridad Ticket',
+          item: `${ticket.activoTag} | ${previousPriority} -> ${prioridad}`,
+          cantidad: 1,
+          usuario,
+          modulo: 'tickets',
+          entidad: 'ticket',
+          entidadId: ticket.id,
+          after: ticket,
+          meta: { prioridadAnterior: previousPriority, prioridadNueva: prioridad,
+            fechaLimiteAnterior: previousDueDate, fechaLimiteNueva: ticket.fechaLimite },
+        });
+      }
 
       if (hasInsumosUpdate) {
         ticket.insumosUsados = supplyUsage.items;
@@ -672,14 +997,16 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
 
       // Solo cuando la asignacion cambia de verdad y hay un responsable nuevo: reasignar
       // al mismo tecnico, o dejar el ticket sin asignar, no genera aviso.
-      const cambioDeResponsable = nextAssignee !== undefined
-        && (nextAssigneeId !== responsablePrevioId || nextAssignee !== responsablePrevio)
+      const cambioDeResponsable = assigneeChanged
         && Boolean(nextAssignee);
 
       return {
         ok: true,
         ticket,
         avisarAsignacionA: cambioDeResponsable ? correoDelNuevoResponsable : '',
+        usuariosParaAvisoResolucion: stateChanged && ticket.estado === 'Resuelto'
+          ? snapshotUsuariosParaAviso(db)
+          : [],
         pushAssigneeId: cambioDeResponsable ? assignedUserId : null,
         pushSubscriptions: cambioDeResponsable ? snapshotPushSubscriptions(db) : [],
       };
@@ -697,10 +1024,18 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
     }
 
     if (updated.avisarAsignacionA) {
-      avisar({
+      const assignmentEvent = updated.ticket.historial.find((event) => ['asignacion', 'reasignacion'].includes(event.tipo));
+      avisarConfiablemente({
         ticket: updated.ticket,
-        destinatarios: [updated.avisarAsignacionA],
-        motivo: MOTIVOS.ASIGNADO,
+        tipo: `asignacion:${updated.ticket.asignadoAId || 'sin-id'}:${assignmentEvent?.fecha || 'actual'}`,
+        plan: { destinatarios: [updated.avisarAsignacionA], motivo: MOTIVOS.ASIGNADO },
+      });
+    }
+    if (updated.usuariosParaAvisoResolucion.length > 0) {
+      avisarConfiablemente({
+        ticket: updated.ticket,
+        tipo: `resuelto:${updated.ticket.cicloActualId || updated.ticket.fechaResolucion || 'legacy'}`,
+        plan: planDeAvisoAlResolver(updated.ticket, updated.usuariosParaAvisoResolucion),
       });
     }
     // Una asignación ocurre después de crear el ticket y, a diferencia del correo,
@@ -723,26 +1058,35 @@ router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
     if (!ensurePermission(req, res, 'tickets.resolve')) return;
     const id = toInt(req.params.id);
     const { usuario } = getRequestActor(req);
-    const comentario = asNonEmptyString(req.body?.comentario) || 'Ticket resuelto';
+    const comentario = asNonEmptyString(req.body?.solucionAplicada);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
 
     const resolved = await updateDb((db) => {
       const ticket = db.tickets.find((t) => t.id === id);
       if (!ticket) return null;
+      assertTicketMutable(ticket);
 
       const previousState = ticket.estado;
+      if (!canTransitionTicket(previousState, 'Resuelto')) throw Object.assign(new Error('Reabre el ticket antes de resolverlo.'), { status: 409 });
+      const resolution = readResolution(req.body);
+      Object.assign(ticket, resolution);
       ticket.estado = 'Resuelto';
-      if (!CLOSED_STATES.has(previousState)) {
-        ticket.fechaCierre = new Date().toISOString();
-      }
+      const resolvedAt = new Date().toISOString();
+      recordTicketWaitTransition(ticket, previousState, resolvedAt, null, Number(req.authUser.id));
+      recordTicketMilestones(ticket, previousState, resolvedAt);
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
-      ticket.historial.unshift({
-        fecha: now(),
-        usuario,
+      ticket.historial.unshift(historyEvent({
+        fecha: resolvedAt,
+        actorId: req.authUser.id,
+        actorName: usuario,
+        tipo: 'solucion',
         accion: 'Ticket Resuelto',
         estado: 'Resuelto',
+        before: { estado: previousState },
+        after: { estado: 'Resuelto', ...resolution },
         comentario,
-      });
+        ...resolution,
+      }));
 
       syncAssetOperationalState(db, ticket.activoTag);
       pushAuditWithContext(db, req, {
@@ -755,78 +1099,66 @@ router.patch('/:id/resolve', requireAuth, async (req, res, next) => {
         entidadId: ticket.id,
         after: ticket,
       });
-      return ticket;
+      return { ticket, usuariosParaAviso: snapshotUsuariosParaAviso(db) };
     });
 
     if (!resolved) return res.status(404).json({ error: 'Ticket no encontrado.' });
-    res.json(serializeTicket(resolved));
+    avisarConfiablemente({
+      ticket: resolved.ticket,
+      tipo: `resuelto:${resolved.ticket.cicloActualId || resolved.ticket.fechaResolucion || 'legacy'}`,
+      plan: planDeAvisoAlResolver(resolved.ticket, resolved.usuariosParaAviso),
+    });
+    res.json(serializeTicket(resolved.ticket));
   } catch (error) {
     next(error);
   }
 });
 
-router.delete('/:id', requireAuth, async (req, res, next) => {
+// Physical purge is disabled until an approved administrative retention policy exists.
+router.delete('/:id', requireAuth, (_req, res) => res.status(403).json({
+  error: 'La purga de expedientes esta deshabilitada. Utiliza cancelar o archivar con motivo.',
+}));
+
+router.post('/:id/retention', requireAuth, async (req, res, next) => {
   try {
     const id = toInt(req.params.id);
-    const { usuario } = getRequestActor(req);
-    if (id === null) return res.status(400).json({ error: 'ID inválido.' });
-
-    const removed = await updateDb((db) => {
-      const index = db.tickets.findIndex((item) => Number(item.id) === Number(id));
-      if (index < 0) return { ok: false, code: 'NOT_FOUND' };
-
-      const ticket = db.tickets[index];
-      const role = req.authUser?.rol || '';
-      const isEditor = canEditByRole(role);
-      const isTicketOwnerRequester = role === 'solicitante' && ticketBelongsToUser(ticket, req.authUser);
-      if (!isEditor && !isTicketOwnerRequester) return { ok: false, code: 'FORBIDDEN' };
-      if (isTicketOwnerRequester && ticket.estado !== 'Abierto') return { ok: false, code: 'LOCKED' };
-
-      const [deleted] = db.tickets.splice(index, 1);
-      const attachmentPaths = Array.isArray(deleted.attachments)
-        ? deleted.attachments
-          .map((item) => asNonEmptyString(item?.storagePath))
-          .filter(Boolean)
-        : [];
-
-      if (keepsAssetInFailureState(deleted.estado)) {
-        syncAssetOperationalState(db, deleted.activoTag);
+    const motivo = asNonEmptyString(req.body?.motivo);
+    const accion = req.body?.accion;
+    if (id === null || !motivo || motivo.length > 2000 || !['cancelar', 'archivar'].includes(accion)) {
+      return res.status(400).json({ error: 'Indica una accion y un motivo de 1 a 2000 caracteres.' });
+    }
+    const result = await updateDb((db) => {
+      const ticket = db.tickets.find((item) => item.id === id);
+      if (!ticket) return { status: 404, error: 'Ticket no encontrado.' };
+      const editor = canEditByRole(req.authUser.rol);
+      const owner = req.authUser.rol === 'solicitante' && ticketBelongsToUser(ticket, req.authUser);
+      if (!editor && !(owner && accion === 'cancelar' && ticket.estado === 'Abierto')) {
+        return { status: 403, error: 'No autorizado para esta accion.' };
       }
-
-      pushAuditWithContext(db, req, {
-        accion: 'Ticket Eliminado',
-        item: `${deleted.activoTag} | #${deleted.id}`,
-        cantidad: 1,
-        usuario,
-        modulo: 'tickets',
-        entidad: 'ticket',
-        entidadId: deleted.id,
-        before: deleted,
-      });
-      return { ok: true, ticket: deleted, attachmentPaths };
+      if (ticket.archivo || (accion === 'cancelar' && CLOSED_STATES.has(ticket.estado))
+        || (accion === 'archivar' && !CLOSED_STATES.has(ticket.estado))) {
+        return { status: 409, error: 'Solo se cancelan pendientes y se archivan expedientes terminados.' };
+      }
+      const fecha = new Date().toISOString();
+      const metadata = { motivo, usuarioId: req.authUser.id, usuario: req.authUser.nombre, fecha, estadoAnterior: ticket.estado };
+      if (accion === 'cancelar') {
+        ticket.cancelacion = metadata;
+        ticket.estado = 'Cancelado';
+      } else ticket.archivo = metadata;
+      syncTicketCycle(ticket);
+      const label = accion === 'cancelar' ? 'Ticket Cancelado' : 'Ticket Archivado';
+      ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
+      ticket.historial.unshift(historyEvent({ fecha, actorId: metadata.usuarioId, actorName: metadata.usuario,
+        tipo: accion === 'cancelar' ? 'cancelacion' : 'archivo', accion: label, estado: ticket.estado,
+        before: { estado: metadata.estadoAnterior }, after: { estado: ticket.estado },
+        anterior: metadata.estadoAnterior, nuevo: ticket.estado, comentario: motivo }));
+      syncAssetOperationalState(db, ticket.activoTag);
+      pushAuditWithContext(db, req, { accion: label, item: ticket.activoTag, cantidad: 1,
+        usuario: metadata.usuario, modulo: 'tickets', entidad: 'ticket', entidadId: id, meta: metadata });
+      return { status: 200, ticket };
     });
-
-    if (!removed?.ok && removed?.code === 'NOT_FOUND') {
-      return res.status(404).json({ error: 'Ticket no encontrado.' });
-    }
-    if (!removed?.ok && removed?.code === 'FORBIDDEN') {
-      return res.status(403).json({ error: 'No autorizado para eliminar este ticket.' });
-    }
-    if (!removed?.ok && removed?.code === 'LOCKED') {
-      return res.status(409).json({ error: 'Solo puedes eliminar tickets abiertos creados por ti.' });
-    }
-    if (!removed?.ok) {
-      return res.status(500).json({ error: 'No se pudo eliminar el ticket.' });
-    }
-
-    for (const storagePath of removed.attachmentPaths) {
-      await attachmentStore.remove({ storagePath }).catch(() => undefined);
-    }
-
-    res.json({ ok: true, removedId: removed.ticket.id });
-  } catch (error) {
-    next(error);
-  }
+    return res.status(result.status).json(result.error ? { error: result.error } : result.ticket);
+  } catch (error) { next(error); }
 });
 
 router.post('/:id/comments', requireAuth, async (req, res, next) => {
@@ -834,6 +1166,7 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
     if (!ensurePermission(req, res, 'tickets.comment')) return;
     const id = toInt(req.params.id);
     const comentario = asNonEmptyString(req.body?.comentario);
+    const requiereRespuesta = req.body?.requiereRespuesta === true;
     const { usuario } = getRequestActor(req);
     if (id === null) return res.status(400).json({ error: 'ID inválido.' });
     if (!comentario) return res.status(400).json({ error: 'Comentario requerido.' });
@@ -844,13 +1177,17 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
       if (!canAccessTicketByAuthUser(req, ticket)) return { ok: false, code: 'FORBIDDEN' };
 
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
-      ticket.historial.unshift({
-        fecha: now(),
-        usuario,
+      const fecha = new Date().toISOString();
+      ticket.historial.unshift(historyEvent({
+        fecha,
+        actorId: req.authUser.id,
+        actorName: usuario,
+        tipo: 'comentario',
         accion: 'Comentario',
         estado: ticket.estado,
         comentario,
-      });
+        requiereRespuesta,
+      }));
 
       pushAuditWithContext(db, req, {
         accion: 'Comentario Ticket',
@@ -860,9 +1197,14 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
         modulo: 'tickets',
         entidad: 'ticket',
         entidadId: ticket.id,
-        meta: { comentario },
+        meta: { comentario, requiereRespuesta },
       });
-      return { ok: true, ticket };
+      return {
+        ok: true,
+        ticket,
+        fecha,
+        usuariosParaAviso: requiereRespuesta ? snapshotUsuariosParaAviso(db) : [],
+      };
     });
 
     if (!result?.ok && result?.code === 'NOT_FOUND') {
@@ -873,6 +1215,18 @@ router.post('/:id/comments', requireAuth, async (req, res, next) => {
     }
     if (!result?.ok) {
       return res.status(500).json({ error: 'No se pudo guardar el comentario.' });
+    }
+    if (requiereRespuesta) {
+      avisarConfiablemente({
+        ticket: {
+          ...result.ticket,
+          comentarioRelevante: comentario,
+          comentarioAutor: usuario,
+          comentarioFecha: result.fecha,
+        },
+        tipo: `comentario:${result.fecha}:${req.authUser.id}`,
+        plan: planDeAvisoDeComentario(result.ticket, result.usuariosParaAviso, req.authUser),
+      });
     }
     res.status(201).json(serializeTicket(result.ticket));
   } catch (error) {
@@ -949,13 +1303,16 @@ router.post('/:id/attachments', requireAuth, async (req, res, next) => {
 
         ticket.attachments.unshift(attachment);
         ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
-        ticket.historial.unshift({
-          fecha: now(),
-          usuario,
+        ticket.historial.unshift(historyEvent({
+          actorId: req.authUser.id,
+          actorName: usuario,
+          tipo: 'adjunto',
           accion: 'Adjunto agregado',
           estado: ticket.estado,
+          before: null,
+          after: { attachmentId, fileName, mimeType, size: contentBuffer.length },
           comentario: fileName,
-        });
+        }));
 
         pushAuditWithContext(db, req, {
           accion: 'Adjunto Ticket',
@@ -1049,6 +1406,7 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
     const result = await updateDb((db) => {
       const ticket = db.tickets.find((item) => Number(item.id) === Number(id));
       if (!ticket) return { ok: false, code: 'NOT_FOUND' };
+      assertTicketMutable(ticket);
       ticket.attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
       const index = ticket.attachments.findIndex((item) => Number(item.id) === Number(attachmentId));
       if (index < 0) return { ok: false, code: 'ATTACHMENT_NOT_FOUND' };
@@ -1056,13 +1414,16 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
       const [attachment] = ticket.attachments.splice(index, 1);
 
       ticket.historial = Array.isArray(ticket.historial) ? ticket.historial : [];
-      ticket.historial.unshift({
-        fecha: now(),
-        usuario,
+      ticket.historial.unshift(historyEvent({
+        actorId: req.authUser.id,
+        actorName: usuario,
+        tipo: 'adjunto',
         accion: 'Adjunto eliminado',
         estado: ticket.estado,
+        before: { attachmentId: attachment.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: attachment.size },
+        after: null,
         comentario: attachment.fileName,
-      });
+      }));
 
       pushAuditWithContext(db, req, {
         accion: 'Adjunto Ticket',
@@ -1093,6 +1454,21 @@ router.delete('/:id/attachments/:attachmentId', requireAuth, async (req, res, ne
   }
 });
 
+router.get('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const db = await getRequestDb(req);
+    const id = toInt(req.params.id);
+    const ticket = db.tickets.find((item) => item.id === id);
+    if (!ticket || filterTicketsForUser([ticket], req.authUser).length === 0) {
+      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json(serializeTicket(ticket));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const db = await getRequestDb(req);
@@ -1104,7 +1480,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const lifecycle = asNonEmptyString(req.query.lifecycle).toUpperCase();
     const sucursal = asNonEmptyString(req.query.sucursal).toUpperCase();
     const assignee = asNonEmptyString(req.query.assignee);
-    const search = normalizeTextKey(req.query.search || '');
+    const search = asNonEmptyString(req.query.search);
     const withPagination = req.query.page !== undefined || req.query.pageSize !== undefined;
     if (req.query.atencion !== undefined && !atencionTipo) {
       return res.status(400).json({ error: 'Filtro de atención inválido.' });
@@ -1125,19 +1501,19 @@ router.get('/', requireAuth, async (req, res, next) => {
       list = list.filter((t) => normalizeTextKey(t.asignadoA || '') === key);
     }
     if (search) {
+      const branchesByCode = new Map(
+        (db.catalogos?.sucursales || []).map((branch) => [asNonEmptyString(branch?.code).toUpperCase(), branch]),
+      );
+      const assetsById = new Map((db.activos || []).map((asset) => [Number(asset?.id), asset]));
+      const assetsByTag = new Map((db.activos || []).map((asset) => [normalizeTextKey(asset?.tag), asset]));
       list = list.filter((ticket) => {
-        const fields = [
-          ticket.activoTag,
-          ticket.descripcion,
-          ticket.asignadoA,
-          ticket.sucursal,
-          ticket.solicitadoPor,
-          ticket.departamento,
-          ticket.atencionTipo,
-          ticket.trasladoRequerido ? 'traslado' : '',
-          String(ticket.id),
-        ];
-        return fields.some((value) => normalizeTextKey(value || '').includes(search));
+        const asset = (ticket.activoId ? assetsById.get(Number(ticket.activoId)) : undefined)
+          || assetsByTag.get(normalizeTextKey(ticket.activoTag));
+        const branch = branchesByCode.get(asNonEmptyString(ticket.sucursal).toUpperCase());
+        return ticketMatchesSearch(ticket, search, {
+          asset,
+          branchLabel: branch?.name || branch?.nombre || '',
+        });
       });
     }
 
@@ -1148,7 +1524,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     });
 
     if (!withPagination) {
-      return res.json(list.map(serializeTicket));
+      return res.json(list.map(serializeTicketSummary));
     }
 
     const { page, pageSize } = parsePagination(req.query);
@@ -1156,7 +1532,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     res.json({
       ...paged,
-      items: paged.items.map(serializeTicket),
+      items: paged.items.map(serializeTicketSummary),
     });
   } catch (error) {
     next(error);

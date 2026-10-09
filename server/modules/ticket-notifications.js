@@ -14,6 +14,8 @@ export const MOTIVOS = Object.freeze({
   ASIGNADO: 'asignado',
   POR_VENCER: 'por-vencer',
   NUEVO: 'nuevo',
+  RESUELTO: 'resuelto',
+  COMENTARIO_RESPUESTA: 'comentario-respuesta',
 });
 
 const ENCABEZADO_POR_MOTIVO = Object.freeze({
@@ -36,6 +38,14 @@ const ENCABEZADO_POR_MOTIVO = Object.freeze({
   [MOTIVOS.NUEVO]: {
     asunto: (t) => `[Mesa IT] Nuevo ticket #${t.id} — ${t.prioridad}`,
     entrada: 'Se registro un nuevo ticket en Mesa IT.',
+  },
+  [MOTIVOS.RESUELTO]: {
+    asunto: (t) => `[Mesa IT] Resuelto · Ticket #${t.id}`,
+    entrada: 'Tu solicitud fue resuelta por Mesa IT.',
+  },
+  [MOTIVOS.COMENTARIO_RESPUESTA]: {
+    asunto: (t) => `[Mesa IT] Respuesta requerida · Ticket #${t.id}`,
+    entrada: 'Hay un comentario que requiere tu respuesta.',
   },
 });
 
@@ -65,17 +75,32 @@ export function destinatariosDeDifusion(users) {
 
 export function construirCorreoDeTicket(ticket, motivo = MOTIVOS.NUEVO) {
   const encabezado = ENCABEZADO_POR_MOTIVO[motivo] || ENCABEZADO_POR_MOTIVO[MOTIVOS.NUEVO];
-  const filas = [
-    ['Ticket', `#${ticket.id}`],
-    ['Prioridad', ticket.prioridad],
-    ['Activo', ticket.activoTag],
-    ['Sucursal', ticket.sucursal],
-    ['Tipo de atención', ticket.atencionTipo || 'Sin definir'],
-    ['Descripción', ticket.descripcion],
-    ['Solicitado por', ticket.solicitadoPor],
-    ['Asignado a', ticket.asignadoA || 'Sin asignar'],
-    ['Fecha límite (SLA)', ticket.fechaLimite],
-  ];
+  const filas = motivo === MOTIVOS.RESUELTO
+    ? [
+        ['Ticket', `#${ticket.id}`],
+        ['Resumen', ticket.descripcion],
+        ['Solución', ticket.solucionAplicada],
+        ['Técnico', ticket.asignadoA || 'Mesa IT'],
+        ['Fecha', ticket.fechaResolucion],
+      ]
+    : motivo === MOTIVOS.COMENTARIO_RESPUESTA
+      ? [
+          ['Ticket', `#${ticket.id}`],
+          ['Comentario', ticket.comentarioRelevante],
+          ['Autor', ticket.comentarioAutor],
+          ['Fecha', ticket.comentarioFecha],
+        ]
+      : [
+        ['Ticket', `#${ticket.id}`],
+        ['Prioridad', ticket.prioridad],
+        ['Activo', ticket.activoTag],
+        ['Sucursal', ticket.sucursal],
+        ['Tipo de atención', ticket.atencionTipo || 'Sin definir'],
+        ['Descripción', ticket.descripcion],
+        ['Solicitado por', ticket.solicitadoPor],
+        ['Asignado a', ticket.asignadoA || 'Sin asignar'],
+        ['Fecha límite (SLA)', ticket.fechaLimite],
+      ];
   const subject = encabezado.asunto(ticket);
   const text = [encabezado.entrada, '', ...filas.map(([k, v]) => `${k}: ${v}`)].join('\n');
   const html = `
@@ -126,6 +151,36 @@ export function planDeAvisoAlCrear(ticket, users, buzonGeneral = getNotifyTicket
   ].filter(Boolean));
 
   return { motivo, destinatarios };
+}
+
+export function planDeAvisoAlResolver(ticket, users) {
+  const requesterId = Math.trunc(Number(ticket?.requesterUserId || ticket?.solicitadoPorId));
+  if (!Number.isSafeInteger(requesterId) || requesterId <= 0) {
+    return { motivo: MOTIVOS.RESUELTO, destinatarios: [] };
+  }
+  const requester = (Array.isArray(users) ? users : [])
+    .find((user) => Number(user?.id) === requesterId && user?.activo !== false && user?.email);
+  return {
+    motivo: MOTIVOS.RESUELTO,
+    destinatarios: dedupeRecipients([requester?.email].filter(Boolean)),
+  };
+}
+
+export function planDeAvisoDeComentario(ticket, users, actor, buzonGeneral = getNotifyTicketEmail()) {
+  const actorId = Math.trunc(Number(actor?.id));
+  const requesterId = Math.trunc(Number(ticket?.requesterUserId || ticket?.solicitadoPorId));
+  const assigneeId = Math.trunc(Number(ticket?.asignadoAId));
+  const actorIsRequester = Number.isSafeInteger(requesterId) && requesterId > 0 && actorId === requesterId;
+  const targetId = actorIsRequester ? assigneeId : requesterId;
+  const target = (Array.isArray(users) ? users : [])
+    .find((user) => Number(user?.id) === targetId && user?.activo !== false && user?.email && Number(user.id) !== actorId);
+  const fallback = actorIsRequester && (!Number.isSafeInteger(assigneeId) || assigneeId <= 0)
+    ? buzonGeneral
+    : '';
+  return {
+    motivo: MOTIVOS.COMENTARIO_RESPUESTA,
+    destinatarios: dedupeRecipients([target?.email, fallback].filter(Boolean)),
+  };
 }
 
 /** Envia sin esperar. Devuelve la promesa solo para que las pruebas puedan aguardarla. */
