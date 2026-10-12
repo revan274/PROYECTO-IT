@@ -110,7 +110,7 @@ export const TRAVEL_DEFAULT_FUEL_EFFICIENCY = 10;
 export const TRAVEL_DEFAULT_DEPARTMENT = 'SISTEMAS';
 export const TRAVEL_DEFAULT_AUTHORIZER = 'MIREYA SANDOVAL';
 export const TRAVEL_DEFAULT_FINANCE = 'RAQUEL PARRA';
-export const TRAVEL_REPORT_MIN_ROWS = 36;
+export const TRAVEL_REPORT_MIN_ROWS = 16;
 export const USER_ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
   tecnico: 'Técnico',
