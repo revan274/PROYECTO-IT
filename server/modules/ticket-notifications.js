@@ -57,19 +57,34 @@ export function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+const CARGOS_ADICIONALES_DE_ATENCION = new Set(['desarrollador']);
+
+function normalizeAttentionValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 /**
- * Quien puede atender tickets y tiene correo. Se resuelve por permiso y no por
- * literal de rol, para que un rol nuevo del catalogo entre solo si de verdad
- * puede trabajar tickets.
+ * Identifica al equipo que debe enterarse de los tickets nuevos. Administracion y
+ * técnicos entran por su permiso operativo. Desarrollador es un cargo del catálogo,
+ * no un rol; se admite con acceso de consulta para que reciba el aviso sin ampliar
+ * sus permisos de escritura.
  */
+export function esUsuarioDeAtencion(user) {
+  if (!user || user.activo === false) return false;
+  if (roleHasPermission(user.rol, 'tickets.update')) return true;
+  const rol = normalizeAttentionValue(user.rol);
+  const cargo = normalizeAttentionValue(user.cargo || user.departamento);
+  return rol === 'consulta' && CARGOS_ADICIONALES_DE_ATENCION.has(cargo);
+}
+
+/** Usuarios activos del equipo de atención que además tienen correo. */
 export function destinatariosDeDifusion(users) {
-  const ROLES_AVISO = new Set(['tecnico', 'administrador', 'desarrollador', 'admin']);
   return (Array.isArray(users) ? users : [])
-    .filter((user) => {
-      if (!user || user.activo === false || !user.email) return false;
-      const rol = String(user.rol || '').trim().toLowerCase();
-      return ROLES_AVISO.has(rol) || roleHasPermission(user.rol, 'tickets.update');
-    })
+    .filter((user) => esUsuarioDeAtencion(user) && user.email)
     .map((user) => user.email);
 }
 
@@ -138,15 +153,11 @@ export function planDeAvisoAlCrear(ticket, users, buzonGeneral = getNotifyTicket
   else if (sinAsignar) motivo = MOTIVOS.SIN_ASIGNAR;
   else if (asignado) motivo = MOTIVOS.ASIGNADO;
 
-  // La difusion se reserva para lo que de verdad requiere que alguien reaccione:
-  // un critico, o trabajo que nadie ha tomado. Un ticket normal ya asignado solo
-  // molesta a su responsable y al buzon general.
-  const difunde = esCritico || sinAsignar;
-  // Se deduplica aqui y no solo al enviar: el responsable suele estar tambien en la
-  // lista de difusion, y un plan con destinatarios repetidos es un plan que miente.
+  // Todo ticket nuevo se comunica al equipo de atención. El responsable y el buzón
+  // general pueden pertenecer también a ese grupo, por eso se deduplica el plan.
   const destinatarios = dedupeRecipients([
     buzonGeneral,
-    ...(difunde ? destinatariosDeDifusion(users) : []),
+    ...destinatariosDeDifusion(users),
     asignado?.email,
   ].filter(Boolean));
 

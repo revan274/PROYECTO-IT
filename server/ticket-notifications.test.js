@@ -5,6 +5,7 @@ import {
   MOTIVOS,
   construirCorreoDeTicket,
   destinatariosDeDifusion,
+  esUsuarioDeAtencion,
   planDeAvisoAlCrear,
   planDeAvisoAlResolver,
   planDeAvisoDeComentario,
@@ -16,6 +17,7 @@ const USUARIOS = [
   { nombre: 'Tecnico Sin Correo', rol: 'tecnico', activo: true, email: '' },
   { nombre: 'Tecnico Inactivo', rol: 'tecnico', activo: false, email: 'baja@losgigantes.mx' },
   { id: 5, nombre: 'Sara Solicitante', rol: 'solicitante', activo: true, email: 'sara@losgigantes.mx' },
+  { id: 6, nombre: 'Dalia Dev', rol: 'consulta', departamento: 'Desarrollador', activo: true, email: 'dev@losgigantes.mx' },
 ];
 
 function ticket(extra = {}) {
@@ -36,10 +38,18 @@ function ticket(extra = {}) {
 test('la difusion solo alcanza a quien puede atender tickets y tiene correo', () => {
   const destinos = destinatariosDeDifusion(USUARIOS);
 
-  assert.deepEqual(destinos.sort(), ['ana@losgigantes.mx', 'tono@losgigantes.mx']);
+  assert.deepEqual(destinos.sort(), ['ana@losgigantes.mx', 'dev@losgigantes.mx', 'tono@losgigantes.mx']);
   // Un solicitante no atiende tickets: recibir la difusion seria ruido y fuga de contexto.
   assert.ok(!destinos.includes('sara@losgigantes.mx'));
   assert.ok(!destinos.includes('baja@losgigantes.mx'), 'un usuario dado de baja no debe recibir nada');
+});
+
+test('administración y técnico entran por permisos; desarrollador entra por cargo sin ganar escritura', () => {
+  assert.equal(esUsuarioDeAtencion(USUARIOS[0]), true);
+  assert.equal(esUsuarioDeAtencion(USUARIOS[1]), true);
+  assert.equal(esUsuarioDeAtencion(USUARIOS[5]), true);
+  assert.equal(esUsuarioDeAtencion({ rol: 'consulta', departamento: 'DESARROLLADOR', activo: false }), false);
+  assert.equal(esUsuarioDeAtencion({ rol: 'solicitante', departamento: 'Desarrollador', activo: true }), false);
 });
 
 test('la difusion tolera una lista ausente o corrupta sin lanzar', () => {
@@ -67,7 +77,7 @@ test('un ticket sin asignar se difunde para que alguien lo tome', () => {
   assert.ok(destinatarios.includes('tono@losgigantes.mx'));
 });
 
-test('un ticket normal ya asignado NO se difunde: solo su responsable y el buzon general', () => {
+test('un ticket normal ya asignado también se comunica a todo el equipo de atención', () => {
   const { motivo, destinatarios } = planDeAvisoAlCrear(
     ticket({ asignadoA: 'Tono Tecnico' }),
     USUARIOS,
@@ -75,8 +85,12 @@ test('un ticket normal ya asignado NO se difunde: solo su responsable y el buzon
   );
 
   assert.equal(motivo, MOTIVOS.ASIGNADO);
-  assert.deepEqual(destinatarios.sort(), ['mesa@losgigantes.mx', 'tono@losgigantes.mx']);
-  assert.ok(!destinatarios.includes('ana@losgigantes.mx'), 'no debe molestar a quien no le toca');
+  assert.deepEqual(destinatarios.sort(), [
+    'ana@losgigantes.mx',
+    'dev@losgigantes.mx',
+    'mesa@losgigantes.mx',
+    'tono@losgigantes.mx',
+  ]);
 });
 
 test('el responsable no aparece dos veces cuando ademas hay difusion', () => {

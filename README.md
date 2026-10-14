@@ -80,7 +80,8 @@ Revisa `.env.example`. Variables principales:
 ## Notificaciones por correo de tickets nuevos
 Al crear un ticket (`POST /api/tickets`), el sistema intenta notificar por correo (SMTP) a:
 - `NOTIFY_TICKET_EMAIL`, si está configurado (siempre).
-- El correo del técnico asignado (campo `email` del usuario), si el ticket ya viene asignado y ese usuario tiene correo cargado.
+- Los usuarios activos de atención con correo: administradores, técnicos y usuarios de consulta con cargo `Desarrollador`.
+- El correo del técnico asignado, si el ticket ya viene asignado y ese usuario tiene correo cargado. Los destinatarios repetidos se eliminan antes del envío.
 
 El envío es asíncrono y best-effort: si SMTP falla o no está configurado, la creación del ticket
 nunca se ve afectada; el error solo queda en el log del servidor. Los tickets históricos

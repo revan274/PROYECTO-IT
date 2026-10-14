@@ -22,12 +22,11 @@ import {
 } from './modules/mailer.js';
 import { createNotificationLedger } from './modules/notification-ledger.js';
 import { iniciarVigilanteDeSla, leerMinutosDeAviso } from './modules/sla-watcher.js';
-import { escapeHtml } from './modules/ticket-notifications.js';
+import { esUsuarioDeAtencion, escapeHtml } from './modules/ticket-notifications.js';
 import {
   createPushNotifier,
   normalizePushSubscription,
 } from './modules/push-notifications.js';
-import { roleHasPermission } from '../shared/permissions.js';
 import {
   buildAssetQrLookupResponse,
   buildSignedAssetQrToken,
@@ -875,9 +874,7 @@ app.get('/api/diagnostics/mail', requireAuth, async (req, res, next) => {
 
     const db = await getRequestDb(req);
     const usuarios = Array.isArray(db.users) ? db.users : [];
-    const puedenAtender = usuarios.filter((user) => user
-      && user.activo !== false
-      && roleHasPermission(user.rol, 'tickets.update'));
+    const puedenAtender = usuarios.filter(esUsuarioDeAtencion);
     const sinCorreo = puedenAtender.filter((user) => !user.email);
 
     res.json({
