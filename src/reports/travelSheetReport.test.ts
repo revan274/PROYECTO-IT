@@ -33,16 +33,18 @@ function buildData(overrides: Partial<TravelSheetData> = {}): TravelSheetData {
 }
 
 describe('formato mensual de movilidad', () => {
-  test('usa una hoja horizontal compacta y conserva los bloques operativos', () => {
+  test('restaura el formato anterior en Carta vertical con totales y firmas', () => {
     const html = buildTravelSheetHtml(buildData());
 
-    expect(html).toContain('@page { size: A4 landscape;');
-    expect(html).toContain('Formato mensual de movilidad');
-    expect(html).toContain('Resumen por ruta');
-    expect(html).toContain('Validación');
-    expect(html).toContain('Combustible estimado');
-    expect(html).toContain('10 km/l');
-    expect(html).not.toContain('font-size: 38px');
+    expect(html).toContain('@page { size: Letter portrait;');
+    expect(html).toContain('Formato Mensual · Movilidad IT');
+    expect(html).toContain('Reporte del mes:');
+    expect(html).toContain('TOTAL DE VIAJES');
+    expect(html).toContain('LITROS');
+    expect(html).toContain('PRESENTA');
+    expect(html).toContain('AUTORIZA');
+    expect(html).toContain('FINANZAS');
+    expect(html).not.toContain('min-height: 100vh');
   });
 
   test('completa únicamente el mínimo de filas y escapa contenido de usuario', () => {
